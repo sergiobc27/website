@@ -1,5 +1,5 @@
-import { Database, Download, Settings, FileText, BarChart3, Circle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
+import { Database, Download, Settings, FileText, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
 import logoVertical from "../../imports/Logo_CUC_PNG_letra_blanca_barra_roja_vtcal.png";
 import logoCollapsed from "../../imports/u.png";
 import logoIdeam from "../../imports/Ideam_(Colombia)_logo.png";
@@ -17,7 +17,7 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
     { id: 'extractor', icon: Database, label: 'Extractor de Datos' },
     { id: 'history', icon: Download, label: 'Historial' },
     { id: 'settings', icon: Settings, label: 'Ajustes de API' },
-    { id: 'docs', icon: FileText, label: 'Documentación' },
+    { id: 'docs', icon: FileText, label: 'Documentacion' },
   ];
 
   return (
@@ -27,8 +27,8 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
           <div className="space-y-3">
             <img src={logoVertical} alt="Universidad de la Costa CUC" className="w-full h-auto" />
             <div className="text-center pt-2">
-              <h1 className="text-white font-bold text-sm">AUTOMATIZACIÓN DE DATOS HÍDRICOS DEL IDEAM</h1>
-              <p className="text-white/80 text-xs">Por: Sergio Beltrán Coley</p>
+              <h1 className="text-white font-bold text-sm">AUTOMATIZACION DE DATOS HIDRICOS DEL IDEAM</h1>
+              <p className="text-white/80 text-xs">Por: Sergio Beltran Coley</p>
             </div>
           </div>
         ) : (
@@ -77,7 +77,7 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
         {!isCollapsed ? (
           <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
             <img src={logoIdeam} alt="IDEAM" className="w-full h-auto" />
-            <p className="text-white/60 text-xs text-center mt-2">Instituto de Hidrología, Meteorología y Estudios Ambientales</p>
+            <p className="text-white/60 text-xs text-center mt-2">Instituto de Hidrologia, Meteorologia y Estudios Ambientales</p>
           </div>
         ) : (
           <div className="flex justify-center">
@@ -85,7 +85,6 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
           </div>
         )}
       </div>
-
     </div>
   );
 }

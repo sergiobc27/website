@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { Settings, FileText } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
 import { Dashboard } from './components/Dashboard';
 import { DataExtractor } from './components/DataExtractor';
 import { DownloadHistory } from './components/DownloadHistory';
-import { Settings, FileText } from 'lucide-react';
 
 export default function App() {
   const [currentView, setCurrentView] = useState('dashboard');
@@ -19,7 +19,7 @@ export default function App() {
       extractor: ['Inicio', 'Extractor de Datos'],
       history: ['Inicio', 'Historial de Descargas'],
       settings: ['Inicio', 'Ajustes de API'],
-      docs: ['Inicio', 'Documentación'],
+      docs: ['Inicio', 'Documentacion'],
     };
     return breadcrumbMap[currentView] || ['Inicio'];
   };
@@ -33,9 +33,9 @@ export default function App() {
       case 'history':
         return <DownloadHistory />;
       case 'settings':
-        return <PlaceholderView icon={Settings} title="Ajustes de API" description="Configura tus credenciales y parámetros de conexión" />;
+        return <PlaceholderView icon={Settings} title="Ajustes de API" description="Configura credenciales y parametros de conexion" />;
       case 'docs':
-        return <PlaceholderView icon={FileText} title="Documentación" description="Guías y referencias de uso del sistema" />;
+        return <PlaceholderView icon={FileText} title="Documentacion" description="Guias y referencias de uso del sistema" />;
       default:
         return <Dashboard />;
     }

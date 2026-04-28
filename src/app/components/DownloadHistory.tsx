@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Calendar, Database, Download, FileText, Trash2 } from 'lucide-react';
+import { Calendar, Clock3, Database, Download, MapPin, Trash2 } from 'lucide-react';
 
 const HISTORY_KEY = 'ideam-history';
 
 interface HistoryEntry {
   timestamp: string;
   variable: string;
-  department: string;
-  municipality: string;
   format: string;
   rowCount: number;
+  stationCount: number;
+  municipalityCount: number;
+  zoneCount: number;
+  processingMs: number;
+  sizeBytes: number;
   fileName: string;
 }
 
@@ -21,6 +24,13 @@ function readHistory(): HistoryEntry[] {
   }
 }
 
+function formatBytes(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return '0 B';
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+}
+
 export function DownloadHistory() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
 
@@ -30,10 +40,13 @@ export function DownloadHistory() {
 
   const stats = useMemo(() => {
     const totalRows = history.reduce((sum, item) => sum + (item.rowCount || 0), 0);
+    const totalStations = history.reduce((sum, item) => sum + (item.stationCount || 0), 0);
+    const totalTime = history.reduce((sum, item) => sum + (item.processingMs || 0), 0);
     return {
       downloads: history.length,
       rows: totalRows,
-      formats: new Set(history.map((item) => item.format.toUpperCase())).size,
+      stations: totalStations,
+      avgTime: history.length ? Math.round(totalTime / history.length) : 0,
       latest: history[0]?.timestamp || 'Sin registros',
     };
   }, [history]);
@@ -47,8 +60,8 @@ export function DownloadHistory() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-card-foreground text-2xl font-bold">Historial de Descargas</h2>
-          <p className="text-muted-foreground text-sm mt-1">Registro local de archivos descargados desde la app</p>
+          <h2 className="text-card-foreground text-2xl font-bold">Historial de descargas</h2>
+          <p className="text-muted-foreground text-sm mt-1">Registro local con volumen, tiempo, estaciones y cobertura procesada</p>
         </div>
         <button
           onClick={clearHistory}
@@ -59,11 +72,12 @@ export function DownloadHistory() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard title="Total Descargas" value={String(stats.downloads)} icon={Download} />
-        <StatCard title="Registros Totales" value={stats.rows.toLocaleString('es-CO')} icon={Database} />
-        <StatCard title="Formatos Usados" value={String(stats.formats)} icon={FileText} />
-        <StatCard title="Última Ejecución" value={stats.latest} icon={Calendar} compact />
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <StatCard title="Descargas" value={String(stats.downloads)} icon={Download} />
+        <StatCard title="Filas" value={stats.rows.toLocaleString('es-CO')} icon={Database} />
+        <StatCard title="Estaciones" value={stats.stations.toLocaleString('es-CO')} icon={MapPin} />
+        <StatCard title="Tiempo medio" value={`${stats.avgTime} ms`} icon={Clock3} />
+        <StatCard title="Ultima ejecucion" value={stats.latest} icon={Calendar} compact />
       </div>
 
       <div className="bg-card border border-border rounded-xl overflow-hidden shadow-[0_0_40px_rgba(201,162,39,0.1)]">
@@ -72,10 +86,12 @@ export function DownloadHistory() {
             <thead className="bg-background border-b border-border">
               <tr>
                 <th className="text-left p-4 text-muted-foreground text-sm font-bold">Variable</th>
-                <th className="text-left p-4 text-muted-foreground text-sm font-bold">Departamento</th>
-                <th className="text-left p-4 text-muted-foreground text-sm font-bold">Municipio</th>
-                <th className="text-left p-4 text-muted-foreground text-sm font-bold">Formato</th>
-                <th className="text-left p-4 text-muted-foreground text-sm font-bold">Registros</th>
+                <th className="text-left p-4 text-muted-foreground text-sm font-bold">Filas</th>
+                <th className="text-left p-4 text-muted-foreground text-sm font-bold">Estaciones</th>
+                <th className="text-left p-4 text-muted-foreground text-sm font-bold">Municipios</th>
+                <th className="text-left p-4 text-muted-foreground text-sm font-bold">Zonas</th>
+                <th className="text-left p-4 text-muted-foreground text-sm font-bold">Tiempo</th>
+                <th className="text-left p-4 text-muted-foreground text-sm font-bold">Peso</th>
                 <th className="text-left p-4 text-muted-foreground text-sm font-bold">Archivo</th>
                 <th className="text-left p-4 text-muted-foreground text-sm font-bold">Descarga</th>
               </tr>
@@ -83,8 +99,8 @@ export function DownloadHistory() {
             <tbody>
               {history.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-muted-foreground">
-                    Aún no hay descargas registradas en este navegador.
+                  <td colSpan={9} className="p-8 text-center text-muted-foreground">
+                    Aun no hay descargas registradas en este navegador.
                   </td>
                 </tr>
               ) : (
@@ -94,18 +110,17 @@ export function DownloadHistory() {
                     className={`border-b border-border hover:bg-muted/50 transition-all ${index % 2 === 0 ? 'bg-card' : 'bg-background'}`}
                   >
                     <td className="p-4 text-card-foreground font-semibold">{item.variable}</td>
-                    <td className="p-4 text-muted-foreground text-sm">{item.department}</td>
-                    <td className="p-4 text-muted-foreground text-sm">{item.municipality}</td>
-                    <td className="p-4">
-                      <span className="px-2 py-1 rounded text-xs font-mono font-bold bg-accent/20 text-accent border border-accent/30">
-                        {item.format.toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="p-4 text-card-foreground font-mono text-sm font-bold">
-                      {Number(item.rowCount || 0).toLocaleString('es-CO')}
-                    </td>
+                    <td className="p-4 text-card-foreground font-mono text-sm font-bold">{Number(item.rowCount || 0).toLocaleString('es-CO')}</td>
+                    <td className="p-4 text-muted-foreground text-sm">{Number(item.stationCount || 0).toLocaleString('es-CO')}</td>
+                    <td className="p-4 text-muted-foreground text-sm">{Number(item.municipalityCount || 0).toLocaleString('es-CO')}</td>
+                    <td className="p-4 text-muted-foreground text-sm">{Number(item.zoneCount || 0).toLocaleString('es-CO')}</td>
+                    <td className="p-4 text-card-foreground font-mono text-sm">{item.processingMs} ms</td>
+                    <td className="p-4 text-muted-foreground text-sm">{formatBytes(item.sizeBytes || 0)}</td>
                     <td className="p-4 text-muted-foreground text-sm font-mono">{item.fileName}</td>
-                    <td className="p-4 text-muted-foreground text-xs font-mono">{item.timestamp}</td>
+                    <td className="p-4 text-muted-foreground text-xs font-mono">
+                      <div>{item.format.toUpperCase()}</div>
+                      <div>{item.timestamp}</div>
+                    </td>
                   </tr>
                 ))
               )}
