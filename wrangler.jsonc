@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "ideam",
-  "main": "workers/ideam.js",
+  "main": "src/worker/index.js",
   "compatibility_date": "2026-04-28",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
@@ -17,6 +17,15 @@
     "PAGE_LIMIT": "50000",
     "PREVIEW_LIMIT": "200",
     "MAX_EXPORT_ROWS": "100000"
+  },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/api/*"
+    ],
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "single-page-application"
   },
   "observability": {
     "enabled": true,

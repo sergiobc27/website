@@ -3,16 +3,18 @@
 Este repositorio ahora conserva dos superficies:
 
 - `index.html` y `styles.css`: sitio personal base.
-- `workers/ideam.js`: Worker modular que sirve la app de `ideam.sergiobc.com`.
+- `src/app/*`: frontend React/Vite basado en el diseño de `Ideamwebsite`.
+- `src/worker/index.js`: Worker modular que expone `/api/*`.
 - `wrangler.jsonc`: configuración productiva del Worker `ideam`.
 
 ## Flujo
 
 1. El navegador abre `ideam.sergiobc.com`.
 2. Cloudflare enruta la solicitud al Worker `ideam`.
-3. El Worker sirve la interfaz y expone endpoints `/api/*`.
-4. El Worker consulta Socrata en `www.datos.gov.co`.
-5. El usuario obtiene vista previa y descarga sin ejecutar scripts locales.
+3. Los assets del frontend se sirven desde `dist`.
+4. Las rutas `/api/*` se resuelven en `src/worker/index.js`.
+5. El Worker consulta Socrata en `www.datos.gov.co`.
+6. El usuario obtiene vista previa y descarga sin ejecutar scripts locales.
 
 ## Endpoints
 

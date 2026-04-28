@@ -5,69 +5,59 @@ Repositorio del sitio web de Sergio BC y de la app operativa en `ideam.sergiobc.
 ## Superficies
 
 - `sergiobc.com` y `www.sergiobc.com`: sitio personal base.
-- `ideam.sergiobc.com`: app web para consultar y descargar datos hidrológicos del IDEAM desde Socrata, ejecutada en Cloudflare Workers.
+- `ideam.sergiobc.com`: frontend React/Vite del proyecto IDEAM servido por Cloudflare Workers Assets, con API `/api/*` ejecutada en el mismo Worker.
 
 ## Estructura relevante
 
-- `index.html`
-- `styles.css`
-- `workers/ideam.js`
-- `wrangler.jsonc`
-- `package.json`
-- `IDEAM_WEBAPP.md`
+- `src/app/*`: frontend React basado en el diseño de `Ideamwebsite`.
+- `src/worker/index.js`: API Worker para metadata, cobertura, preview y export.
+- `src/imports/*`: assets del diseño original.
+- `src/styles/*`: tema y estilos globales.
+- `wrangler.jsonc`: configuración productiva del Worker.
+- `package.json`: scripts de build y deploy.
 
-## IDEAM Web App
-
-La aplicación de `ideam.sergiobc.com`:
-
-- consulta datasets IDEAM publicados en Socrata,
-- aplica filtros por variable, departamento, municipio, estación y rango temporal,
-- valida variantes territoriales como `ATLANTICO` / `ATLÁNTICO`,
-- ofrece vista previa y descarga directa desde navegador,
-- corre completamente online sobre Cloudflare Workers.
-
-## Desarrollo y despliegue
+## Comandos
 
 ```bash
 npm install
 npm run check
-npm run dev
+npm run build
+npm run dev:web
+npm run dev:worker
 npm run deploy
 ```
 
-La configuración del Worker está en `wrangler.jsonc`. El despliegue productivo usa:
+## Arquitectura
 
-- Worker name: `ideam`
-- Route: `ideam.sergiobc.com/*`
-- Zone: `sergiobc.com`
+1. El usuario entra a `ideam.sergiobc.com`.
+2. Cloudflare sirve el build estático del frontend desde `dist`.
+3. Las rutas `/api/*` se ejecutan en `src/worker/index.js`.
+4. El Worker consulta los datasets públicos de IDEAM en Socrata.
+5. La descarga se resuelve completamente online, sin scripts locales del usuario.
 
-## CI/CD
+## Deploy
 
-El workflow `.github/workflows/deploy-ideam.yml` despliega automáticamente cuando cambian:
+El workflow `.github/workflows/deploy-ideam.yml`:
 
-- `workers/ideam.js`
-- `wrangler.jsonc`
-- `package.json`
+1. instala dependencias,
+2. valida sintaxis del Worker,
+3. ejecuta el build frontend,
+4. despliega a Cloudflare con Wrangler.
 
 Secrets requeridos en GitHub:
 
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
 
-## Figma
+## Estado actual
 
-El diseño fuente está en Figma Make bajo `AUTOMATIZACIÓN DE DATOS HÍDRICOS DEL IDEAM`.
+- El extractor React ya quedó conectado a:
+  - `/api/meta`
+  - `/api/municipalities`
+  - `/api/coverage`
+  - `/api/preview`
+  - `/api/export`
+- El historial ya usa `localStorage` real.
+- El dashboard ya consume metadata e historial local en lugar de depender solo de datos de demo.
 
-El conector actual sí expone la estructura del proyecto Make, pero no nos entregó todavía el contenido textual de archivos como:
-
-- `src/app/App.tsx`
-- `src/app/components/Dashboard.tsx`
-- `src/app/components/DataExtractor.tsx`
-- `src/styles/*.css`
-
-Para una implementación visual 1:1 contra Figma, conviene aportar uno de estos dos insumos:
-
-1. Un link Figma de la pantalla específica con `node-id`.
-2. El código exportado del Make file para `App.tsx`, `Dashboard.tsx`, `DataExtractor.tsx`, `Sidebar.tsx`, `Navbar.tsx` y los CSS del proyecto.
-
-Más detalle técnico en `IDEAM_WEBAPP.md`.
+El siguiente paso operativo es correr `npm install` + `npm run build` en un entorno con acceso al registry y desplegar el Worker actualizado.
