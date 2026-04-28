@@ -3,7 +3,8 @@
 Este repositorio ahora conserva dos superficies:
 
 - `index.html` y `styles.css`: sitio personal base.
-- `workers/ideam.js`: Worker que sirve la app de `ideam.sergiobc.com`.
+- `workers/ideam.js`: Worker modular que sirve la app de `ideam.sergiobc.com`.
+- `wrangler.jsonc`: configuración productiva del Worker `ideam`.
 
 ## Flujo
 
@@ -16,6 +17,7 @@ Este repositorio ahora conserva dos superficies:
 ## Endpoints
 
 - `GET /api/meta`
+- `GET /api/health`
 - `GET /api/municipalities?department=ATLANTICO`
 - `GET /api/coverage?datasetId=s54a-sgyg&department=ATLANTICO`
 - `POST /api/preview`
@@ -26,6 +28,16 @@ Este repositorio ahora conserva dos superficies:
 - Vista previa: 200 filas.
 - Descarga por solicitud: 100000 filas.
 - Formatos: `csv` y `json`.
+
+## Configuracion operativa
+
+Las variables se pueden ajustar desde `wrangler.jsonc` o desde el entorno del Worker:
+
+- `SOCRATA_DOMAIN`
+- `CATALOG_DATASET_ID`
+- `PAGE_LIMIT`
+- `PREVIEW_LIMIT`
+- `MAX_EXPORT_ROWS`
 
 ## Siguiente evolucion recomendada
 

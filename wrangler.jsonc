@@ -1,0 +1,25 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "ideam",
+  "main": "workers/ideam.js",
+  "compatibility_date": "2026-04-28",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "routes": [
+    {
+      "pattern": "ideam.sergiobc.com/*",
+      "zone_name": "sergiobc.com"
+    }
+  ],
+  "vars": {
+    "SOCRATA_DOMAIN": "https://www.datos.gov.co",
+    "CATALOG_DATASET_ID": "hp9r-jxuu",
+    "PAGE_LIMIT": "50000",
+    "PREVIEW_LIMIT": "200",
+    "MAX_EXPORT_ROWS": "100000"
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}

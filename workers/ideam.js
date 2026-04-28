@@ -1,8 +1,10 @@
-const SOCRATA_DOMAIN = "https://www.datos.gov.co";
-const CATALOG_DATASET_ID = "hp9r-jxuu";
-const PAGE_LIMIT = 50000;
-const PREVIEW_LIMIT = 200;
-const MAX_EXPORT_ROWS = 100000;
+const DEFAULT_CONFIG = {
+  socrataDomain: "https://www.datos.gov.co",
+  catalogDatasetId: "hp9r-jxuu",
+  pageLimit: 50000,
+  previewLimit: 200,
+  maxExportRows: 100000,
+};
 
 const DATASETS = [
   { name: "Precipitacion", id: "s54a-sgyg", dateColumn: "fechaobservacion", category: "Hidrometeorologia" },
@@ -55,6 +57,16 @@ const DEPARTMENT_MAP = {
   "VAUPES": ["VAUPES", "VAUPÉS"],
   "VICHADA": ["VICHADA"]
 };
+
+function getConfig(env) {
+  return {
+    socrataDomain: env?.SOCRATA_DOMAIN || DEFAULT_CONFIG.socrataDomain,
+    catalogDatasetId: env?.CATALOG_DATASET_ID || DEFAULT_CONFIG.catalogDatasetId,
+    pageLimit: Number(env?.PAGE_LIMIT || DEFAULT_CONFIG.pageLimit),
+    previewLimit: Number(env?.PREVIEW_LIMIT || DEFAULT_CONFIG.previewLimit),
+    maxExportRows: Number(env?.MAX_EXPORT_ROWS || DEFAULT_CONFIG.maxExportRows),
+  };
+}
 
 const HTML = String.raw`<!doctype html>
 <html lang="es">
@@ -282,7 +294,7 @@ const HTML = String.raw`<!doctype html>
                 <li>La app consulta datasets publicos de IDEAM en Socrata desde Cloudflare Workers.</li>
                 <li>Los filtros de departamento usan variantes normalizadas para evitar perder registros por acentos.</li>
                 <li>La vista previa limita el volumen de respuesta para mantener la UI rapida y segura.</li>
-                <li>Las descargas completas se limitan a ${MAX_EXPORT_ROWS.toLocaleString("es-CO")} filas por solicitud para proteger el worker.</li>
+                <li>Las descargas completas se limitan a ${DEFAULT_CONFIG.maxExportRows.toLocaleString("es-CO")} filas por solicitud para proteger el worker.</li>
                 <li>El siguiente paso natural es agregar jobs asincronicos y almacenamiento en R2 para descargas masivas.</li>
               </ul>
             </article>
@@ -1338,8 +1350,8 @@ function timestampStamp() {
   return hh + mm + "_" + dd + month + yy;
 }
 
-async function socrataGet(datasetId, params) {
-  const url = new URL(SOCRATA_DOMAIN + "/resource/" + datasetId + ".json");
+async function socrataGet(config, datasetId, params) {
+  const url = new URL(config.socrataDomain + "/resource/" + datasetId + ".json");
   Object.entries(params || {}).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== "") {
       url.searchParams.set(key, String(value));
@@ -1356,8 +1368,8 @@ async function socrataGet(datasetId, params) {
   return response.json();
 }
 
-async function fetchCount(datasetId, where) {
-  const rows = await socrataGet(datasetId, {
+async function fetchCount(config, datasetId, where) {
+  const rows = await socrataGet(config, datasetId, {
     "$select": "count(*) as total",
     "$where": where,
     "$limit": 1,
@@ -1365,7 +1377,7 @@ async function fetchCount(datasetId, where) {
   return Number(rows?.[0]?.total || 0);
 }
 
-async function fetchAllRows(datasetId, where, order, limitCap) {
+async function fetchAllRows(config, datasetId, where, order, limitCap) {
   const rows = [];
   let offset = 0;
 
@@ -1373,7 +1385,7 @@ async function fetchAllRows(datasetId, where, order, limitCap) {
     const page = await socrataGet(datasetId, {
       "$where": where,
       "$order": order || ":id",
-      "$limit": PAGE_LIMIT,
+      "$limit": config.pageLimit,
       "$offset": offset,
     });
 
@@ -1385,15 +1397,15 @@ async function fetchAllRows(datasetId, where, order, limitCap) {
     if (rows.length > limitCap) {
       throw new Error(
         "La consulta excede el limite operativo de " +
-          MAX_EXPORT_ROWS.toLocaleString("es-CO") +
+          config.maxExportRows.toLocaleString("es-CO") +
           " filas. Reduce el rango o agrega filtros."
       );
     }
 
-    if (page.length < PAGE_LIMIT) {
+    if (page.length < config.pageLimit) {
       break;
     }
-    offset += PAGE_LIMIT;
+    offset += config.pageLimit;
   }
 
   return rows;
@@ -1474,23 +1486,25 @@ function buildFilters(payload, dataset) {
   };
 }
 
-async function handleMeta() {
+async function handleMeta(env) {
+  const config = getConfig(env);
   return jsonResponse({
     datasets: DATASETS,
     departments: Object.keys(DEPARTMENT_MAP).sort(),
-    previewLimit: PREVIEW_LIMIT,
-    maxExportRows: MAX_EXPORT_ROWS,
+    previewLimit: config.previewLimit,
+    maxExportRows: config.maxExportRows,
   });
 }
 
-async function handleMunicipalities(request) {
+async function handleMunicipalities(request, env) {
+  const config = getConfig(env);
   const url = new URL(request.url);
   const department = url.searchParams.get("department");
   if (!department) {
     return jsonResponse({ municipalities: [] });
   }
   const departmentFilter = buildDepartmentFilter(department, "departamento");
-  const rows = await socrataGet(CATALOG_DATASET_ID, {
+  const rows = await socrataGet(config, config.catalogDatasetId, {
     "$select": "municipio",
     "$where": departmentFilter.filter,
     "$group": "municipio",
@@ -1506,7 +1520,8 @@ async function handleMunicipalities(request) {
   return jsonResponse({ municipalities });
 }
 
-async function handleCoverage(request) {
+async function handleCoverage(request, env) {
+  const config = getConfig(env);
   const url = new URL(request.url);
   const datasetId = url.searchParams.get("datasetId");
   const department = url.searchParams.get("department");
@@ -1516,7 +1531,7 @@ async function handleCoverage(request) {
 
   const configured = departmentVariants(department).map((value) => normalizeLabel(value));
   const needle = normalizeLabel(department).slice(0, 4);
-  const discovered = await socrataGet(datasetId, {
+  const discovered = await socrataGet(config, datasetId, {
     "$select": "departamento, count(*) as total",
     "$where": "upper(departamento) like " + quoteSoql("%" + needle + "%"),
     "$group": "departamento",
@@ -1562,14 +1577,15 @@ async function parsePayload(request) {
   return { payload, dataset };
 }
 
-async function handlePreview(request) {
+async function handlePreview(request, env) {
+  const config = getConfig(env);
   const { payload, dataset } = await parsePayload(request);
   const built = buildFilters(payload, dataset);
-  const rowCount = await fetchCount(dataset.id, built.where);
-  const rows = await socrataGet(dataset.id, {
+  const rowCount = await fetchCount(config, dataset.id, built.where);
+  const rows = await socrataGet(config, dataset.id, {
     "$where": built.where,
     "$order": dataset.dateColumn ? dataset.dateColumn + " DESC" : ":id",
-    "$limit": PREVIEW_LIMIT,
+    "$limit": config.previewLimit,
   });
   const normalized = normalizeRows(rows, dataset.id, built.replacements, dataset.dateColumn);
   return jsonResponse({
@@ -1579,23 +1595,30 @@ async function handlePreview(request) {
   });
 }
 
-async function handleExport(request) {
+async function handleExport(request, env) {
+  const config = getConfig(env);
   const { payload, dataset } = await parsePayload(request);
   const built = buildFilters(payload, dataset);
-  const total = await fetchCount(dataset.id, built.where);
-  if (total > MAX_EXPORT_ROWS) {
+  const total = await fetchCount(config, dataset.id, built.where);
+  if (total > config.maxExportRows) {
     return jsonResponse(
       {
         error:
           "La consulta excede el limite operativo de " +
-          MAX_EXPORT_ROWS.toLocaleString("es-CO") +
+          config.maxExportRows.toLocaleString("es-CO") +
           " filas. Reduce el rango o agrega filtros.",
       },
       413
     );
   }
 
-  const rows = await fetchAllRows(dataset.id, built.where, dataset.dateColumn ? dataset.dateColumn + " DESC" : ":id", MAX_EXPORT_ROWS);
+  const rows = await fetchAllRows(
+    config,
+    dataset.id,
+    built.where,
+    dataset.dateColumn ? dataset.dateColumn + " DESC" : ":id",
+    config.maxExportRows
+  );
   const normalized = normalizeRows(rows, dataset.id, built.replacements, dataset.dateColumn);
 
   const fileStem = [
@@ -1626,23 +1649,26 @@ async function handleExport(request) {
   });
 }
 
-async function handleApi(request) {
+async function handleApi(request, env) {
   const url = new URL(request.url);
   try {
+    if (url.pathname === "/api/health" && request.method === "GET") {
+      return jsonResponse({ ok: true, service: "ideam-web-app" });
+    }
     if (url.pathname === "/api/meta" && request.method === "GET") {
-      return await handleMeta();
+      return await handleMeta(env);
     }
     if (url.pathname === "/api/municipalities" && request.method === "GET") {
-      return await handleMunicipalities(request);
+      return await handleMunicipalities(request, env);
     }
     if (url.pathname === "/api/coverage" && request.method === "GET") {
-      return await handleCoverage(request);
+      return await handleCoverage(request, env);
     }
     if (url.pathname === "/api/preview" && request.method === "POST") {
-      return await handlePreview(request);
+      return await handlePreview(request, env);
     }
     if (url.pathname === "/api/export" && request.method === "POST") {
-      return await handleExport(request);
+      return await handleExport(request, env);
     }
     return jsonResponse({ error: "Ruta API no encontrada." }, 404);
   } catch (error) {
@@ -1650,11 +1676,11 @@ async function handleApi(request) {
   }
 }
 
-async function handleRequest(request) {
+async function handleRequest(request, env) {
   const url = new URL(request.url);
 
   if (url.pathname.startsWith("/api/")) {
-    return handleApi(request);
+    return handleApi(request, env);
   }
   if (url.pathname === "/styles.css") {
     return textResponse(CSS, "text/css; charset=utf-8");
@@ -1665,6 +1691,8 @@ async function handleRequest(request) {
   return textResponse(HTML, "text/html; charset=utf-8");
 }
 
-addEventListener("fetch", (event) => {
-  event.respondWith(handleRequest(event.request));
-});
+export default {
+  async fetch(request, env) {
+    return handleRequest(request, env);
+  },
+};
