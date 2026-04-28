@@ -1,13 +1,27 @@
 # sergiobc.com
 
-Sitio personal inicial para publicar con Cloudflare Pages.
+Repositorio de la presencia web de Sergio BC.
 
-## Publicar en Cloudflare Pages
+## Superficies actuales
 
-1. En Cloudflare, ve a **Workers & Pages**.
-2. Crea una nueva aplicacion de **Pages** conectando este repositorio de GitHub.
-3. Usa estos ajustes:
-   - Framework preset: `None`
-   - Build command: dejar vacio
-   - Build output directory: `/`
-4. Despues del primer despliegue, agrega `sergiobc.com` en **Custom domains**.
+- `sergiobc.com` y `www.sergiobc.com`: sitio personal base.
+- `ideam.sergiobc.com`: app web del proyecto IDEAM servida desde Cloudflare Worker.
+
+## Archivos principales
+
+- `index.html`
+- `styles.css`
+- `workers/ideam.js`
+- `IDEAM_WEBAPP.md`
+
+## IDEAM Web App
+
+La app de `ideam.sergiobc.com`:
+
+- consulta datasets IDEAM publicados en Socrata,
+- aplica filtros por variable, departamento, municipio, estacion y rango temporal,
+- valida variantes territoriales como `ATLANTICO` / `ATLÁNTICO`,
+- permite vista previa y descarga directa desde navegador,
+- ejecuta todo online a traves de Cloudflare Workers.
+
+Mas detalle tecnico en `IDEAM_WEBAPP.md`.
