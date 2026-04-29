@@ -7,21 +7,25 @@ import {
   Clock3,
   Database,
   Download,
+  FileArchive,
   FileSearch,
   Filter,
   Layers,
+  LoaderCircle,
   MapPin,
   Rocket,
   Search,
   ShieldCheck,
   TimerReset,
 } from 'lucide-react';
+import parquetWasmUrl from 'parquet-wasm/esm/parquet_wasm_bg.wasm?url';
 import { EmptyState } from './EmptyState';
 
 const HISTORY_KEY = 'ideam-history';
+const ARCHIVE_PART_ROW_LIMIT = 100000;
 
 type StepId = 'consent' | 'variable' | 'territory' | 'advanced' | 'time' | 'execute';
-type FormatType = 'csv' | 'json';
+type OutputFormat = 'csv' | 'json' | 'parquet';
 type LogLevel = 'INFO' | 'SUCCESS' | 'ERROR';
 type DepartmentMode = 'all' | 'selected';
 type TimeMode = 'full' | 'custom';
@@ -43,7 +47,8 @@ interface MetaResponse {
   datasets: DatasetMeta[];
   departments: string[];
   previewLimit: number;
-  maxExportRows: number;
+  exportPageSize: number;
+  maxExportRows: number | null;
   catalogFilters: CatalogFilterDefinition[];
 }
 
@@ -95,6 +100,34 @@ interface PreviewResponse {
   processingMs: number;
 }
 
+interface ExportPlanPage {
+  planIndex: number;
+  where: string | null;
+  rowCount: number;
+  pageCount: number;
+}
+
+interface ExportPlanResponse {
+  datasetId: string;
+  fileStem: string;
+  rowCount: number;
+  pageSize: number;
+  totalPages: number;
+  queryPlans: number;
+  stationPoolSize: number;
+  replacements: Record<string, string>;
+  planPages: ExportPlanPage[];
+  processingMs: number;
+}
+
+interface ExportPageResponse {
+  datasetId: string;
+  planIndex: number;
+  offset: number;
+  returnedRows: number;
+  rows: Record<string, unknown>[];
+}
+
 interface DownloadMetrics {
   fileName: string;
   rowCount: number;
@@ -108,6 +141,17 @@ interface DownloadMetrics {
   observedEnd: string;
   queryPlans: number;
   stationPoolSize: number;
+  archivePartCount: number;
+  downloadedPages: number;
+}
+
+interface TransferProgress {
+  totalPages: number;
+  completedPages: number;
+  totalRows: number;
+  downloadedRows: number;
+  totalParts: number;
+  completedParts: number;
 }
 
 interface HistoryEntry extends DownloadMetrics {
@@ -145,6 +189,17 @@ function formatBytes(value: number) {
   return `${(value / (1024 * 1024)).toFixed(2)} MB`;
 }
 
+function formatDuration(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return '0 s';
+  if (value < 1000) return `${Math.round(value)} ms`;
+  if (value < 60000) return `${(value / 1000).toFixed(1)} s`;
+
+  const totalSeconds = Math.round(value / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
+}
+
 function parseStationCodes(value: string) {
   return Array.from(
     new Set(
@@ -154,6 +209,81 @@ function parseStationCodes(value: string) {
         .filter(Boolean)
     )
   );
+}
+
+function rowsToCsv(rows: Record<string, unknown>[]) {
+  if (!rows.length) return '';
+
+  const columns = Array.from(
+    rows.reduce((set, row) => {
+      Object.keys(row).forEach((key) => set.add(key));
+      return set;
+    }, new Set<string>())
+  );
+
+  const escape = (value: unknown) => {
+    const text = value === null || value === undefined ? '' : String(value);
+    return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+
+  const header = columns.join(',');
+  const body = rows.map((row) => columns.map((column) => escape(row[column])).join(','));
+  return [header, ...body].join('\n');
+}
+
+function createSummaryAccumulator() {
+  return {
+    stationCodes: new Set<string>(),
+    municipalities: new Set<string>(),
+    departments: new Set<string>(),
+    zones: new Set<string>(),
+    observedStartMs: null as number | null,
+    observedEndMs: null as number | null,
+  };
+}
+
+function updateSummaryAccumulator(
+  accumulator: ReturnType<typeof createSummaryAccumulator>,
+  rows: Record<string, unknown>[],
+  dateColumn: string
+) {
+  rows.forEach((row) => {
+    if (row.codigoestacion) accumulator.stationCodes.add(String(row.codigoestacion));
+    if (row.municipio) accumulator.municipalities.add(String(row.municipio));
+    if (row.departamento) accumulator.departments.add(String(row.departamento));
+    if (row.zonahidrografica) accumulator.zones.add(String(row.zonahidrografica));
+    if (row[dateColumn]) {
+      const parsed = new Date(String(row[dateColumn]));
+      if (!Number.isNaN(parsed.valueOf())) {
+        const value = parsed.valueOf();
+        accumulator.observedStartMs =
+          accumulator.observedStartMs === null ? value : Math.min(accumulator.observedStartMs, value);
+        accumulator.observedEndMs =
+          accumulator.observedEndMs === null ? value : Math.max(accumulator.observedEndMs, value);
+      }
+    }
+  });
+}
+
+function finalizeSummaryAccumulator(
+  accumulator: ReturnType<typeof createSummaryAccumulator>,
+  rowCount: number
+) {
+  return {
+    rowCount,
+    stationCount: accumulator.stationCodes.size,
+    municipalityCount: accumulator.municipalities.size,
+    departmentCount: accumulator.departments.size,
+    zoneCount: accumulator.zones.size,
+    observedStart: accumulator.observedStartMs ? new Date(accumulator.observedStartMs).toISOString() : '',
+    observedEnd: accumulator.observedEndMs ? new Date(accumulator.observedEndMs).toISOString() : '',
+  };
+}
+
+function summarizeRows(rows: Record<string, unknown>[], dateColumn: string) {
+  const accumulator = createSummaryAccumulator();
+  updateSummaryAccumulator(accumulator, rows, dateColumn);
+  return finalizeSummaryAccumulator(accumulator, rows.length);
 }
 
 export function DataExtractor() {
@@ -174,12 +304,16 @@ export function DataExtractor() {
   const [timeMode, setTimeMode] = useState<TimeMode>('full');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [format, setFormat] = useState<FormatType>('csv');
+  const [selectedFormats, setSelectedFormats] = useState<OutputFormat[]>(['csv']);
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [downloadMetrics, setDownloadMetrics] = useState<DownloadMetrics | null>(null);
+  const [transferProgress, setTransferProgress] = useState<TransferProgress | null>(null);
   const [logs, setLogs] = useState<Array<{ type: LogLevel; message: string }>>([]);
   const [isBusy, setIsBusy] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [activeTask, setActiveTask] = useState('Esperando configuracion');
+  const [operationStartedAt, setOperationStartedAt] = useState<number | null>(null);
+  const [elapsedMs, setElapsedMs] = useState(0);
 
   const steps = useMemo(
     () => [
@@ -209,9 +343,8 @@ export function DataExtractor() {
       stationCodes: parseStationCodes(stationCodesText),
       startDate,
       endDate,
-      format,
     };
-  }, [catalogFilters, datasetId, departmentMode, endDate, format, selectedDepartments, startDate, stationCodesText]);
+  }, [catalogFilters, datasetId, departmentMode, endDate, selectedDepartments, startDate, stationCodesText]);
 
   const selectionSummary = useMemo(() => {
     const advancedSelections = (meta?.catalogFilters || [])
@@ -221,8 +354,9 @@ export function DataExtractor() {
       departments: departmentMode === 'all' ? 'Todos los departamentos' : selectedDepartments.join(', ') || 'Sin seleccion',
       advancedSelections,
       stationCodes: parseStationCodes(stationCodesText),
+      formats: selectedFormats,
     };
-  }, [catalogFilters, departmentMode, meta?.catalogFilters, selectedDepartments, stationCodesText]);
+  }, [catalogFilters, departmentMode, meta?.catalogFilters, selectedDepartments, selectedFormats, stationCodesText]);
 
   const previewColumns = preview?.rows.length ? Object.keys(preview.rows[0]).slice(0, 8) : [];
 
@@ -306,10 +440,20 @@ export function DataExtractor() {
       setCatalogOptions(nextOptions);
     };
 
-    if (step === 'advanced') {
+    if (step === 'advanced' && acceptedTerms) {
       void loadCatalogOptionGroups();
     }
-  }, [catalogFilters, departmentMode, meta?.catalogFilters, selectedDepartments, step]);
+  }, [acceptedTerms, catalogFilters, departmentMode, meta?.catalogFilters, selectedDepartments, step]);
+
+  useEffect(() => {
+    if (!isBusy || operationStartedAt === null) return undefined;
+
+    const timer = window.setInterval(() => {
+      setElapsedMs(Math.round(performance.now() - operationStartedAt));
+    }, 250);
+
+    return () => window.clearInterval(timer);
+  }, [isBusy, operationStartedAt]);
 
   const validateCurrentConfiguration = () => {
     if (!acceptedTerms) {
@@ -341,6 +485,16 @@ export function DataExtractor() {
       const nextValues = values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
       return { ...current, [filterKey]: nextValues };
     });
+  };
+
+  const toggleOutputFormat = (format: OutputFormat) => {
+    setSelectedFormats((current) =>
+      current.includes(format)
+        ? current.length === 1
+          ? current
+          : current.filter((item) => item !== format)
+        : [...current, format]
+    );
   };
 
   const runCoverage = async () => {
@@ -398,7 +552,11 @@ export function DataExtractor() {
     try {
       validateCurrentConfiguration();
       setIsBusy(true);
-      setProgress(25);
+      setOperationStartedAt(performance.now());
+      setElapsedMs(0);
+      setTransferProgress(null);
+      setProgress(20);
+      setActiveTask('Generando vista previa...');
       appendLog('INFO', 'Generando vista previa operativa...');
       const response = await fetch('/api/preview', {
         method: 'POST',
@@ -411,12 +569,14 @@ export function DataExtractor() {
       }
       setPreview(data);
       setProgress(100);
+      setActiveTask('Vista previa completada');
       appendLog(
         'SUCCESS',
         `Vista previa completada: ${data.rowCount.toLocaleString('es-CO')} filas, ${data.summary.stationCount} estaciones, ${data.processingMs} ms.`
       );
     } catch (error) {
       setProgress(100);
+      setActiveTask('Error en vista previa');
       appendLog('ERROR', error instanceof Error ? error.message : 'Error en la vista previa.');
     } finally {
       setIsBusy(false);
@@ -426,63 +586,234 @@ export function DataExtractor() {
   const runDownload = async () => {
     try {
       validateCurrentConfiguration();
+      if (!selectedFormats.length) {
+        throw new Error('Selecciona al menos un formato de salida.');
+      }
+
       setIsBusy(true);
-      setProgress(35);
-      appendLog('INFO', `Iniciando descarga ${format.toUpperCase()}...`);
+      setOperationStartedAt(performance.now());
+      setElapsedMs(0);
+      setDownloadMetrics(null);
+      setTransferProgress(null);
+      setProgress(2);
+      setActiveTask('Preparando plan de exportacion...');
+      appendLog('INFO', 'Construyendo plan de descarga paginada...');
       const startedAt = performance.now();
-      const response = await fetch('/api/export', {
+
+      const planResponse = await fetch('/api/export-plan', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(executionPayload),
       });
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || 'No fue posible completar la descarga.');
+      const planData = (await planResponse.json()) as ExportPlanResponse & { error?: string };
+      if (!planResponse.ok) {
+        throw new Error(planData.error || 'No fue posible construir el plan de exportacion.');
+      }
+      if (!planData.rowCount) {
+        throw new Error('La consulta no contiene datos. Ajusta los filtros antes de descargar.');
       }
 
-      const blob = await response.blob();
-      const totalMs = Math.round(performance.now() - startedAt);
-      const fileName = response.headers.get('x-export-name') || 'ideam-export.csv';
-      const metrics: DownloadMetrics = {
-        fileName,
-        rowCount: Number(response.headers.get('x-row-count') || '0'),
-        stationCount: Number(response.headers.get('x-station-count') || '0'),
-        municipalityCount: Number(response.headers.get('x-municipality-count') || '0'),
-        departmentCount: Number(response.headers.get('x-department-count') || '0'),
-        zoneCount: Number(response.headers.get('x-zone-count') || '0'),
-        processingMs: Number(response.headers.get('x-processing-ms') || String(totalMs)),
-        sizeBytes: Number(response.headers.get('x-size-bytes') || String(blob.size)),
-        observedStart: response.headers.get('x-observed-start') || '',
-        observedEnd: response.headers.get('x-observed-end') || '',
-        queryPlans: Number(response.headers.get('x-query-plans') || '0'),
-        stationPoolSize: Number(response.headers.get('x-station-pool-size') || '0'),
+      appendLog(
+        'INFO',
+        `Plan listo: ${planData.rowCount.toLocaleString('es-CO')} filas en ${planData.totalPages.toLocaleString('es-CO')} paginas.`
+      );
+
+      const totalPages = Math.max(planData.totalPages, 1);
+      const totalParts = Math.max(1, Math.ceil(planData.rowCount / ARCHIVE_PART_ROW_LIMIT));
+      const summaryAccumulator = createSummaryAccumulator();
+      setTransferProgress({
+        totalPages,
+        completedPages: 0,
+        totalRows: planData.rowCount,
+        downloadedRows: 0,
+        totalParts,
+        completedParts: 0,
+      });
+
+      const [{ default: JSZip }, parquetDependencies] = await Promise.all([
+        import('jszip'),
+        selectedFormats.includes('parquet')
+          ? Promise.all([
+              import('apache-arrow'),
+              import('parquet-wasm/esm').then(async (module) => {
+                await module.default(parquetWasmUrl);
+                return module;
+              }),
+            ])
+          : Promise.resolve(null),
+      ]);
+
+      const zip = new JSZip();
+      const dateColumn = selectedDataset?.dateColumn || 'fechaobservacion';
+      const buildMemberName = (extension: string, partNumber: number) => {
+        const suffix = totalParts > 1 && partNumber > 1 ? `_${partNumber}` : '';
+        return `${planData.fileStem}${suffix}.${extension}`;
       };
 
+      const writePartToArchive = async (rowsForPart: Record<string, unknown>[], partNumber: number) => {
+        setActiveTask(`Empaquetando bloque ${partNumber} de ${totalParts}...`);
+
+        if (selectedFormats.includes('csv')) {
+          zip.file(buildMemberName('csv', partNumber), rowsToCsv(rowsForPart));
+        }
+
+        if (selectedFormats.includes('json')) {
+          zip.file(buildMemberName('json', partNumber), JSON.stringify(rowsForPart, null, 2));
+        }
+
+        if (selectedFormats.includes('parquet')) {
+          if (!parquetDependencies) {
+            throw new Error('No fue posible inicializar la exportacion Parquet.');
+          }
+
+          const [arrowModule, parquetModule] = parquetDependencies;
+          const arrowTable = arrowModule.tableFromJSON(rowsForPart);
+          const wasmTable = parquetModule.Table.fromIPCStream(arrowModule.tableToIPC(arrowTable, 'stream'));
+          const writerBuilder = new parquetModule.WriterPropertiesBuilder();
+          const writerProperties = writerBuilder.setCompression(parquetModule.Compression.SNAPPY).build();
+
+          try {
+            zip.file(buildMemberName('parquet', partNumber), parquetModule.writeParquet(wasmTable, writerProperties));
+          } finally {
+            writerProperties.free();
+            writerBuilder.free();
+            wasmTable.free();
+          }
+        }
+      };
+
+      let partRows: Record<string, unknown>[] = [];
+      let completedPages = 0;
+      let downloadedRows = 0;
+      let completedParts = 0;
+
+      for (const planPage of planData.planPages) {
+        for (let pageIndex = 0; pageIndex < planPage.pageCount; pageIndex += 1) {
+          const offset = pageIndex * planData.pageSize;
+          setActiveTask(`Descargando pagina ${completedPages + 1} de ${totalPages}...`);
+
+          const pageResponse = await fetch('/api/export-page', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              datasetId,
+              planIndex: planPage.planIndex,
+              where: planPage.where,
+              replacements: planData.replacements,
+              offset,
+              limit: planData.pageSize,
+            }),
+          });
+          const pageData = (await pageResponse.json()) as ExportPageResponse & { error?: string };
+          if (!pageResponse.ok) {
+            throw new Error(pageData.error || 'No fue posible descargar una pagina de datos.');
+          }
+
+          partRows.push(...pageData.rows);
+          updateSummaryAccumulator(summaryAccumulator, pageData.rows, dateColumn);
+          completedPages += 1;
+          downloadedRows += pageData.returnedRows;
+          setTransferProgress({
+            totalPages,
+            completedPages,
+            totalRows: planData.rowCount,
+            downloadedRows,
+            totalParts,
+            completedParts,
+          });
+          setProgress(10 + Math.round((completedPages / totalPages) * 60));
+
+          if (partRows.length >= ARCHIVE_PART_ROW_LIMIT) {
+            completedParts += 1;
+            await writePartToArchive(partRows, completedParts);
+            partRows = [];
+            setTransferProgress({
+              totalPages,
+              completedPages,
+              totalRows: planData.rowCount,
+              downloadedRows,
+              totalParts,
+              completedParts,
+            });
+          }
+        }
+      }
+
+      if (partRows.length) {
+        completedParts += 1;
+        await writePartToArchive(partRows, completedParts);
+        partRows = [];
+        setTransferProgress({
+          totalPages,
+          completedPages,
+          totalRows: planData.rowCount,
+          downloadedRows,
+          totalParts,
+          completedParts,
+        });
+      }
+
+      if (!downloadedRows || !completedParts) {
+        throw new Error('La descarga se quedo sin datos utiles. No se genero ningun archivo.');
+      }
+
+      setActiveTask('Comprimiendo paquete ZIP...');
+      appendLog('INFO', 'Comprimiendo archivos en ZIP...');
+      setProgress(88);
+      const zipBlob = await zip.generateAsync(
+        { type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } },
+        (metadata) => {
+          setProgress(88 + Math.round(metadata.percent * 0.12));
+        }
+      );
+
+      const summary = finalizeSummaryAccumulator(summaryAccumulator, downloadedRows);
+      const archiveName = `${planData.fileStem}.zip`;
       const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = fileName;
+      link.href = URL.createObjectURL(zipBlob);
+      link.download = archiveName;
       document.body.appendChild(link);
       link.click();
       link.remove();
       URL.revokeObjectURL(link.href);
 
+      const totalMs = Math.round(performance.now() - startedAt);
+      const metrics: DownloadMetrics = {
+        fileName: archiveName,
+        rowCount: summary.rowCount,
+        stationCount: summary.stationCount,
+        municipalityCount: summary.municipalityCount,
+        departmentCount: summary.departmentCount,
+        zoneCount: summary.zoneCount,
+        processingMs: totalMs,
+        sizeBytes: zipBlob.size,
+        observedStart: summary.observedStart,
+        observedEnd: summary.observedEnd,
+        queryPlans: planData.queryPlans,
+        stationPoolSize: planData.stationPoolSize,
+        archivePartCount: completedParts,
+        downloadedPages: completedPages,
+      };
+
       setDownloadMetrics(metrics);
       saveHistory({
         timestamp: new Date().toLocaleString('es-CO'),
         variable: selectedDataset?.name || datasetId,
-        format,
+        format: `ZIP (${selectedFormats.join(', ').toUpperCase()})`,
         departments: departmentMode === 'selected' ? selectedDepartments : ['Todos'],
         catalogFilters,
         ...metrics,
       });
 
       setProgress(100);
+      setActiveTask('Descarga completada');
       appendLog(
         'SUCCESS',
-        `Descarga completada: ${metrics.fileName}. ${metrics.rowCount.toLocaleString('es-CO')} filas en ${metrics.processingMs} ms.`
+        `ZIP generado: ${archiveName}. ${metrics.rowCount.toLocaleString('es-CO')} filas, ${metrics.archivePartCount} parte(s) y ${formatDuration(metrics.processingMs)} de proceso.`
       );
     } catch (error) {
       setProgress(100);
+      setActiveTask('Error en descarga');
       appendLog('ERROR', error instanceof Error ? error.message : 'Error durante la descarga.');
     } finally {
       setIsBusy(false);
@@ -513,21 +844,42 @@ export function DataExtractor() {
     setStep(steps[Math.max(selectedStepIndex - 1, 0)].id);
   };
 
+  const runtimeRows =
+    transferProgress?.downloadedRows ?? downloadMetrics?.rowCount ?? preview?.rowCount ?? 0;
+  const runtimeTotalRows = transferProgress?.totalRows ?? preview?.rowCount ?? downloadMetrics?.rowCount ?? 0;
+  const runtimeElapsedMs = isBusy ? elapsedMs : downloadMetrics?.processingMs ?? preview?.processingMs ?? 0;
+  const runtimePages = transferProgress
+    ? `${transferProgress.completedPages}/${transferProgress.totalPages}`
+    : downloadMetrics
+      ? `${downloadMetrics.downloadedPages}/${downloadMetrics.downloadedPages}`
+      : '0/0';
+  const runtimeParts = transferProgress
+    ? `${transferProgress.completedParts}/${transferProgress.totalParts}`
+    : downloadMetrics
+      ? `${downloadMetrics.archivePartCount}/${downloadMetrics.archivePartCount}`
+      : '0/0';
+
   return (
     <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 min-h-[calc(100vh-7rem)]">
       <div className="xl:col-span-4 space-y-6">
         <div className="bg-card border border-border rounded-xl p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
-          <h2 className="text-card-foreground text-xl font-bold mb-4">Asistente de Extraccion</h2>
+          <h2 className="text-card-foreground text-xl font-bold mb-4">Asistente de extraccion</h2>
           <div className="space-y-3">
             {steps.map((item, index) => {
               const Icon = item.icon;
               const isActive = step === item.id;
-              const isDone = selectedStepIndex > index;
+              const isDone = selectedStepIndex > index && acceptedTerms;
               return (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => setStep(item.id)}
+                  onClick={() => {
+                    if (item.id !== 'consent' && !acceptedTerms) {
+                      appendLog('ERROR', 'Debes aceptar el consentimiento antes de abrir otros pasos.');
+                      return;
+                    }
+                    setStep(item.id);
+                  }}
                   className={`w-full flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-all ${
                     isActive
                       ? 'border-accent bg-accent/10 text-card-foreground'
@@ -576,8 +928,8 @@ export function DataExtractor() {
             endDate={endDate}
             onStartDateChange={setStartDate}
             onEndDateChange={setEndDate}
-            format={format}
-            onFormatChange={setFormat}
+            selectedFormats={selectedFormats}
+            onToggleOutputFormat={toggleOutputFormat}
             onDatasetChange={setDatasetId}
             selectionSummary={selectionSummary}
             coverageReports={coverageReports}
@@ -624,12 +976,19 @@ export function DataExtractor() {
             />
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
             <MetricCard title="Variable" value={selectedDataset?.name || 'Sin seleccion'} icon={Database} />
-            <MetricCard title="Filas estimadas" value={preview?.rowCount?.toLocaleString('es-CO') || '0'} icon={FileSearch} />
+            <MetricCard
+              title="Filas"
+              value={`${runtimeRows.toLocaleString('es-CO')} / ${runtimeTotalRows.toLocaleString('es-CO')}`}
+              icon={FileSearch}
+            />
+            <MetricCard title="Paginas" value={runtimePages} icon={Layers} />
+            <MetricCard title="Partes ZIP" value={runtimeParts} icon={FileArchive} />
             <MetricCard title="Estaciones" value={String(downloadMetrics?.stationCount || preview?.summary.stationCount || 0)} icon={MapPin} />
-            <MetricCard title="Tiempo" value={`${downloadMetrics?.processingMs || preview?.processingMs || 0} ms`} icon={Clock3} />
+            <MetricCard title="Tiempo" value={formatDuration(runtimeElapsedMs)} icon={Clock3} />
             <MetricCard title="Peso" value={formatBytes(downloadMetrics?.sizeBytes || 0)} icon={Download} />
+            <MetricCard title="Proceso" value={activeTask} icon={LoaderCircle} />
           </div>
         </div>
 
@@ -653,13 +1012,14 @@ export function DataExtractor() {
           </div>
 
           <div className="bg-card border border-border rounded-xl p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
-            <h3 className="text-card-foreground font-bold mb-4">Impacto para el usuario</h3>
+            <h3 className="text-card-foreground font-bold mb-4">Salida esperada</h3>
             <div className="space-y-3 text-sm">
-              <SummaryRow label="Formato elegido" value={format.toUpperCase()} />
+              <SummaryRow label="Entrega" value="ZIP comprimido con particion automatica" />
+              <SummaryRow label="Formatos" value={selectionSummary.formats.length ? selectionSummary.formats.join(', ').toUpperCase() : 'Sin seleccion'} />
               <SummaryRow label="Pool de estaciones" value={String(downloadMetrics?.stationPoolSize || preview?.stationPoolSize || 0)} />
               <SummaryRow label="Planes de consulta" value={String(downloadMetrics?.queryPlans || preview?.queryPlans || 0)} />
+              <SummaryRow label="Partes esperadas" value={transferProgress ? String(transferProgress.totalParts) : String(downloadMetrics?.archivePartCount || 0)} />
               <SummaryRow label="Municipios cubiertos" value={String(downloadMetrics?.municipalityCount || preview?.summary.municipalityCount || 0)} />
-              <SummaryRow label="Zonas detectadas" value={String(downloadMetrics?.zoneCount || preview?.summary.zoneCount || 0)} />
             </div>
           </div>
         </div>
@@ -748,8 +1108,8 @@ export function DataExtractor() {
             ) : (
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard title="Filas" value={downloadMetrics.rowCount.toLocaleString('es-CO')} icon={Database} />
-                <MetricCard title="Tiempo" value={`${downloadMetrics.processingMs} ms`} icon={Clock3} />
-                <MetricCard title="Peso" value={formatBytes(downloadMetrics.sizeBytes)} icon={Download} />
+                <MetricCard title="Tiempo total" value={`${downloadMetrics.processingMs} ms`} icon={Clock3} />
+                <MetricCard title="Peso ZIP" value={formatBytes(downloadMetrics.sizeBytes)} icon={FileArchive} />
                 <MetricCard title="Estaciones" value={String(downloadMetrics.stationCount)} icon={MapPin} />
                 <MetricCard title="Municipios" value={String(downloadMetrics.municipalityCount)} icon={Layers} />
                 <MetricCard title="Zonas" value={String(downloadMetrics.zoneCount)} icon={Filter} />
@@ -790,8 +1150,8 @@ function StepPanel({
   endDate,
   onStartDateChange,
   onEndDateChange,
-  format,
-  onFormatChange,
+  selectedFormats,
+  onToggleOutputFormat,
   onDatasetChange,
   selectionSummary,
   coverageReports,
@@ -826,13 +1186,14 @@ function StepPanel({
   endDate: string;
   onStartDateChange: (value: string) => void;
   onEndDateChange: (value: string) => void;
-  format: FormatType;
-  onFormatChange: (value: FormatType) => void;
+  selectedFormats: OutputFormat[];
+  onToggleOutputFormat: (format: OutputFormat) => void;
   onDatasetChange: (value: string) => void;
   selectionSummary: {
     departments: string;
     advancedSelections: Array<{ label: string; values: string[] }>;
     stationCodes: string[];
+    formats: OutputFormat[];
   };
   coverageReports: CoverageReport[];
   coverageLoading: boolean;
@@ -852,8 +1213,7 @@ function StepPanel({
         <label className="flex items-start gap-3 rounded-lg border border-border bg-background p-4">
           <input type="checkbox" checked={acceptedTerms} onChange={(event) => onAcceptedTermsChange(event.target.checked)} />
           <span className="text-sm text-card-foreground font-medium">
-            Acepto los terminos y entiendo que la plataforma automatiza descargas de datos hidricos para uso tecnico,
-            academico o investigativo.
+            Acepto los terminos y entiendo que debo marcar este consentimiento para continuar con la configuracion y la descarga.
           </span>
         </label>
       </Section>
@@ -884,18 +1244,8 @@ function StepPanel({
     return (
       <Section title="Cobertura territorial" icon={MapPin}>
         <div className="grid grid-cols-2 gap-3">
-          <ChoiceCard
-            active={departmentMode === 'all'}
-            onClick={() => setDepartmentMode('all')}
-            title="Todo el pais"
-            description="No limitar por departamento"
-          />
-          <ChoiceCard
-            active={departmentMode === 'selected'}
-            onClick={() => setDepartmentMode('selected')}
-            title="Departamentos puntuales"
-            description="Replicar el paso de seleccion territorial"
-          />
+          <ChoiceCard active={departmentMode === 'all'} onClick={() => setDepartmentMode('all')} title="Todo el pais" description="No limitar por departamento" />
+          <ChoiceCard active={departmentMode === 'selected'} onClick={() => setDepartmentMode('selected')} title="Departamentos puntuales" description="Replicar el paso territorial del terminal" />
         </div>
         {departmentMode === 'selected' ? (
           <>
@@ -1054,21 +1404,27 @@ function StepPanel({
         </p>
       </div>
 
-      <div className="flex gap-2">
-        {(['csv', 'json'] as const).map((item) => (
-          <button
-            key={item}
-            type="button"
-            onClick={() => onFormatChange(item)}
-            className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
-              format === item
-                ? 'bg-accent text-accent-foreground shadow-[0_0_20px] shadow-accent/40'
-                : 'bg-muted text-muted-foreground hover:bg-primary/20 hover:text-card-foreground'
-            }`}
-          >
-            {item.toUpperCase()}
-          </button>
-        ))}
+      <div className="space-y-3">
+        <p className="text-sm font-semibold text-card-foreground">Formatos dentro del ZIP</p>
+        <div className="grid grid-cols-3 gap-3">
+          {(['csv', 'json', 'parquet'] as OutputFormat[]).map((format) => (
+            <button
+              key={format}
+              type="button"
+              onClick={() => onToggleOutputFormat(format)}
+              className={`rounded-lg border px-4 py-3 text-sm font-semibold transition-all ${
+                selectedFormats.includes(format)
+                  ? 'border-accent bg-accent/15 text-accent'
+                  : 'border-border bg-background text-muted-foreground hover:border-accent/40'
+              }`}
+            >
+              {format.toUpperCase()}
+            </button>
+          ))}
+        </div>
+        <div className="rounded-lg border border-border bg-background p-3 text-xs text-muted-foreground">
+          La descarga final se entrega como paquete ZIP comprimido.
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1097,7 +1453,7 @@ function StepPanel({
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-primary to-accent px-4 py-3 text-sm font-semibold text-primary-foreground hover:shadow-[0_0_24px] hover:shadow-accent/40 disabled:opacity-50"
         >
           <Download className="h-4 w-4" />
-          Descargar
+          Descargar ZIP
         </button>
       </div>
 

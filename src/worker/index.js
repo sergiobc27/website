@@ -3,8 +3,8 @@ const DEFAULT_CONFIG = {
   catalogDatasetId: "hp9r-jxuu",
   pageLimit: 50000,
   previewLimit: 200,
-  maxExportRows: 100000,
-  maxCatalogStations: 100000,
+  exportPageSize: 50000,
+  maxCatalogStations: null,
 };
 
 const DATASETS = [
@@ -75,8 +75,8 @@ function getConfig(env) {
     catalogDatasetId: env?.CATALOG_DATASET_ID || DEFAULT_CONFIG.catalogDatasetId,
     pageLimit: Number(env?.PAGE_LIMIT || DEFAULT_CONFIG.pageLimit),
     previewLimit: Number(env?.PREVIEW_LIMIT || DEFAULT_CONFIG.previewLimit),
-    maxExportRows: Number(env?.MAX_EXPORT_ROWS || DEFAULT_CONFIG.maxExportRows),
-    maxCatalogStations: DEFAULT_CONFIG.maxCatalogStations,
+    exportPageSize: Number(env?.EXPORT_PAGE_SIZE || DEFAULT_CONFIG.exportPageSize),
+    maxCatalogStations: env?.MAX_CATALOG_STATIONS ? Number(env.MAX_CATALOG_STATIONS) : DEFAULT_CONFIG.maxCatalogStations,
   };
 }
 
@@ -156,7 +156,9 @@ function buildDepartmentFilter(departments, column = "departamento") {
 
   const uniqueVariants = uniqueSorted(variants);
   return {
-    filter: uniqueVariants.length ? `upper(${column}) IN (${uniqueVariants.map((variant) => quoteSoql(variant.toUpperCase())).join(", ")})` : null,
+    filter: uniqueVariants.length
+      ? `upper(${column}) IN (${uniqueVariants.map((variant) => quoteSoql(variant.toUpperCase())).join(", ")})`
+      : null,
     replacements,
     variants: uniqueVariants,
   };
@@ -196,6 +198,15 @@ function timestampStamp() {
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const yy = String(now.getFullYear()).slice(-2);
   return `${hh}${mm}_${dd}${month}${yy}`;
+}
+
+function buildFileStem(payload, dataset) {
+  return [
+    fileSafePart(dataset.name, "variable").toLowerCase(),
+    fileSafePart(asArray(payload.departments ?? payload.department).join("-") || "todos", "todos").toLowerCase(),
+    fileSafePart(asArray(payload.outputMunicipalities ?? payload.municipality).join("-") || "todos", "todos").toLowerCase(),
+    timestampStamp(),
+  ].join("_");
 }
 
 function parseDate(value) {
@@ -259,39 +270,35 @@ async function fetchCount(config, datasetId, where) {
   return Number(rows?.[0]?.total || 0);
 }
 
-async function fetchCountForPlans(config, datasetId, plans) {
-  let total = 0;
-  for (const plan of plans) {
-    total += await fetchCount(config, datasetId, plan.where);
-  }
-  return total;
-}
-
-async function fetchAllRows(config, datasetId, where, order, limitCap) {
+async function fetchAllRows(config, datasetId, where, order, limitCap = Number.POSITIVE_INFINITY, extraParams = {}) {
   const rows = [];
   let offset = 0;
-
   while (true) {
     const page = await socrataGet(config, datasetId, {
+      ...extraParams,
       "$where": where,
       "$order": order || ":id",
       "$limit": config.pageLimit,
       "$offset": offset,
     });
-
     if (!page.length) break;
-
     rows.push(...page);
-    if (rows.length > limitCap) {
-      throw new Error(
-        `La consulta excede el limite operativo de ${config.maxExportRows.toLocaleString("es-CO")} filas. Reduce el rango o agrega filtros.`
-      );
+    if (Number.isFinite(limitCap) && rows.length > limitCap) {
+      throw new Error("La consulta excede el limite operativo de " + limitCap.toLocaleString("es-CO") + " registros intermedios.");
     }
     if (page.length < config.pageLimit) break;
     offset += config.pageLimit;
   }
-
   return rows;
+}
+
+async function fetchPlanPage(config, datasetId, where, order, offset, limit) {
+  return socrataGet(config, datasetId, {
+    "$where": where,
+    "$order": order || ":id",
+    "$limit": limit,
+    "$offset": offset,
+  });
 }
 
 async function fetchPreviewRowsForPlans(config, datasetId, plans, order) {
@@ -390,24 +397,21 @@ function buildCatalogWhere(payload, excludeKey = null) {
 async function resolveStationPool(config, payload) {
   const manualCodes = expandStationCodes(payload.stationCodes || payload.stationCode);
   const catalogWhere = buildCatalogWhere(payload);
-
   if (!catalogWhere) {
     return manualCodes.length ? uniqueSorted(manualCodes) : null;
   }
-
   const catalogRows = await fetchAllRows(
     config,
     config.catalogDatasetId,
     catalogWhere,
     "codigo",
-    config.maxCatalogStations
+    config.maxCatalogStations ?? Number.POSITIVE_INFINITY,
+    { "$select": "codigo" }
   );
-
   const combined = new Set(manualCodes);
   catalogRows.forEach((row) => {
     expandStationCodes(row.codigo).forEach((code) => combined.add(code));
   });
-
   return uniqueSorted(Array.from(combined));
 }
 
@@ -455,6 +459,36 @@ async function buildQueryPlans(config, payload, dataset) {
   };
 }
 
+async function buildExportPlan(config, payload, dataset) {
+  const built = await buildQueryPlans(config, payload, dataset);
+  const planPages = [];
+  let rowCount = 0;
+
+  for (let index = 0; index < built.plans.length; index += 1) {
+    const where = built.plans[index].where;
+    const count = await fetchCount(config, dataset.id, where);
+    rowCount += count;
+    planPages.push({
+      planIndex: index,
+      where,
+      rowCount: count,
+      pageCount: Math.ceil(count / config.exportPageSize),
+    });
+  }
+
+  return {
+    dataset,
+    replacements: built.replacements,
+    stationPoolSize: built.stationPoolSize,
+    queryPlans: built.plans.length,
+    rowCount,
+    pageSize: config.exportPageSize,
+    totalPages: planPages.reduce((sum, item) => sum + item.pageCount, 0),
+    fileStem: buildFileStem(payload, dataset),
+    planPages,
+  };
+}
+
 async function parsePayload(request) {
   const payload = await request.json();
   if (!payload.datasetId || !payload.startDate || !payload.endDate) {
@@ -473,7 +507,8 @@ async function handleMeta(env) {
     datasets: DATASETS,
     departments: Object.keys(DEPARTMENT_MAP).sort(),
     previewLimit: config.previewLimit,
-    maxExportRows: config.maxExportRows,
+    exportPageSize: config.exportPageSize,
+    maxExportRows: null,
     catalogFilters: CATALOG_FILTERS,
   });
 }
@@ -529,8 +564,7 @@ async function handleMunicipalities(request, env) {
     "$limit": 5000,
   });
 
-  const municipalities = uniqueSorted(rows.map((row) => row.municipio));
-  return jsonResponse({ municipalities });
+  return jsonResponse({ municipalities: uniqueSorted(rows.map((row) => row.municipio)) });
 }
 
 async function handleCatalogOptions(request, env) {
@@ -553,10 +587,7 @@ async function handleCatalogOptions(request, env) {
   return jsonResponse({
     attributeKey: definition.key,
     options: rows
-      .map((row) => ({
-        value: row[definition.column],
-        total: Number(row.total || 0),
-      }))
+      .map((row) => ({ value: row[definition.column], total: Number(row.total || 0) }))
       .filter((row) => row.value),
   });
 }
@@ -595,6 +626,7 @@ async function handleCoverage(request, env) {
   }
 
   const reports = [];
+
   for (const department of departments) {
     const configured = departmentVariants(department).map((value) => normalizeLabel(value));
     const needle = normalizeLabel(department).slice(0, 4);
@@ -643,67 +675,108 @@ async function handlePreview(request, env) {
   const { payload, dataset } = await parsePayload(request);
   const startedAt = Date.now();
   const built = await buildQueryPlans(config, payload, dataset);
-  const rowCount = built.plans.length ? await fetchCountForPlans(config, dataset.id, built.plans) : 0;
+  let rowCount = 0;
+
+  for (const plan of built.plans) {
+    rowCount += await fetchCount(config, dataset.id, plan.where);
+  }
+
   const rows = built.plans.length
     ? await fetchPreviewRowsForPlans(config, dataset.id, built.plans, dataset.dateColumn ? `${dataset.dateColumn} DESC` : ":id")
     : [];
   const normalized = normalizeRows(rows, dataset.id, built.replacements, dataset.dateColumn);
-  const summary = summarizeRows(normalized, dataset);
 
   return jsonResponse({
     datasetId: dataset.id,
     rowCount,
     rows: normalized,
-    summary,
+    summary: summarizeRows(normalized, dataset),
     stationPoolSize: built.stationPoolSize,
     queryPlans: built.plans.length,
     processingMs: Date.now() - startedAt,
   });
 }
 
-async function handleExport(request, env) {
+async function handleExportPlan(request, env) {
   const config = getConfig(env);
   const { payload, dataset } = await parsePayload(request);
   const startedAt = Date.now();
-  const built = await buildQueryPlans(config, payload, dataset);
-  const total = built.plans.length ? await fetchCountForPlans(config, dataset.id, built.plans) : 0;
+  const plan = await buildExportPlan(config, payload, dataset);
 
-  if (total > config.maxExportRows) {
-    return jsonResponse(
-      {
-        error: `La consulta excede el limite operativo de ${config.maxExportRows.toLocaleString("es-CO")} filas. Reduce el rango o agrega filtros.`,
-      },
-      413
-    );
+  return jsonResponse({
+    datasetId: dataset.id,
+    fileStem: plan.fileStem,
+    rowCount: plan.rowCount,
+    pageSize: plan.pageSize,
+    totalPages: plan.totalPages,
+    queryPlans: plan.queryPlans,
+    stationPoolSize: plan.stationPoolSize,
+    replacements: plan.replacements,
+    planPages: plan.planPages,
+    processingMs: Date.now() - startedAt,
+  });
+}
+
+async function handleExportPage(request, env) {
+  const config = getConfig(env);
+  const body = await request.json();
+  const dataset = resolveDataset(body.datasetId);
+  if (!dataset) {
+    return jsonResponse({ error: "Dataset no soportado en export-page." }, 400);
+  }
+
+  if (!body.where && body.where !== null) {
+    return jsonResponse({ error: "where es requerido para export-page." }, 400);
+  }
+
+  const offset = Number(body.offset || 0);
+  const limit = Math.min(Number(body.limit || config.exportPageSize), config.exportPageSize);
+  const rows = await fetchPlanPage(
+    config,
+    dataset.id,
+    body.where,
+    dataset.dateColumn ? `${dataset.dateColumn} DESC` : ":id",
+    offset,
+    limit
+  );
+  const normalized = normalizeRows(rows, dataset.id, body.replacements || {}, dataset.dateColumn);
+
+  return jsonResponse({
+    datasetId: dataset.id,
+    planIndex: Number(body.planIndex || 0),
+    offset,
+    returnedRows: normalized.length,
+    rows: normalized,
+  });
+}
+
+async function handleExport(request, env) {
+  const config = getConfig(env);
+  const { payload, dataset } = await parsePayload(request);
+  const plan = await buildExportPlan(config, payload, dataset);
+
+  if (!plan.rowCount) {
+    return jsonResponse({ error: "La consulta no contiene datos para descargar." }, 404);
   }
 
   const rows = [];
-  for (const plan of built.plans) {
+  for (const entry of plan.planPages) {
     const pageRows = await fetchAllRows(
       config,
       dataset.id,
-      plan.where,
-      dataset.dateColumn ? `${dataset.dateColumn} DESC` : ":id",
-      config.maxExportRows
+      entry.where,
+      dataset.dateColumn ? `${dataset.dateColumn} DESC` : ":id"
     );
     rows.push(...pageRows);
   }
 
-  const normalized = normalizeRows(rows, dataset.id, built.replacements, dataset.dateColumn);
+  const normalized = normalizeRows(rows, dataset.id, plan.replacements, dataset.dateColumn);
   const summary = summarizeRows(normalized, dataset);
-  const fileStem = [
-    fileSafePart(dataset.name, "variable").toLowerCase(),
-    fileSafePart(asArray(payload.departments ?? payload.department).join("-") || "todos", "todos").toLowerCase(),
-    fileSafePart(asArray(payload.outputMunicipalities ?? payload.municipality).join("-") || "todos", "todos").toLowerCase(),
-    timestampStamp(),
-  ].join("_");
-
-  const durationMs = Date.now() - startedAt;
   const format = (payload.format || "csv").toLowerCase();
   const body = format === "json" ? JSON.stringify(normalized, null, 2) : rowsToCsv(normalized);
   const mimeType = format === "json" ? "application/json; charset=utf-8" : "text/csv; charset=utf-8";
   const extension = format === "json" ? "json" : "csv";
-  const fileName = `${fileStem}.${extension}`;
+  const fileName = `${plan.fileStem}.${extension}`;
   const byteSize = new TextEncoder().encode(body).length;
 
   return new Response(body, {
@@ -718,10 +791,9 @@ async function handleExport(request, env) {
       "x-zone-count": String(summary.zoneCount),
       "x-observed-start": summary.observedStart || "",
       "x-observed-end": summary.observedEnd || "",
-      "x-processing-ms": String(durationMs),
       "x-size-bytes": String(byteSize),
-      "x-station-pool-size": String(built.stationPoolSize),
-      "x-query-plans": String(built.plans.length),
+      "x-station-pool-size": String(plan.stationPoolSize),
+      "x-query-plans": String(plan.queryPlans),
     },
   });
 }
@@ -753,6 +825,12 @@ async function handleApi(request, env) {
     }
     if (url.pathname === "/api/preview" && request.method === "POST") {
       return handlePreview(request, env);
+    }
+    if (url.pathname === "/api/export-plan" && request.method === "POST") {
+      return handleExportPlan(request, env);
+    }
+    if (url.pathname === "/api/export-page" && request.method === "POST") {
+      return handleExportPage(request, env);
     }
     if (url.pathname === "/api/export" && request.method === "POST") {
       return handleExport(request, env);
