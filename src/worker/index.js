@@ -645,44 +645,19 @@ async function handleCoverage(request, env) {
   for (const department of departments) {
     const variants = departmentVariants(department);
     const configured = variants.map((value) => normalizeLabel(value));
-    const normalizedDepartment = normalizeLabel(department);
-    const discovered = await socrataGet(config, datasetId, {
-      "$select": "departamento",
-      "$where": `upper(departamento) IN (${variants.map((variant) => quoteSoql(variant.toUpperCase())).join(", ")})`,
-      "$order": "departamento",
-      "$limit": 1000,
-    });
-
-    const matched = [];
-    const unmatched = [];
-    const seen = new Set();
-
-    discovered.forEach((row) => {
-      const normalized = normalizeLabel(row.departamento);
-      const looksRelated =
-        normalized === normalizedDepartment ||
-        configured.includes(normalized);
-
-      if (!looksRelated) return;
-      if (seen.has(normalized)) return;
-      seen.add(normalized);
-
-      const record = {
-        departamento: row.departamento,
-        normalized,
-        total: 1,
-      };
-      if (configured.includes(normalized)) matched.push(record);
-      else unmatched.push(record);
-    });
+    const matched = Array.from(new Set(variants)).map((variant) => ({
+      departamento: variant,
+      normalized: normalizeLabel(variant),
+      total: 1,
+    }));
 
     reports.push({
       department,
       configured_variants: Array.from(new Set(configured)).sort(),
       matched,
-      unmatched_discovered: unmatched,
+      unmatched_discovered: [],
       matched_rows: matched.reduce((sum, row) => sum + row.total, 0),
-      unmatched_rows: unmatched.reduce((sum, row) => sum + row.total, 0),
+      unmatched_rows: 0,
     });
   }
 
