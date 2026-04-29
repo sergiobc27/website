@@ -15,8 +15,30 @@
     "SOCRATA_DOMAIN": "https://www.datos.gov.co",
     "CATALOG_DATASET_ID": "hp9r-jxuu",
     "PAGE_LIMIT": "50000",
-    "PREVIEW_LIMIT": "200",
-    "MAX_EXPORT_ROWS": "100000"
+    "PREVIEW_LIMIT": "200"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "EXPORT_JOBS",
+        "class_name": "ExportJobDurableObject"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v2_export_jobs",
+      "new_sqlite_classes": ["ExportJobDurableObject"]
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "EXPORTS_BUCKET",
+      "bucket_name": "ideam-exports"
+    }
+  ],
+  "limits": {
+    "cpu_ms": 300000
   },
   "assets": {
     "directory": "./dist",

@@ -1,9 +1,14 @@
+import JSZip from "jszip";
+
+const ASYNC_EXPORT_PAGE_BATCH = 1;
+
 const DEFAULT_CONFIG = {
   socrataDomain: "https://www.datos.gov.co",
   catalogDatasetId: "hp9r-jxuu",
   pageLimit: 50000,
   previewLimit: 200,
   exportPageSize: 50000,
+  maxExportRows: null,
   maxCatalogStations: null,
 };
 
@@ -88,10 +93,11 @@ function getConfig(env) {
   return {
     socrataDomain: env?.SOCRATA_DOMAIN || DEFAULT_CONFIG.socrataDomain,
     catalogDatasetId: env?.CATALOG_DATASET_ID || DEFAULT_CONFIG.catalogDatasetId,
-    pageLimit: Number(env?.PAGE_LIMIT || DEFAULT_CONFIG.pageLimit),
-    previewLimit: Number(env?.PREVIEW_LIMIT || DEFAULT_CONFIG.previewLimit),
-    exportPageSize: Number(env?.EXPORT_PAGE_SIZE || DEFAULT_CONFIG.exportPageSize),
-    maxCatalogStations: env?.MAX_CATALOG_STATIONS ? Number(env.MAX_CATALOG_STATIONS) : DEFAULT_CONFIG.maxCatalogStations,
+    pageLimit: positiveNumber(env?.PAGE_LIMIT, DEFAULT_CONFIG.pageLimit),
+    previewLimit: positiveNumber(env?.PREVIEW_LIMIT, DEFAULT_CONFIG.previewLimit),
+    exportPageSize: positiveNumber(env?.EXPORT_PAGE_SIZE, DEFAULT_CONFIG.exportPageSize),
+    maxExportRows: positiveNumber(env?.MAX_EXPORT_ROWS, DEFAULT_CONFIG.maxExportRows),
+    maxCatalogStations: env?.MAX_CATALOG_STATIONS ? positiveNumber(env.MAX_CATALOG_STATIONS, DEFAULT_CONFIG.maxCatalogStations) : DEFAULT_CONFIG.maxCatalogStations,
   };
 }
 
@@ -113,6 +119,11 @@ function asArray(value) {
 
 function uniqueSorted(values, locale = "es") {
   return Array.from(new Set(values.filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b), locale));
+}
+
+function positiveNumber(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 function chunkArray(values, size) {
@@ -474,6 +485,112 @@ async function buildQueryPlans(config, payload, dataset) {
   };
 }
 
+async function buildCoveragePlans(config, payload, dataset) {
+  const filters = [];
+
+  const outputMunicipalities = asArray(payload.outputMunicipalities ?? payload.municipality);
+  if (outputMunicipalities.length) {
+    filters.push(buildUpperInFilter(outputMunicipalities, "municipio"));
+  }
+
+  buildDateFilters(dataset, payload.startDate, payload.endDate).forEach((filter) => filters.push(filter));
+
+  const stationPool = await resolveStationPool(config, payload);
+  if (stationPool === null) {
+    return {
+      plans: [{ where: filters.filter(Boolean).join(" AND ") || null }],
+      stationPoolSize: 0,
+    };
+  }
+
+  if (!stationPool.length) {
+    return {
+      plans: [],
+      stationPoolSize: 0,
+    };
+  }
+
+  return {
+    plans: chunkArray(stationPool, 400).map((chunk) => ({
+      where: filters.concat([buildExactInFilter(chunk, "codigoestacion")]).filter(Boolean).join(" AND "),
+    })),
+    stationPoolSize: stationPool.length,
+  };
+}
+
+async function collectCoverageRows(config, payload, dataset) {
+  const built = await buildCoveragePlans(config, payload, dataset);
+  const totals = new Map();
+
+  for (const plan of built.plans) {
+    const rows = await socrataGet(config, dataset.id, {
+      "$select": "departamento, count(*) as total",
+      "$where": plan.where,
+      "$group": "departamento",
+      "$order": "departamento",
+      "$limit": 5000,
+    });
+
+    rows.forEach((row) => {
+      if (!row?.departamento) return;
+      const key = String(row.departamento);
+      const current = totals.get(key) || { departamento: key, normalized: normalizeLabel(key), total: 0 };
+      current.total += Number(row.total || 0);
+      totals.set(key, current);
+    });
+  }
+
+  return {
+    rows: Array.from(totals.values()).sort((left, right) => left.departamento.localeCompare(right.departamento, "es")),
+    stationPoolSize: built.stationPoolSize,
+    queryPlans: built.plans.length,
+  };
+}
+
+function classifyCoverageRows(department, discoveredRows) {
+  const configuredVariants = Array.from(new Set(departmentVariants(department).map((value) => normalizeLabel(value)))).sort();
+  const searchTokens = Array.from(
+    new Set(
+      configuredVariants
+        .flatMap((value) => value.split(/[^A-Z0-9]+/))
+        .filter((token) => token.length >= 4)
+    )
+  );
+
+  const matched = [];
+  const unmatched = [];
+
+  discoveredRows.forEach((row) => {
+    const normalized = normalizeLabel(row.departamento);
+    const looksRelated =
+      configuredVariants.includes(normalized) ||
+      searchTokens.some((token) => normalized.includes(token) || token.includes(normalized));
+
+    if (!looksRelated) return;
+
+    const record = {
+      departamento: row.departamento,
+      normalized,
+      total: Number(row.total || 0),
+    };
+
+    if (configuredVariants.includes(normalized)) {
+      matched.push(record);
+    } else {
+      unmatched.push(record);
+    }
+  });
+
+  return {
+    department,
+    configured_variants: configuredVariants,
+    matched,
+    unmatched_discovered: unmatched,
+    matched_rows: matched.reduce((sum, row) => sum + row.total, 0),
+    unmatched_rows: unmatched.reduce((sum, row) => sum + row.total, 0),
+  };
+}
+
 async function buildExportPlan(config, payload, dataset) {
   const built = await buildQueryPlans(config, payload, dataset);
   const planPages = [];
@@ -632,38 +749,21 @@ async function handleStationHelper(request, env) {
 
 async function handleCoverage(request, env) {
   const config = getConfig(env);
-  const payload = await request.json();
-  const datasetId = payload.datasetId;
+  const { payload, dataset } = await parsePayload(request);
   const departments = asArray(payload.departments ?? payload.department);
 
-  if (!datasetId || !departments.length) {
-    return jsonResponse({ error: "datasetId y departments son requeridos." }, 400);
+  if (!departments.length) {
+    return jsonResponse({ error: "Debes seleccionar al menos un departamento para validar cobertura." }, 400);
   }
 
-  const reports = [];
-
-  for (const department of departments) {
-    const variants = departmentVariants(department);
-    const configured = variants.map((value) => normalizeLabel(value));
-    const matched = Array.from(new Set(variants)).map((variant) => ({
-      departamento: variant,
-      normalized: normalizeLabel(variant),
-      total: 1,
-    }));
-
-    reports.push({
-      department,
-      configured_variants: Array.from(new Set(configured)).sort(),
-      matched,
-      unmatched_discovered: [],
-      matched_rows: matched.reduce((sum, row) => sum + row.total, 0),
-      unmatched_rows: 0,
-    });
-  }
+  const discovered = await collectCoverageRows(config, payload, dataset);
+  const reports = departments.map((department) => classifyCoverageRows(department, discovered.rows));
 
   return jsonResponse({
-    datasetId,
+    datasetId: dataset.id,
     reports,
+    stationPoolSize: discovered.stationPoolSize,
+    queryPlans: discovered.queryPlans,
     totalMatchedRows: reports.reduce((sum, item) => sum + item.matched_rows, 0),
     totalUnmatchedRows: reports.reduce((sum, item) => sum + item.unmatched_rows, 0),
   });
@@ -797,7 +897,446 @@ async function handleExport(request, env) {
   });
 }
 
-async function handleApi(request, env) {
+function sanitizeRequestedFormats(formats) {
+  const requested = Array.isArray(formats) ? formats.filter(Boolean) : [];
+  const normalized = Array.from(new Set(requested.map((value) => String(value).toLowerCase())));
+  const effective = normalized.filter((value) => value === "csv" || value === "json");
+  const warnings = [];
+
+  if (normalized.includes("parquet")) {
+    warnings.push("El formato Parquet todavia no esta disponible en la exportacion asincrona. Se omitio para priorizar estabilidad.");
+  }
+
+  if (!effective.length) {
+    effective.push("csv");
+    if (normalized.length) {
+      warnings.push("Se agrego CSV como formato de respaldo para garantizar una descarga util.");
+    }
+  }
+
+  return { requested: normalized, effective, warnings };
+}
+
+function buildJobPartBaseName(fileStem, partIndex) {
+  return `${fileStem}_part_${String(partIndex).padStart(4, "0")}`;
+}
+
+function createAccumulatorState() {
+  return {
+    stationCodes: [],
+    municipalities: [],
+    departments: [],
+    zones: [],
+    observedStart: null,
+    observedEnd: null,
+  };
+}
+
+function mergeAccumulatorState(state, rows, dateColumn) {
+  const stationCodes = new Set(state.stationCodes || []);
+  const municipalities = new Set(state.municipalities || []);
+  const departments = new Set(state.departments || []);
+  const zones = new Set(state.zones || []);
+  let observedStart = state.observedStart || null;
+  let observedEnd = state.observedEnd || null;
+
+  rows.forEach((row) => {
+    if (row.codigoestacion) stationCodes.add(String(row.codigoestacion));
+    if (row.municipio) municipalities.add(String(row.municipio));
+    if (row.departamento) departments.add(String(row.departamento));
+    if (row.zonahidrografica) zones.add(String(row.zonahidrografica));
+    if (dateColumn && row[dateColumn]) {
+      const parsed = parseDate(row[dateColumn]);
+      if (parsed) {
+        const iso = parsed.toISOString();
+        observedStart = observedStart ? (iso < observedStart ? iso : observedStart) : iso;
+        observedEnd = observedEnd ? (iso > observedEnd ? iso : observedEnd) : iso;
+      }
+    }
+  });
+
+  return {
+    stationCodes: Array.from(stationCodes),
+    municipalities: Array.from(municipalities),
+    departments: Array.from(departments),
+    zones: Array.from(zones),
+    observedStart,
+    observedEnd,
+  };
+}
+
+function finalizeAccumulatorState(state, rowCount) {
+  return {
+    rowCount,
+    stationCount: (state.stationCodes || []).length,
+    municipalityCount: (state.municipalities || []).length,
+    departmentCount: (state.departments || []).length,
+    zoneCount: (state.zones || []).length,
+    observedStart: state.observedStart || "",
+    observedEnd: state.observedEnd || "",
+  };
+}
+
+async function createArchivePart(rows, formats, baseName, metadata) {
+  const zip = new JSZip();
+
+  if (formats.includes("csv")) {
+    zip.file(`${baseName}.csv`, rowsToCsv(rows));
+  }
+
+  if (formats.includes("json")) {
+    zip.file(`${baseName}.json`, JSON.stringify(rows, null, 2));
+  }
+
+  zip.file(`${baseName}_manifest.json`, JSON.stringify(metadata, null, 2));
+
+  return zip.generateAsync({
+    type: "uint8array",
+    compression: "DEFLATE",
+    compressionOptions: { level: 6 },
+  });
+}
+
+function buildJobResponse(job) {
+  return {
+    jobId: job.id,
+    status: job.status,
+    createdAt: job.createdAt,
+    startedAt: job.startedAt || null,
+    finishedAt: job.finishedAt || null,
+    updatedAt: job.updatedAt,
+    datasetId: job.datasetId,
+    datasetName: job.datasetName,
+    fileStem: job.fileStem,
+    warnings: job.warnings || [],
+    error: job.error || null,
+    selectedFormats: job.selectedFormats || [],
+    effectiveFormats: job.effectiveFormats || [],
+    rowCount: job.plan?.rowCount || 0,
+    totalPages: job.plan?.totalPages || 0,
+    completedPages: job.completedPages || 0,
+    processedRows: job.processedRows || 0,
+    queryPlans: job.plan?.queryPlans || 0,
+    stationPoolSize: job.plan?.stationPoolSize || 0,
+    parts: job.parts || [],
+    metrics: job.metrics || null,
+  };
+}
+
+async function loadJobFromStorage(storage) {
+  return (await storage.get("job")) || null;
+}
+
+async function saveJobToStorage(storage, job) {
+  job.updatedAt = new Date().toISOString();
+  await storage.put("job", job);
+}
+
+function getNextPageDescriptor(job) {
+  const planPages = job.plan?.planPages || [];
+  const planCursor = job.planCursor || { planIndex: 0, pageIndex: 0 };
+
+  while (planCursor.planIndex < planPages.length) {
+    const planPage = planPages[planCursor.planIndex];
+    if (planCursor.pageIndex < planPage.pageCount) {
+      return {
+        planIndex: planCursor.planIndex,
+        pageIndex: planCursor.pageIndex,
+        offset: planCursor.pageIndex * job.plan.pageSize,
+        where: planPage.where,
+        rowCount: planPage.rowCount,
+      };
+    }
+    planCursor.planIndex += 1;
+    planCursor.pageIndex = 0;
+  }
+
+  return null;
+}
+
+function advanceJobCursor(job) {
+  const planPages = job.plan?.planPages || [];
+  job.planCursor = job.planCursor || { planIndex: 0, pageIndex: 0 };
+  job.planCursor.pageIndex += 1;
+  while (job.planCursor.planIndex < planPages.length && job.planCursor.pageIndex >= planPages[job.planCursor.planIndex].pageCount) {
+    job.planCursor.planIndex += 1;
+    job.planCursor.pageIndex = 0;
+  }
+}
+
+async function planExportJob(env, job) {
+  const config = getConfig(env);
+  const dataset = resolveDataset(job.datasetId);
+  if (!dataset) {
+    throw new Error("Dataset no soportado para el job de exportacion.");
+  }
+
+  const plan = await buildExportPlan(config, job.payload, dataset);
+  job.status = plan.rowCount ? "processing" : "completed";
+  job.startedAt = job.startedAt || new Date().toISOString();
+  job.datasetName = dataset.name;
+  job.dateColumn = dataset.dateColumn || "fechaobservacion";
+  job.fileStem = plan.fileStem;
+  job.plan = plan;
+  job.completedPages = 0;
+  job.processedRows = 0;
+  job.parts = [];
+  job.summaryState = createAccumulatorState();
+  job.planCursor = { planIndex: 0, pageIndex: 0 };
+
+  if (!plan.rowCount) {
+    const summary = finalizeAccumulatorState(job.summaryState, 0);
+    job.metrics = {
+      fileName: `${job.fileStem}_sin_datos`,
+      rowCount: 0,
+      stationCount: summary.stationCount,
+      municipalityCount: summary.municipalityCount,
+      departmentCount: summary.departmentCount,
+      zoneCount: summary.zoneCount,
+      processingMs: 0,
+      sizeBytes: 0,
+      observedStart: summary.observedStart,
+      observedEnd: summary.observedEnd,
+      queryPlans: plan.queryPlans,
+      stationPoolSize: plan.stationPoolSize,
+      archivePartCount: 0,
+      downloadedPages: 0,
+    };
+    job.finishedAt = new Date().toISOString();
+  }
+}
+
+async function processExportJobBatch(env, job) {
+  if (!env.EXPORTS_BUCKET) {
+    throw new Error("EXPORTS_BUCKET no esta configurado en Cloudflare. Configura el bucket R2 antes de usar exportaciones asincronas.");
+  }
+
+  const config = getConfig(env);
+  const dataset = resolveDataset(job.datasetId);
+  if (!dataset) {
+    throw new Error("Dataset no soportado para procesamiento asincrono.");
+  }
+
+  let processedAnyPage = false;
+
+  for (let batchIndex = 0; batchIndex < ASYNC_EXPORT_PAGE_BATCH; batchIndex += 1) {
+    const descriptor = getNextPageDescriptor(job);
+    if (!descriptor) break;
+
+    const rows = await fetchPlanPage(
+      config,
+      dataset.id,
+      descriptor.where,
+      dataset.dateColumn ? `${dataset.dateColumn} DESC` : ":id",
+      descriptor.offset,
+      job.plan.pageSize
+    );
+    const normalized = normalizeRows(rows, dataset.id, job.plan.replacements || {}, dataset.dateColumn);
+    const partIndex = (job.parts || []).length + 1;
+    const baseName = buildJobPartBaseName(job.fileStem, partIndex);
+    const archiveBuffer = await createArchivePart(normalized, job.effectiveFormats, baseName, {
+      jobId: job.id,
+      datasetId: dataset.id,
+      datasetName: dataset.name,
+      partIndex,
+      pageIndex: descriptor.pageIndex + 1,
+      planIndex: descriptor.planIndex + 1,
+      rowCount: normalized.length,
+      formats: job.effectiveFormats,
+      requestedFormats: job.selectedFormats,
+      warnings: job.warnings || [],
+    });
+    const key = `exports/${job.id}/${baseName}.zip`;
+    await env.EXPORTS_BUCKET.put(key, archiveBuffer, {
+      httpMetadata: { contentType: "application/zip" },
+    });
+
+    job.summaryState = mergeAccumulatorState(job.summaryState, normalized, dataset.dateColumn);
+    job.processedRows += normalized.length;
+    job.completedPages += 1;
+    job.parts.push({
+      index: partIndex,
+      key,
+      fileName: `${baseName}.zip`,
+      rowCount: normalized.length,
+      sizeBytes: archiveBuffer.byteLength,
+      formats: job.effectiveFormats,
+      downloadPath: `/api/jobs/${job.id}/parts/${partIndex}`,
+    });
+
+    advanceJobCursor(job);
+    processedAnyPage = true;
+  }
+
+  if (!processedAnyPage || job.completedPages >= (job.plan?.totalPages || 0)) {
+    const summary = finalizeAccumulatorState(job.summaryState, job.processedRows || 0);
+    const startedAt = job.startedAt ? new Date(job.startedAt).valueOf() : Date.now();
+    job.status = "completed";
+    job.finishedAt = new Date().toISOString();
+    job.metrics = {
+      fileName: `${job.fileStem}_partes`,
+      rowCount: summary.rowCount,
+      stationCount: summary.stationCount,
+      municipalityCount: summary.municipalityCount,
+      departmentCount: summary.departmentCount,
+      zoneCount: summary.zoneCount,
+      processingMs: Math.max(0, new Date(job.finishedAt).valueOf() - startedAt),
+      sizeBytes: (job.parts || []).reduce((sum, part) => sum + Number(part.sizeBytes || 0), 0),
+      observedStart: summary.observedStart,
+      observedEnd: summary.observedEnd,
+      queryPlans: job.plan?.queryPlans || 0,
+      stationPoolSize: job.plan?.stationPoolSize || 0,
+      archivePartCount: (job.parts || []).length,
+      downloadedPages: job.completedPages || 0,
+    };
+  }
+}
+
+class ExportJobDurableObject {
+  constructor(state, env) {
+    this.state = state;
+    this.env = env;
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+
+    if (url.pathname === "/create" && request.method === "POST") {
+      const body = await request.json();
+      const payload = body.payload || {};
+      const dataset = resolveDataset(payload.datasetId);
+      if (!dataset) {
+        return jsonResponse({ error: "Dataset no soportado en la exportacion asincrona." }, 400);
+      }
+
+      const formatState = sanitizeRequestedFormats(body.formats || payload.formats || []);
+      const now = new Date().toISOString();
+      const job = {
+        id: body.jobId,
+        status: "queued",
+        createdAt: now,
+        updatedAt: now,
+        startedAt: null,
+        finishedAt: null,
+        datasetId: dataset.id,
+        datasetName: dataset.name,
+        payload,
+        selectedFormats: formatState.requested,
+        effectiveFormats: formatState.effective,
+        warnings: formatState.warnings,
+        error: null,
+        fileStem: null,
+        plan: null,
+        completedPages: 0,
+        processedRows: 0,
+        parts: [],
+        summaryState: createAccumulatorState(),
+        planCursor: { planIndex: 0, pageIndex: 0 },
+        metrics: null,
+      };
+      await saveJobToStorage(this.state.storage, job);
+      await this.state.storage.setAlarm(Date.now());
+      return jsonResponse(buildJobResponse(job), 202);
+    }
+
+    const job = await loadJobFromStorage(this.state.storage);
+    if (!job) {
+      return jsonResponse({ error: "Job no encontrado." }, 404);
+    }
+
+    if (url.pathname === "/status" && request.method === "GET") {
+      return jsonResponse(buildJobResponse(job));
+    }
+
+    if (url.pathname === "/manifest" && request.method === "GET") {
+      return jsonResponse({
+        ...buildJobResponse(job),
+        parts: (job.parts || []).map((part) => ({
+          ...part,
+          absoluteUrl: part.downloadPath,
+        })),
+      });
+    }
+
+    if (url.pathname.startsWith("/parts/") && request.method === "GET") {
+      const partIndex = Number(url.pathname.split("/").pop());
+      const part = (job.parts || []).find((item) => item.index === partIndex);
+      if (!part) {
+        return jsonResponse({ error: "Parte de descarga no encontrada." }, 404);
+      }
+      const object = await this.env.EXPORTS_BUCKET.get(part.key);
+      if (!object) {
+        return jsonResponse({ error: "Archivo de salida no disponible en R2." }, 404);
+      }
+      return new Response(object.body, {
+        headers: {
+          "content-type": object.httpMetadata?.contentType || "application/zip",
+          "content-disposition": `attachment; filename="${part.fileName}"`,
+          "cache-control": "no-store",
+        },
+      });
+    }
+
+    return jsonResponse({ error: "Ruta interna de job no encontrada." }, 404);
+  }
+
+  async alarm() {
+    const job = await loadJobFromStorage(this.state.storage);
+    if (!job || job.status === "completed" || job.status === "failed") {
+      return;
+    }
+
+    try {
+      if (!job.plan) {
+        job.status = "planning";
+        await saveJobToStorage(this.state.storage, job);
+        await planExportJob(this.env, job);
+      } else if (job.status !== "completed") {
+        job.status = "processing";
+        await processExportJobBatch(this.env, job);
+      }
+    } catch (error) {
+      job.status = "failed";
+      job.error = error?.message || "Fallo interno procesando el job de exportacion.";
+      job.finishedAt = new Date().toISOString();
+    }
+
+    await saveJobToStorage(this.state.storage, job);
+
+    if (job.status !== "completed" && job.status !== "failed") {
+      await this.state.storage.setAlarm(Date.now() + 250);
+    }
+  }
+}
+
+async function handleCreateJob(request, env) {
+  if (!env.EXPORT_JOBS) {
+    return jsonResponse({ error: "EXPORT_JOBS no esta configurado en Cloudflare." }, 500);
+  }
+
+  const body = await request.json();
+  const jobId = crypto.randomUUID();
+  const stub = env.EXPORT_JOBS.get(env.EXPORT_JOBS.idFromName(jobId));
+  return stub.fetch(
+    new Request("https://export-job/create", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jobId, payload: body, formats: body.formats || [] }),
+    })
+  );
+}
+
+async function handleJobProxy(request, env, jobId, action, extra = null) {
+  if (!env.EXPORT_JOBS) {
+    return jsonResponse({ error: "EXPORT_JOBS no esta configurado en Cloudflare." }, 500);
+  }
+
+  const stub = env.EXPORT_JOBS.get(env.EXPORT_JOBS.idFromName(jobId));
+  const suffix = action === "status" ? "/status" : action === "manifest" ? "/manifest" : `/parts/${extra}`;
+  return stub.fetch(new Request(`https://export-job${suffix}`, { method: request.method }));
+}
+
+async function handleApi(request, env, ctx) {
   const url = new URL(request.url);
 
   try {
@@ -834,17 +1373,41 @@ async function handleApi(request, env) {
     if (url.pathname === "/api/export" && request.method === "POST") {
       return handleExport(request, env);
     }
+    if (url.pathname === "/api/jobs" && request.method === "POST") {
+      return handleCreateJob(request, env, ctx);
+    }
+    const jobMatch = url.pathname.match(/^\/api\/jobs\/([^/]+)(?:\/(manifest|parts)(?:\/([^/]+))?)?$/);
+    if (jobMatch && request.method === "GET") {
+      const [, jobId, action, extra] = jobMatch;
+      return handleJobProxy(request, env, jobId, action || "status", extra);
+    }
     return jsonResponse({ error: "Ruta API no encontrada." }, 404);
   } catch (error) {
     return jsonResponse({ error: error.message || "Error interno del Worker." }, 500);
   }
 }
 
+export {
+  buildDepartmentFilter,
+  buildQueryPlans,
+  classifyCoverageRows,
+  departmentVariants,
+  expandStationCodes,
+  getConfig,
+  handleExportPlan,
+  normalizeLabel,
+  rowsToCsv,
+  sanitizeRequestedFormats,
+  buildJobPartBaseName,
+  createArchivePart,
+  ExportJobDurableObject,
+};
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/api/")) {
-      return handleApi(request, env);
+      return handleApi(request, env, ctx);
     }
     return env.ASSETS.fetch(request);
   },

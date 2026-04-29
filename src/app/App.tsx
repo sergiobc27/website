@@ -11,7 +11,7 @@ export default function App() {
   const [currentView, setCurrentView] = useState('dashboard');
   const [runtime, setRuntime] = useState<ExtractorRuntimeState>({
     isBusy: false,
-    activeTask: 'Esperando configuracion',
+    activeTask: 'Esperando configuraci?n',
     progress: 0,
     elapsedMs: 0,
     downloadedRows: 0,
@@ -30,7 +30,7 @@ export default function App() {
       extractor: ['Inicio', 'Extractor de Datos'],
       history: ['Inicio', 'Historial de Descargas'],
       settings: ['Inicio', 'Ajustes de API'],
-      docs: ['Inicio', 'Documentacion'],
+      docs: ['Inicio', 'Documentaci?n'],
     };
     return breadcrumbMap[currentView] || ['Inicio'];
   };
@@ -76,7 +76,7 @@ function SettingsView() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <InfoCard icon={Cloud} title="Origen" value="datos.gov.co" detail="Socrata SODA API" />
-        <InfoCard icon={Database} title="Catalogo de estaciones" value="hp9r-jxuu" detail="Filtros territoriales y tecnicos" />
+        <InfoCard icon={Database} title="Cat?logo de estaciones" value="hp9r-jxuu" detail="Filtros territoriales y tecnicos" />
         <InfoCard icon={FileArchive} title="Salida" value="ZIP paginado" detail="CSV, JSON y Parquet opcional" />
       </div>
 

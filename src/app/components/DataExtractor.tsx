@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Calendar,
   CheckCircle2,
@@ -18,11 +18,9 @@ import {
   ShieldCheck,
   TimerReset,
 } from 'lucide-react';
-import parquetWasmUrl from 'parquet-wasm/esm/parquet_wasm_bg.wasm?url';
 import { EmptyState } from './EmptyState';
 
 const HISTORY_KEY = 'ideam-history';
-const ARCHIVE_PART_ROW_LIMIT = 100000;
 
 type StepId = 'consent' | 'variable' | 'territory' | 'advanced' | 'time' | 'execute';
 type OutputFormat = 'csv' | 'json' | 'parquet';
@@ -99,6 +97,39 @@ interface PreviewResponse {
   stationPoolSize: number;
   queryPlans: number;
   processingMs: number;
+}
+
+interface ExportJobPart {
+  index: number;
+  fileName: string;
+  rowCount: number;
+  sizeBytes: number;
+  formats: string[];
+  downloadPath: string;
+}
+
+interface ExportJobStatusResponse {
+  jobId: string;
+  status: 'queued' | 'planning' | 'processing' | 'completed' | 'failed';
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  updatedAt: string;
+  datasetId: string;
+  datasetName: string;
+  fileStem: string | null;
+  warnings: string[];
+  error: string | null;
+  selectedFormats: string[];
+  effectiveFormats: string[];
+  rowCount: number;
+  totalPages: number;
+  completedPages: number;
+  processedRows: number;
+  queryPlans: number;
+  stationPoolSize: number;
+  parts: ExportJobPart[];
+  metrics: DownloadMetrics | null;
 }
 
 interface ExportPlanPage {
@@ -317,13 +348,16 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   const [selectedFormats, setSelectedFormats] = useState<OutputFormat[]>(['csv']);
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [downloadMetrics, setDownloadMetrics] = useState<DownloadMetrics | null>(null);
+  const [currentJob, setCurrentJob] = useState<ExportJobStatusResponse | null>(null);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [transferProgress, setTransferProgress] = useState<TransferProgress | null>(null);
   const [logs, setLogs] = useState<Array<{ type: LogLevel; message: string }>>([]);
   const [isBusy, setIsBusy] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [activeTask, setActiveTask] = useState('Esperando configuracion');
+  const [activeTask, setActiveTask] = useState('Esperando configuraci?n');
   const [operationStartedAt, setOperationStartedAt] = useState<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const handledJobIdsRef = useRef<Set<string>>(new Set());
 
   const steps = useMemo(
     () => [
@@ -332,7 +366,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       { id: 'territory' as StepId, title: 'Territorio', icon: MapPin },
       { id: 'advanced' as StepId, title: 'Filtros avanzados', icon: Filter },
       { id: 'time' as StepId, title: 'Temporalidad', icon: Calendar },
-      { id: 'execute' as StepId, title: 'Ejecucion', icon: Rocket },
+      { id: 'execute' as StepId, title: 'Ejecuci?n', icon: Rocket },
     ],
     []
   );
@@ -372,6 +406,60 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
 
   const appendLog = (type: LogLevel, message: string) => {
     setLogs((current) => [...current, { type, message }]);
+  };
+
+  const triggerBrowserDownload = (blob: Blob, fileName: string) => {
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(link.href);
+  };
+
+  const downloadJobParts = async (job: ExportJobStatusResponse) => {
+    for (const part of job.parts) {
+      appendLog('INFO', `Descargando ${part.fileName}...`);
+      const response = await fetch(part.downloadPath);
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error((data as { error?: string }).error || `No fue posible descargar ${part.fileName}.`);
+      }
+      const blob = await response.blob();
+      triggerBrowserDownload(blob, part.fileName);
+      await new Promise((resolve) => window.setTimeout(resolve, 120));
+    }
+  };
+
+  const finalizeCompletedJob = async (job: ExportJobStatusResponse) => {
+    if (handledJobIdsRef.current.has(job.jobId)) return;
+    handledJobIdsRef.current.add(job.jobId);
+
+    job.warnings.forEach((warning) => appendLog('INFO', warning));
+
+    if (job.metrics) {
+      setDownloadMetrics(job.metrics);
+      saveHistory({
+        timestamp: new Date().toLocaleString('es-CO'),
+        variable: selectedDataset?.name || datasetId,
+        format: `JOB (${job.effectiveFormats.join(', ').toUpperCase()})`,
+        departments: departmentMode === 'selected' ? selectedDepartments : ['Todos'],
+        catalogFilters,
+        ...job.metrics,
+      });
+    }
+
+    if (!job.parts.length) {
+      appendLog('INFO', 'El job termino correctamente, pero la consulta no produjo archivos descargables.');
+      return;
+    }
+
+    await downloadJobParts(job);
+    appendLog(
+      'SUCCESS',
+      `Job completado: ${job.parts.length} archivo(s), ${job.processedRows.toLocaleString('es-CO')} filas y ${formatDuration(job.metrics?.processingMs || 0)}.`
+    );
   };
 
   useEffect(() => {
@@ -465,6 +553,70 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     return () => window.clearInterval(timer);
   }, [isBusy, operationStartedAt]);
 
+
+  useEffect(() => {
+    if (!currentJobId) return undefined;
+
+    let cancelled = false;
+
+    const pollJob = async () => {
+      try {
+        const response = await fetch(`/api/jobs/${currentJobId}`);
+        const data = (await response.json()) as ExportJobStatusResponse & { error?: string };
+        if (!response.ok) {
+          throw new Error(data.error || 'No fue posible consultar el estado del job.');
+        }
+        if (cancelled) return;
+
+        setCurrentJob(data);
+        setTransferProgress({
+          totalPages: Math.max(data.totalPages, 1),
+          completedPages: data.completedPages,
+          totalRows: data.rowCount,
+          downloadedRows: data.processedRows,
+          totalParts: Math.max(data.totalPages, 1),
+          completedParts: data.parts.length,
+        });
+
+        if (data.status === 'queued') {
+          setProgress(4);
+          setActiveTask('Job en cola...');
+        } else if (data.status === 'planning') {
+          setProgress(8);
+          setActiveTask('Planificando exportacion...');
+        } else if (data.status === 'processing') {
+          const ratio = data.totalPages ? data.completedPages / data.totalPages : 0;
+          setProgress(10 + Math.round(ratio * 80));
+          setActiveTask(`Procesando ${data.completedPages}/${Math.max(data.totalPages, 1)} paginas...`);
+        } else if (data.status === 'completed') {
+          setProgress(100);
+          setActiveTask('Descarga lista');
+          setIsBusy(false);
+          await finalizeCompletedJob(data);
+        } else if (data.status === 'failed') {
+          setProgress(100);
+          setActiveTask('Error en descarga');
+          setIsBusy(false);
+          throw new Error(data.error || 'El job de exportacion fallo.');
+        }
+      } catch (error) {
+        if (cancelled) return;
+        setIsBusy(false);
+        appendLog('ERROR', error instanceof Error ? error.message : 'Error consultando el job.');
+      }
+    };
+
+    void pollJob();
+    const timer = window.setInterval(() => {
+      void pollJob();
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [catalogFilters, currentJobId, datasetId, departmentMode, finalizeCompletedJob, selectedDataset?.name, selectedDepartments]);
+
   const validateCurrentConfiguration = () => {
     if (!acceptedTerms) {
       throw new Error('Debes aceptar el aviso legal antes de continuar.');
@@ -520,7 +672,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       const response = await fetch('/api/coverage', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ datasetId, departments: selectedDepartments }),
+        body: JSON.stringify(executionPayload),
       });
       const data = (await response.json()) as { error?: string; reports?: CoverageReport[] };
       if (!response.ok) {
@@ -627,231 +779,48 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       setElapsedMs(0);
       setDownloadMetrics(null);
       setTransferProgress(null);
+      setCurrentJob(null);
+      setCurrentJobId(null);
       setProgress(2);
       setActiveTask('Validando cobertura territorial...');
-      const startedAt = performance.now();
+
       const downloadPayload = await validateCoverageForDownload();
+      appendLog('INFO', 'Creando job asincrono de exportacion...');
 
-      setActiveTask('Preparando plan de exportacion...');
-      appendLog('INFO', 'Construyendo plan de descarga paginada...');
-
-      const planResponse = await fetch('/api/export-plan', {
+      const response = await fetch('/api/jobs', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(downloadPayload),
+        body: JSON.stringify({
+          ...downloadPayload,
+          formats: selectedFormats,
+        }),
       });
-      const planData = (await planResponse.json()) as ExportPlanResponse & { error?: string };
-      if (!planResponse.ok) {
-        throw new Error(planData.error || 'No fue posible construir el plan de exportacion.');
-      }
-      if (!planData.rowCount) {
-        throw new Error('La consulta no contiene datos. Ajusta los filtros antes de descargar.');
+
+      const data = (await response.json()) as ExportJobStatusResponse & { error?: string };
+      if (!response.ok) {
+        throw new Error(data.error || 'No fue posible crear el job de exportacion.');
       }
 
-      appendLog(
-        'INFO',
-        `Plan listo: ${planData.rowCount.toLocaleString('es-CO')} filas en ${planData.totalPages.toLocaleString('es-CO')} paginas.`
-      );
-
-      const totalPages = Math.max(planData.totalPages, 1);
-      const totalParts = Math.max(1, Math.ceil(planData.rowCount / ARCHIVE_PART_ROW_LIMIT));
-      const summaryAccumulator = createSummaryAccumulator();
+      handledJobIdsRef.current.delete(data.jobId);
+      setCurrentJobId(data.jobId);
+      setCurrentJob(data);
       setTransferProgress({
-        totalPages,
-        completedPages: 0,
-        totalRows: planData.rowCount,
-        downloadedRows: 0,
-        totalParts,
-        completedParts: 0,
+        totalPages: Math.max(data.totalPages, 1),
+        completedPages: data.completedPages,
+        totalRows: data.rowCount,
+        downloadedRows: data.processedRows,
+        totalParts: Math.max(data.totalPages, 1),
+        completedParts: data.parts.length,
       });
-
-      const [{ default: JSZip }, parquetDependencies] = await Promise.all([
-        import('jszip'),
-        selectedFormats.includes('parquet')
-          ? Promise.all([
-              import('apache-arrow'),
-              import('parquet-wasm/esm').then(async (module) => {
-                await module.default(parquetWasmUrl);
-                return module;
-              }),
-            ])
-          : Promise.resolve(null),
-      ]);
-
-      const zip = new JSZip();
-      const dateColumn = selectedDataset?.dateColumn || 'fechaobservacion';
-      const buildMemberName = (extension: string, partNumber: number) => {
-        const suffix = totalParts > 1 && partNumber > 1 ? `_${partNumber}` : '';
-        return `${planData.fileStem}${suffix}.${extension}`;
-      };
-
-      const writePartToArchive = async (rowsForPart: Record<string, unknown>[], partNumber: number) => {
-        setActiveTask(`Empaquetando bloque ${partNumber} de ${totalParts}...`);
-
-        if (selectedFormats.includes('csv')) {
-          zip.file(buildMemberName('csv', partNumber), rowsToCsv(rowsForPart));
-        }
-
-        if (selectedFormats.includes('json')) {
-          zip.file(buildMemberName('json', partNumber), JSON.stringify(rowsForPart, null, 2));
-        }
-
-        if (selectedFormats.includes('parquet')) {
-          if (!parquetDependencies) {
-            throw new Error('No fue posible inicializar la exportacion Parquet.');
-          }
-
-          const [arrowModule, parquetModule] = parquetDependencies;
-          try {
-            const arrowTable = arrowModule.tableFromJSON(rowsForPart);
-            const wasmTable = parquetModule.Table.fromIPCStream(arrowModule.tableToIPC(arrowTable, 'stream'));
-            const writerBuilder = new parquetModule.WriterPropertiesBuilder();
-            const writerProperties = writerBuilder.setCompression(parquetModule.Compression.SNAPPY).build();
-
-            zip.file(buildMemberName('parquet', partNumber), parquetModule.writeParquet(wasmTable, writerProperties));
-          } catch (error) {
-            throw new Error(
-              `No fue posible generar Parquet para este bloque. ${error instanceof Error ? error.message : 'Error interno de exportacion.'}`
-            );
-          }
-        }
-      };
-
-      let partRows: Record<string, unknown>[] = [];
-      let completedPages = 0;
-      let downloadedRows = 0;
-      let completedParts = 0;
-
-      for (const planPage of planData.planPages) {
-        for (let pageIndex = 0; pageIndex < planPage.pageCount; pageIndex += 1) {
-          const offset = pageIndex * planData.pageSize;
-          setActiveTask(`Descargando pagina ${completedPages + 1} de ${totalPages}...`);
-
-          const pageResponse = await fetch('/api/export-page', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              datasetId,
-              planIndex: planPage.planIndex,
-              where: planPage.where,
-              replacements: planData.replacements,
-              offset,
-              limit: planData.pageSize,
-            }),
-          });
-          const pageData = (await pageResponse.json()) as ExportPageResponse & { error?: string };
-          if (!pageResponse.ok) {
-            throw new Error(pageData.error || 'No fue posible descargar una pagina de datos.');
-          }
-
-          partRows.push(...pageData.rows);
-          updateSummaryAccumulator(summaryAccumulator, pageData.rows, dateColumn);
-          completedPages += 1;
-          downloadedRows += pageData.returnedRows;
-          setTransferProgress({
-            totalPages,
-            completedPages,
-            totalRows: planData.rowCount,
-            downloadedRows,
-            totalParts,
-            completedParts,
-          });
-          setProgress(10 + Math.round((completedPages / totalPages) * 60));
-
-          if (partRows.length >= ARCHIVE_PART_ROW_LIMIT) {
-            completedParts += 1;
-            await writePartToArchive(partRows, completedParts);
-            partRows = [];
-            setTransferProgress({
-              totalPages,
-              completedPages,
-              totalRows: planData.rowCount,
-              downloadedRows,
-              totalParts,
-              completedParts,
-            });
-          }
-        }
-      }
-
-      if (partRows.length) {
-        completedParts += 1;
-        await writePartToArchive(partRows, completedParts);
-        partRows = [];
-        setTransferProgress({
-          totalPages,
-          completedPages,
-          totalRows: planData.rowCount,
-          downloadedRows,
-          totalParts,
-          completedParts,
-        });
-      }
-
-      if (!downloadedRows || !completedParts) {
-        throw new Error('La descarga se quedo sin datos utiles. No se genero ningun archivo.');
-      }
-
-      setActiveTask('Comprimiendo paquete ZIP...');
-      appendLog('INFO', 'Comprimiendo archivos en ZIP...');
-      setProgress(88);
-      const zipBlob = await zip.generateAsync(
-        { type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } },
-        (metadata) => {
-          setProgress(88 + Math.round(metadata.percent * 0.12));
-        }
-      );
-
-      const summary = finalizeSummaryAccumulator(summaryAccumulator, downloadedRows);
-      const archiveName = `${planData.fileStem}.zip`;
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(zipBlob);
-      link.download = archiveName;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(link.href);
-
-      const totalMs = Math.round(performance.now() - startedAt);
-      const metrics: DownloadMetrics = {
-        fileName: archiveName,
-        rowCount: summary.rowCount,
-        stationCount: summary.stationCount,
-        municipalityCount: summary.municipalityCount,
-        departmentCount: summary.departmentCount,
-        zoneCount: summary.zoneCount,
-        processingMs: totalMs,
-        sizeBytes: zipBlob.size,
-        observedStart: summary.observedStart,
-        observedEnd: summary.observedEnd,
-        queryPlans: planData.queryPlans,
-        stationPoolSize: planData.stationPoolSize,
-        archivePartCount: completedParts,
-        downloadedPages: completedPages,
-      };
-
-      setDownloadMetrics(metrics);
-      saveHistory({
-        timestamp: new Date().toLocaleString('es-CO'),
-        variable: selectedDataset?.name || datasetId,
-        format: `ZIP (${selectedFormats.join(', ').toUpperCase()})`,
-        departments: departmentMode === 'selected' ? selectedDepartments : ['Todos'],
-        catalogFilters,
-        ...metrics,
-      });
-
-      setProgress(100);
-      setActiveTask('Descarga completada');
-      appendLog(
-        'SUCCESS',
-        `ZIP generado: ${archiveName}. ${metrics.rowCount.toLocaleString('es-CO')} filas, ${metrics.archivePartCount} parte(s) y ${formatDuration(metrics.processingMs)} de proceso.`
-      );
+      setProgress(5);
+      setActiveTask('Job creado, esperando procesamiento...');
+      appendLog('SUCCESS', `Job ${data.jobId.slice(0, 8)} creado. El backend continuara la exportacion por lotes.`);
+      data.warnings.forEach((warning) => appendLog('INFO', warning));
     } catch (error) {
       setProgress(100);
       setActiveTask('Error en descarga');
-      appendLog('ERROR', error instanceof Error ? error.message : 'Error durante la descarga.');
-    } finally {
       setIsBusy(false);
+      appendLog('ERROR', error instanceof Error ? error.message : 'Error durante la descarga.');
     }
   };
 
@@ -879,8 +848,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     setStep(steps[Math.max(selectedStepIndex - 1, 0)].id);
   };
 
-  const runtimeRows =
-    transferProgress?.downloadedRows ?? downloadMetrics?.rowCount ?? preview?.rowCount ?? 0;
+  const runtimeRows = transferProgress?.downloadedRows ?? downloadMetrics?.rowCount ?? preview?.rowCount ?? 0;
   const runtimeTotalRows = transferProgress?.totalRows ?? preview?.rowCount ?? downloadMetrics?.rowCount ?? 0;
   const runtimeElapsedMs = isBusy ? elapsedMs : downloadMetrics?.processingMs ?? preview?.processingMs ?? 0;
   const runtimePages = transferProgress
@@ -1287,7 +1255,7 @@ function StepPanel({
     return (
       <Section title="Cobertura territorial" icon={MapPin}>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <ChoiceCard active={departmentMode === 'all'} onClick={() => setDepartmentMode('all')} title="Todo el pais" description="No limitar por departamento" />
+          <ChoiceCard active={departmentMode === 'all'} onClick={() => setDepartmentMode('all')} title="Todo el pa?s" description="No limitar por departamento" />
           <ChoiceCard active={departmentMode === 'selected'} onClick={() => setDepartmentMode('selected')} title="Departamentos puntuales" description="Replicar el paso territorial del terminal" />
         </div>
         {departmentMode === 'selected' ? (
@@ -1436,7 +1404,7 @@ function StepPanel({
   }
 
   return (
-    <Section title="Ejecucion y descarga" icon={Rocket}>
+    <Section title="Ejecuci?n y descarga" icon={Rocket}>
       <div className="rounded-lg border border-border bg-background p-4 text-sm text-muted-foreground space-y-2">
         <p>
           <span className="font-semibold text-card-foreground">Departamentos:</span> {selectionSummary.departments}

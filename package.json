@@ -10,7 +10,8 @@
     "dev:web": "vite",
     "dev:worker": "wrangler dev",
     "deploy": "wrangler deploy",
-    "tail": "wrangler tail"
+    "tail": "wrangler tail",
+    "test": "node --test tests/worker.test.mjs"
   },
   "dependencies": {
     "@radix-ui/react-progress": "1.1.2",
