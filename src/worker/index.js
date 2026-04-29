@@ -59,6 +59,21 @@ const DEPARTMENT_MAP = {
   "VICHADA": ["VICHADA"]
 };
 
+const CLEAN_DEPARTMENT_MAP = {
+  "ATLANTICO": ["ATLANTICO", "ATL\u00c1NTICO"],
+  "BOLIVAR": ["BOLIVAR", "BOL\u00cdVAR"],
+  "BOGOTA D.C.": ["BOGOTA", "BOGOT\u00c1", "BOGOT\u00c1 D.C.", "BOGOTA, D.C"],
+  "BOYACA": ["BOYACA", "BOYAC\u00c1"],
+  "CAQUETA": ["CAQUETA", "CAQUET\u00c1"],
+  "CHOCO": ["CHOCO", "CHOC\u00d3"],
+  "CORDOBA": ["CORDOBA", "C\u00d3RDOBA"],
+  "GUAINIA": ["GUAINIA", "GUAIN\u00cdA"],
+  "NARINO": ["NARI\u00d1O", "NARINO"],
+  "QUINDIO": ["QUINDIO", "QUIND\u00cdO"],
+  "SAN ANDRES Y PROVIDENCIA": ["SAN ANDRES", "SAN ANDR\u00c9S Y PROVIDENCIA"],
+  "VAUPES": ["VAUPES", "VAUP\u00c9S"],
+};
+
 const CATALOG_FILTERS = [
   { key: "hydrologicZones", label: "Zona Hidrografica", column: "zona_hidrografica" },
   { key: "categories", label: "Categoria", column: "categoria" },
@@ -134,7 +149,7 @@ function buildExactInFilter(values, column) {
 }
 
 function departmentVariants(department) {
-  const configured = DEPARTMENT_MAP[department] || [department];
+  const configured = CLEAN_DEPARTMENT_MAP[department] || DEPARTMENT_MAP[department] || [department];
   const variants = new Set(configured.concat([department]).filter(Boolean));
   for (const variant of Array.from(variants)) {
     variants.add(normalizeLabel(variant));
@@ -625,36 +640,37 @@ async function handleCoverage(request, env) {
     return jsonResponse({ error: "datasetId y departments son requeridos." }, 400);
   }
 
-  const discovered = await socrataGet(config, datasetId, {
-    "$select": "departamento, count(*) as total",
-    "$group": "departamento",
-    "$order": "departamento",
-    "$limit": 5000,
-  });
-
   const reports = [];
 
   for (const department of departments) {
-    const configured = departmentVariants(department).map((value) => normalizeLabel(value));
+    const variants = departmentVariants(department);
+    const configured = variants.map((value) => normalizeLabel(value));
     const normalizedDepartment = normalizeLabel(department);
-    const needle = normalizedDepartment.slice(0, 4);
+    const discovered = await socrataGet(config, datasetId, {
+      "$select": "departamento",
+      "$where": `upper(departamento) IN (${variants.map((variant) => quoteSoql(variant.toUpperCase())).join(", ")})`,
+      "$order": "departamento",
+      "$limit": 1000,
+    });
 
     const matched = [];
     const unmatched = [];
+    const seen = new Set();
 
     discovered.forEach((row) => {
       const normalized = normalizeLabel(row.departamento);
       const looksRelated =
         normalized === normalizedDepartment ||
-        configured.includes(normalized) ||
-        (needle.length >= 4 && normalized.includes(needle));
+        configured.includes(normalized);
 
       if (!looksRelated) return;
+      if (seen.has(normalized)) return;
+      seen.add(normalized);
 
       const record = {
         departamento: row.departamento,
         normalized,
-        total: Number(row.total || 0),
+        total: 1,
       };
       if (configured.includes(normalized)) matched.push(record);
       else unmatched.push(record);

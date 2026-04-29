@@ -540,7 +540,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       if (unmatchedRows > 0) {
         appendLog(
           'INFO',
-          `Cobertura con variantes nuevas: ${unmatchedRows.toLocaleString('es-CO')} filas potenciales se incluiran en la descarga.`
+          `Cobertura con variantes nuevas: ${unmatchedRows.toLocaleString('es-CO')} variante(s) potenciales se incluiran en la descarga.`
         );
       } else {
         appendLog('SUCCESS', 'Cobertura territorial validada sin variantes pendientes.');
@@ -1497,7 +1497,7 @@ function StepPanel({
             <div key={report.department} className="rounded-lg border border-border p-3">
               <p className="font-semibold text-card-foreground">{report.department}</p>
               <p className="text-sm text-muted-foreground">
-                Filas cubiertas: {report.matched_rows.toLocaleString('es-CO')} · Filas no cubiertas:{' '}
+                Variantes confirmadas: {report.matched_rows.toLocaleString('es-CO')} · Variantes no cubiertas:{' '}
                 {report.unmatched_rows.toLocaleString('es-CO')}
               </p>
               {report.unmatched_discovered.length > 0 && (
