@@ -15,6 +15,14 @@ const DEFAULT_CONFIG = {
   maxCatalogStations: null,
 };
 
+class ApiError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 const DATASETS = [
   { name: "Precipitacion", id: "s54a-sgyg", dateColumn: "fechaobservacion", category: "Hidrometeorologia" },
   { name: "Nivel del Mar", id: "ia8x-22em", dateColumn: "fechaobservacion", category: "Oceanografia" },
@@ -663,15 +671,15 @@ async function buildExportPlan(config, payload, dataset) {
 async function parsePayload(request) {
   const payload = await request.json();
   if (!payload.datasetId || !payload.startDate || !payload.endDate) {
-    throw new Error("datasetId, startDate y endDate son obligatorios.");
+    throw new ApiError("datasetId, startDate y endDate son obligatorios.", 400);
   }
   const dataset = resolveDataset(payload.datasetId);
   if (!dataset) {
-    throw new Error("Dataset no soportado en la interfaz web.");
+    throw new ApiError("Dataset no soportado en la interfaz web.", 400);
   }
   const departmentState = validateRequiredDepartments(payload);
   if (!departmentState.ok) {
-    throw new Error(departmentState.error);
+    throw new ApiError(departmentState.error, 400);
   }
   payload.departments = departmentState.departments;
   return { payload, dataset };
@@ -1500,7 +1508,7 @@ async function handleApi(request, env, ctx) {
     }
     return jsonResponse({ error: "Ruta API no encontrada." }, 404);
   } catch (error) {
-    return jsonResponse({ error: error.message || "Error interno del Worker." }, 500);
+    return jsonResponse({ error: error.message || "Error interno del Worker." }, error.status || 500);
   }
 }
 
