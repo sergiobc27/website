@@ -9,6 +9,7 @@ on:
       - "src/**"
       - "tests/**"
       - "wrangler.jsonc"
+      - "cloudflare/**"
       - "package.json"
       - "package-lock.json"
       - "vite.config.ts"
@@ -83,6 +84,10 @@ jobs:
       - name: Ensure export bucket
         if: steps.cloudflare_secrets.outputs.ready == 'true'
         run: npx wrangler r2 bucket create ideam-exports || true
+
+      - name: Enforce one-hour export lifecycle
+        if: steps.cloudflare_secrets.outputs.ready == 'true'
+        run: npx wrangler r2 bucket lifecycle set ideam-exports --file cloudflare/r2-lifecycle.json
 
       - name: Deploy to Cloudflare
         if: steps.cloudflare_secrets.outputs.ready == 'true'

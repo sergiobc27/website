@@ -10,11 +10,12 @@ Repositorio del sitio web de Sergio BC y de la app operativa en `ideam.sergiobc.
 ## Estructura relevante
 
 - `src/app/*`: frontend React basado en el dise?o de `Ideamwebsite`.
-- `src/worker/index.js`: API Worker para metadata, cobertura, preview, export plan y descarga paginada.
+- `src/worker/index.js`: API Worker para metadata, cobertura, preview y exportaciones asincronas por ZIP.
 - `src/imports/*`: assets del dise?o original.
 - `src/styles/*`: tema y estilos globales.
 - `tests/worker.test.mjs`: pruebas base de helpers y configuraci?n del Worker.
 - `wrangler.jsonc`: configuraci?n productiva del Worker.
+- `cloudflare/r2-lifecycle.json`: regla de lifecycle para eliminar exportaciones temporales despues de 1 hora.
 - `package.json`: scripts de build, test y deploy.
 
 ## Comandos
@@ -45,12 +46,25 @@ El workflow `.github/workflows/deploy-ideam.yml`:
 2. valida sintaxis del Worker,
 3. ejecuta pruebas base,
 4. construye el frontend,
-5. despliega a Cloudflare con Wrangler.
+5. crea/verifica el bucket R2,
+6. aplica lifecycle de 1 hora para `exports/`,
+7. despliega a Cloudflare con Wrangler.
 
 Secrets requeridos en GitHub:
 
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
+
+El token debe incluir permisos de Workers y `Workers R2 Storage Write` para poder aplicar lifecycle.
+
+## Controles de costo $0.00
+
+- No se permiten descargas globales: cada preview/exportacion debe incluir al menos un departamento valido.
+- `/api/jobs` aplica rate limiting estricto: 30 exportaciones por hora por IP, con respuesta `429` y `Retry-After`.
+- Los ZIP se comprimen antes de subirse a R2 y se guardan bajo `exports/<jobId>/`.
+- Despues de que la interfaz descarga cada parte, llama `DELETE /api/jobs/:id/parts/:partIndex` para borrar el objeto de R2.
+- El bucket tiene lifecycle de respaldo para borrar cualquier objeto `exports/` con mas de 1 hora.
+- La ruta sincronica `/api/export` queda deshabilitada; el flujo soportado es asincrono por `/api/jobs`.
 
 ## Estado actual
 
@@ -64,9 +78,12 @@ Secrets requeridos en GitHub:
   - `/api/preview`
   - `/api/export-plan`
   - `/api/export-page`
+  - `/api/jobs`
+  - `/api/jobs/:id`
+  - `/api/jobs/:id/parts/:partIndex`
 - El historial usa `localStorage` real.
 - La cobertura territorial previa al ZIP vuelve a consultar resultados reales del dataset dentro del contexto de filtros activos.
-- La exportaci?n paginada vuelve a respetar un l?mite operativo configurable.
+- La exportacion asincrona respeta filtros territoriales, divide por partes ZIP y limpia R2 al finalizar la descarga.
 
 `src/worker/index.js` es la ?nica fuente activa para producci?n. El Worker inline anterior qued? archivado solo como referencia hist?rica.
 

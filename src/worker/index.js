@@ -1,6 +1,9 @@
 import JSZip from "jszip";
 
 const ASYNC_EXPORT_PAGE_BATCH = 1;
+const EXPORT_RATE_LIMIT = 30;
+const EXPORT_RATE_WINDOW_MS = 60 * 60 * 1000;
+const EXPORT_OBJECT_TTL_SECONDS = 60 * 60;
 
 const DEFAULT_CONFIG = {
   socrataDomain: "https://www.datos.gov.co",
@@ -101,12 +104,14 @@ function getConfig(env) {
   };
 }
 
-function jsonResponse(data, status = 200) {
+function jsonResponse(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data, null, 2), {
     status,
     headers: {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
+      "x-robots-tag": "noindex, nofollow, noarchive",
+      ...extraHeaders,
     },
   });
 }
@@ -187,6 +192,40 @@ function buildDepartmentFilter(departments, column = "departamento") {
       : null,
     replacements,
     variants: uniqueVariants,
+  };
+}
+
+function canonicalDepartment(value) {
+  const normalized = normalizeLabel(value);
+  return Object.keys(DEPARTMENT_MAP).find((department) => {
+    if (normalizeLabel(department) === normalized) return true;
+    return departmentVariants(department).some((variant) => normalizeLabel(variant) === normalized);
+  }) || null;
+}
+
+function validateRequiredDepartments(payload) {
+  const requested = asArray(payload.departments ?? payload.department).map((value) => String(value).trim()).filter(Boolean);
+  if (!requested.length) {
+    return {
+      ok: false,
+      error: "Debes seleccionar al menos un departamento. Las descargas globales no estan permitidas para proteger el costo y la estabilidad del servicio.",
+      departments: [],
+    };
+  }
+
+  const invalid = requested.filter((department) => !canonicalDepartment(department));
+  if (invalid.length) {
+    return {
+      ok: false,
+      error: `Departamento no soportado: ${invalid.join(", ")}.`,
+      departments: [],
+    };
+  }
+
+  return {
+    ok: true,
+    error: null,
+    departments: Array.from(new Set(requested.map((department) => canonicalDepartment(department)).filter(Boolean))),
   };
 }
 
@@ -630,6 +669,11 @@ async function parsePayload(request) {
   if (!dataset) {
     throw new Error("Dataset no soportado en la interfaz web.");
   }
+  const departmentState = validateRequiredDepartments(payload);
+  if (!departmentState.ok) {
+    throw new Error(departmentState.error);
+  }
+  payload.departments = departmentState.departments;
   return { payload, dataset };
 }
 
@@ -819,6 +863,11 @@ async function handleExportPlan(request, env) {
 async function handleExportPage(request, env) {
   const config = getConfig(env);
   const body = await request.json();
+  const departmentState = validateRequiredDepartments(body);
+  if (!departmentState.ok) {
+    return jsonResponse({ error: departmentState.error }, 400);
+  }
+
   const dataset = resolveDataset(body.datasetId);
   if (!dataset) {
     return jsonResponse({ error: "Dataset no soportado en export-page." }, 400);
@@ -850,51 +899,9 @@ async function handleExportPage(request, env) {
 }
 
 async function handleExport(request, env) {
-  const config = getConfig(env);
-  const { payload, dataset } = await parsePayload(request);
-  const plan = await buildExportPlan(config, payload, dataset);
-
-  if (!plan.rowCount) {
-    return jsonResponse({ error: "La consulta no contiene datos para descargar." }, 404);
-  }
-
-  const rows = [];
-  for (const entry of plan.planPages) {
-    const pageRows = await fetchAllRows(
-      config,
-      dataset.id,
-      entry.where,
-      dataset.dateColumn ? `${dataset.dateColumn} DESC` : ":id"
-    );
-    rows.push(...pageRows);
-  }
-
-  const normalized = normalizeRows(rows, dataset.id, plan.replacements, dataset.dateColumn);
-  const summary = summarizeRows(normalized, dataset);
-  const format = (payload.format || "csv").toLowerCase();
-  const body = format === "json" ? JSON.stringify(normalized, null, 2) : rowsToCsv(normalized);
-  const mimeType = format === "json" ? "application/json; charset=utf-8" : "text/csv; charset=utf-8";
-  const extension = format === "json" ? "json" : "csv";
-  const fileName = `${plan.fileStem}.${extension}`;
-  const byteSize = new TextEncoder().encode(body).length;
-
-  return new Response(body, {
-    headers: {
-      "content-type": mimeType,
-      "content-disposition": `attachment; filename="${fileName}"`,
-      "x-export-name": fileName,
-      "x-row-count": String(summary.rowCount),
-      "x-station-count": String(summary.stationCount),
-      "x-municipality-count": String(summary.municipalityCount),
-      "x-department-count": String(summary.departmentCount),
-      "x-zone-count": String(summary.zoneCount),
-      "x-observed-start": summary.observedStart || "",
-      "x-observed-end": summary.observedEnd || "",
-      "x-size-bytes": String(byteSize),
-      "x-station-pool-size": String(plan.stationPoolSize),
-      "x-query-plans": String(plan.queryPlans),
-    },
-  });
+  return jsonResponse({
+    error: "La exportacion sincronica fue deshabilitada. Usa /api/jobs para exportaciones comprimidas, asincronas y con limpieza R2.",
+  }, 410);
 }
 
 function sanitizeRequestedFormats(formats) {
@@ -1148,7 +1155,15 @@ async function processExportJobBatch(env, job) {
     });
     const key = `exports/${job.id}/${baseName}.zip`;
     await env.EXPORTS_BUCKET.put(key, archiveBuffer, {
-      httpMetadata: { contentType: "application/zip" },
+      httpMetadata: {
+        contentType: "application/zip",
+        cacheControl: "no-store",
+        contentDisposition: `attachment; filename="${baseName}.zip"`,
+      },
+      customMetadata: {
+        jobId: job.id,
+        expiresAt: new Date(Date.now() + EXPORT_OBJECT_TTL_SECONDS * 1000).toISOString(),
+      },
     });
 
     job.summaryState = mergeAccumulatorState(job.summaryState, normalized, dataset.dateColumn);
@@ -1192,6 +1207,58 @@ async function processExportJobBatch(env, job) {
   }
 }
 
+function getClientIp(request) {
+  const forwarded = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "";
+  const first = forwarded.split(",")[0]?.trim();
+  return first || "unknown";
+}
+
+class ExportRateLimitDurableObject {
+  constructor(state) {
+    this.state = state;
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    if (url.pathname !== "/check" || request.method !== "POST") {
+      return jsonResponse({ error: "Ruta interna de rate limit no encontrada." }, 404);
+    }
+
+    const now = Date.now();
+    const record = (await this.state.storage.get("rate")) || {
+      windowStart: now,
+      count: 0,
+    };
+    const elapsed = now - Number(record.windowStart || 0);
+    const current = elapsed >= EXPORT_RATE_WINDOW_MS
+      ? { windowStart: now, count: 0 }
+      : { windowStart: Number(record.windowStart || now), count: Number(record.count || 0) };
+
+    if (current.count >= EXPORT_RATE_LIMIT) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((EXPORT_RATE_WINDOW_MS - (now - current.windowStart)) / 1000));
+      return jsonResponse(
+        {
+          error: `Limite de exportaciones alcanzado. Intenta de nuevo en ${Math.ceil(retryAfterSeconds / 60)} minuto(s).`,
+          limit: EXPORT_RATE_LIMIT,
+          retryAfterSeconds,
+        },
+        429,
+        { "retry-after": String(retryAfterSeconds) }
+      );
+    }
+
+    current.count += 1;
+    await this.state.storage.put("rate", current);
+
+    return jsonResponse({
+      ok: true,
+      limit: EXPORT_RATE_LIMIT,
+      remaining: Math.max(0, EXPORT_RATE_LIMIT - current.count),
+      resetAt: new Date(current.windowStart + EXPORT_RATE_WINDOW_MS).toISOString(),
+    });
+  }
+}
+
 class ExportJobDurableObject {
   constructor(state, env) {
     this.state = state;
@@ -1208,6 +1275,11 @@ class ExportJobDurableObject {
       if (!dataset) {
         return jsonResponse({ error: "Dataset no soportado en la exportacion asincrona." }, 400);
       }
+      const departmentState = validateRequiredDepartments(payload);
+      if (!departmentState.ok) {
+        return jsonResponse({ error: departmentState.error }, 400);
+      }
+      payload.departments = departmentState.departments;
 
       const formatState = sanitizeRequestedFormats(body.formats || payload.formats || []);
       const now = new Date().toISOString();
@@ -1258,12 +1330,26 @@ class ExportJobDurableObject {
       });
     }
 
-    if (url.pathname.startsWith("/parts/") && request.method === "GET") {
+    if (url.pathname.startsWith("/parts/") && (request.method === "GET" || request.method === "DELETE")) {
       const partIndex = Number(url.pathname.split("/").pop());
       const part = (job.parts || []).find((item) => item.index === partIndex);
       if (!part) {
         return jsonResponse({ error: "Parte de descarga no encontrada." }, 404);
       }
+
+      if (request.method === "DELETE") {
+        if (!part.deletedAt) {
+          await this.env.EXPORTS_BUCKET.delete(part.key);
+          part.deletedAt = new Date().toISOString();
+          await saveJobToStorage(this.state.storage, job);
+        }
+        return jsonResponse({ ok: true, deleted: true, partIndex, deletedAt: part.deletedAt });
+      }
+
+      if (part.deletedAt) {
+        return jsonResponse({ error: "Archivo ya eliminado despues de la descarga." }, 410);
+      }
+
       const object = await this.env.EXPORTS_BUCKET.get(part.key);
       if (!object) {
         return jsonResponse({ error: "Archivo de salida no disponible en R2." }, 404);
@@ -1273,6 +1359,7 @@ class ExportJobDurableObject {
           "content-type": object.httpMetadata?.contentType || "application/zip",
           "content-disposition": `attachment; filename="${part.fileName}"`,
           "cache-control": "no-store",
+          "x-robots-tag": "noindex, nofollow, noarchive",
         },
       });
     }
@@ -1315,6 +1402,17 @@ async function handleCreateJob(request, env) {
   }
 
   const body = await request.json();
+  const departmentState = validateRequiredDepartments(body);
+  if (!departmentState.ok) {
+    return jsonResponse({ error: departmentState.error }, 400);
+  }
+  body.departments = departmentState.departments;
+
+  const rateLimitResponse = await checkExportRateLimit(request, env);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   const jobId = crypto.randomUUID();
   const stub = env.EXPORT_JOBS.get(env.EXPORT_JOBS.idFromName(jobId));
   return stub.fetch(
@@ -1324,6 +1422,25 @@ async function handleCreateJob(request, env) {
       body: JSON.stringify({ jobId, payload: body, formats: body.formats || [] }),
     })
   );
+}
+
+async function checkExportRateLimit(request, env) {
+  if (!env.EXPORT_RATE_LIMITER) {
+    return null;
+  }
+
+  const clientIp = getClientIp(request);
+  const id = env.EXPORT_RATE_LIMITER.idFromName(`export:${clientIp}`);
+  const stub = env.EXPORT_RATE_LIMITER.get(id);
+  const response = await stub.fetch(
+    new Request("https://export-rate-limit/check", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clientIp }),
+    })
+  );
+
+  return response.status === 429 ? response : null;
 }
 
 async function handleJobProxy(request, env, jobId, action, extra = null) {
@@ -1377,7 +1494,7 @@ async function handleApi(request, env, ctx) {
       return handleCreateJob(request, env, ctx);
     }
     const jobMatch = url.pathname.match(/^\/api\/jobs\/([^/]+)(?:\/(manifest|parts)(?:\/([^/]+))?)?$/);
-    if (jobMatch && request.method === "GET") {
+    if (jobMatch && (request.method === "GET" || request.method === "DELETE")) {
       const [, jobId, action, extra] = jobMatch;
       return handleJobProxy(request, env, jobId, action || "status", extra);
     }
@@ -1401,6 +1518,8 @@ export {
   buildJobPartBaseName,
   createArchivePart,
   ExportJobDurableObject,
+  ExportRateLimitDurableObject,
+  validateRequiredDepartments,
 };
 
 export default {

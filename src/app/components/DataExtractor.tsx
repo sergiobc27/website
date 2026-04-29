@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Calendar,
   CheckCircle2,
@@ -25,7 +25,6 @@ const HISTORY_KEY = 'ideam-history';
 type StepId = 'consent' | 'variable' | 'territory' | 'advanced' | 'time' | 'execute';
 type OutputFormat = 'csv' | 'json' | 'parquet';
 type LogLevel = 'INFO' | 'SUCCESS' | 'ERROR';
-type DepartmentMode = 'all' | 'selected';
 type TimeMode = 'full' | 'custom';
 
 interface DatasetMeta {
@@ -332,7 +331,6 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   const [step, setStep] = useState<StepId>('consent');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [datasetId, setDatasetId] = useState('');
-  const [departmentMode, setDepartmentMode] = useState<DepartmentMode>('all');
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
   const [catalogFilters, setCatalogFilters] = useState<Record<string, string[]>>({});
   const [catalogOptions, setCatalogOptions] = useState<Record<string, OptionItem[]>>({});
@@ -379,34 +377,33 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   const selectedStepIndex = steps.findIndex((item) => item.id === step);
 
   const executionPayload = useMemo(() => {
-    const departments = departmentMode === 'selected' ? selectedDepartments : [];
     return {
       datasetId,
-      departments,
+      departments: selectedDepartments,
       catalogFilters,
       stationCodes: parseStationCodes(stationCodesText),
       startDate,
       endDate,
     };
-  }, [catalogFilters, datasetId, departmentMode, endDate, selectedDepartments, startDate, stationCodesText]);
+  }, [catalogFilters, datasetId, endDate, selectedDepartments, startDate, stationCodesText]);
 
   const selectionSummary = useMemo(() => {
     const advancedSelections = (meta?.catalogFilters || [])
       .map((item) => ({ label: item.label, values: catalogFilters[item.key] || [] }))
       .filter((item) => item.values.length);
     return {
-      departments: departmentMode === 'all' ? 'Todos los departamentos' : selectedDepartments.join(', ') || 'Sin seleccion',
+      departments: selectedDepartments.join(', ') || 'Sin seleccion',
       advancedSelections,
       stationCodes: parseStationCodes(stationCodesText),
       formats: selectedFormats,
     };
-  }, [catalogFilters, departmentMode, meta?.catalogFilters, selectedDepartments, selectedFormats, stationCodesText]);
+  }, [catalogFilters, meta?.catalogFilters, selectedDepartments, selectedFormats, stationCodesText]);
 
   const previewColumns = preview?.rows.length ? Object.keys(preview.rows[0]).slice(0, 8) : [];
 
-  const appendLog = (type: LogLevel, message: string) => {
+  const appendLog = useCallback((type: LogLevel, message: string) => {
     setLogs((current) => [...current, { type, message }]);
-  };
+  }, []);
 
   const triggerBrowserDownload = (blob: Blob, fileName: string) => {
     const link = document.createElement('a');
@@ -418,7 +415,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     URL.revokeObjectURL(link.href);
   };
 
-  const downloadJobParts = async (job: ExportJobStatusResponse) => {
+  const downloadJobParts = useCallback(async (job: ExportJobStatusResponse) => {
     for (const part of job.parts) {
       appendLog('INFO', `Descargando ${part.fileName}...`);
       const response = await fetch(part.downloadPath);
@@ -428,11 +425,21 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       }
       const blob = await response.blob();
       triggerBrowserDownload(blob, part.fileName);
+      try {
+        const cleanupResponse = await fetch(part.downloadPath, { method: 'DELETE' });
+        if (cleanupResponse.ok) {
+          appendLog('SUCCESS', `Archivo temporal eliminado de R2: ${part.fileName}.`);
+        } else {
+          appendLog('INFO', `El archivo temporal ${part.fileName} quedara cubierto por la limpieza automatica de 1 hora.`);
+        }
+      } catch {
+        appendLog('INFO', `No se pudo confirmar limpieza inmediata de ${part.fileName}; lifecycle lo eliminara automaticamente.`);
+      }
       await new Promise((resolve) => window.setTimeout(resolve, 120));
     }
-  };
+  }, [appendLog]);
 
-  const finalizeCompletedJob = async (job: ExportJobStatusResponse) => {
+  const finalizeCompletedJob = useCallback(async (job: ExportJobStatusResponse) => {
     if (handledJobIdsRef.current.has(job.jobId)) return;
     handledJobIdsRef.current.add(job.jobId);
 
@@ -444,7 +451,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         timestamp: new Date().toLocaleString('es-CO'),
         variable: selectedDataset?.name || datasetId,
         format: `JOB (${job.effectiveFormats.join(', ').toUpperCase()})`,
-        departments: departmentMode === 'selected' ? selectedDepartments : ['Todos'],
+        departments: selectedDepartments,
         catalogFilters,
         ...job.metrics,
       });
@@ -460,7 +467,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       'SUCCESS',
       `Job completado: ${job.parts.length} archivo(s), ${job.processedRows.toLocaleString('es-CO')} filas y ${formatDuration(job.metrics?.processingMs || 0)}.`
     );
-  };
+  }, [appendLog, catalogFilters, datasetId, downloadJobParts, selectedDataset?.name, selectedDepartments]);
 
   useEffect(() => {
     const boot = async () => {
@@ -520,7 +527,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
-              departments: departmentMode === 'selected' ? selectedDepartments : [],
+              departments: selectedDepartments,
               catalogFilters,
               attributeKey: definition.key,
             }),
@@ -541,7 +548,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     if (step === 'advanced' && acceptedTerms) {
       void loadCatalogOptionGroups();
     }
-  }, [acceptedTerms, catalogFilters, departmentMode, meta?.catalogFilters, selectedDepartments, step]);
+  }, [acceptedTerms, appendLog, catalogFilters, meta?.catalogFilters, selectedDepartments, step]);
 
   useEffect(() => {
     if (!isBusy || operationStartedAt === null) return undefined;
@@ -615,7 +622,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [catalogFilters, currentJobId, datasetId, departmentMode, finalizeCompletedJob, selectedDataset?.name, selectedDepartments]);
+  }, [currentJobId, finalizeCompletedJob]);
 
   const validateCurrentConfiguration = () => {
     if (!acceptedTerms) {
@@ -624,8 +631,8 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     if (!datasetId) {
       throw new Error('Selecciona una variable para continuar.');
     }
-    if (departmentMode === 'selected' && !selectedDepartments.length) {
-      throw new Error('Selecciona al menos un departamento o usa todo el pais.');
+    if (!selectedDepartments.length) {
+      throw new Error('Selecciona al menos un departamento. Las descargas globales no estan permitidas.');
     }
     if (!startDate || !endDate) {
       throw new Error('Debes definir el rango temporal.');
@@ -660,11 +667,6 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   };
 
   const validateCoverageForDownload = async () => {
-    if (departmentMode !== 'selected' || !selectedDepartments.length) {
-      setCoverageReports([]);
-      return executionPayload;
-    }
-
     setCoverageLoading(true);
     setActiveTask('Validando cobertura territorial...');
     appendLog('INFO', 'Validando cobertura territorial antes de descargar...');
@@ -682,17 +684,14 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       const reports = data.reports || [];
       setCoverageReports(reports);
 
-      const discoveredDepartments = reports.flatMap((report) => [
-        ...report.matched.map((item) => item.departamento),
-        ...report.unmatched_discovered.map((item) => item.departamento),
-      ]);
+      const discoveredDepartments = reports.flatMap((report) => report.matched.map((item) => item.departamento));
       const enhancedDepartments = Array.from(new Set([...selectedDepartments, ...discoveredDepartments].filter(Boolean)));
       const unmatchedRows = reports.reduce((sum, report) => sum + report.unmatched_rows, 0);
 
       if (unmatchedRows > 0) {
         appendLog(
           'INFO',
-          `Cobertura con variantes nuevas: ${unmatchedRows.toLocaleString('es-CO')} variante(s) potenciales se incluiran en la descarga.`
+          `Cobertura con variantes nuevas: ${unmatchedRows.toLocaleString('es-CO')} variante(s) potenciales se reportan para revision, pero solo se descargan departamentos validados.`
         );
       } else {
         appendLog('SUCCESS', 'Cobertura territorial validada sin variantes pendientes.');
@@ -715,7 +714,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          departments: departmentMode === 'selected' ? selectedDepartments : [],
+          departments: selectedDepartments,
           catalogFilters,
         }),
       });
@@ -832,7 +831,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       if (step === 'variable' && !datasetId) {
         throw new Error('Selecciona una variable para continuar.');
       }
-      if (step === 'territory' && departmentMode === 'selected' && !selectedDepartments.length) {
+      if (step === 'territory' && !selectedDepartments.length) {
         throw new Error('Selecciona al menos un departamento.');
       }
       if (step === 'time' && (!startDate || !endDate || startDate > endDate)) {
@@ -923,8 +922,6 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
             selectedDataset={selectedDataset}
             acceptedTerms={acceptedTerms}
             onAcceptedTermsChange={setAcceptedTerms}
-            departmentMode={departmentMode}
-            setDepartmentMode={setDepartmentMode}
             selectedDepartments={selectedDepartments}
             onToggleDepartment={toggleDepartment}
             catalogFilters={catalogFilters}
@@ -1144,8 +1141,6 @@ function StepPanel({
   selectedDataset,
   acceptedTerms,
   onAcceptedTermsChange,
-  departmentMode,
-  setDepartmentMode,
   selectedDepartments,
   onToggleDepartment,
   catalogFilters,
@@ -1179,8 +1174,6 @@ function StepPanel({
   selectedDataset: DatasetMeta | null;
   acceptedTerms: boolean;
   onAcceptedTermsChange: (value: boolean) => void;
-  departmentMode: DepartmentMode;
-  setDepartmentMode: (value: DepartmentMode) => void;
   selectedDepartments: string[];
   onToggleDepartment: (department: string) => void;
   catalogFilters: Record<string, string[]>;
@@ -1254,37 +1247,28 @@ function StepPanel({
   if (step === 'territory') {
     return (
       <Section title="Cobertura territorial" icon={MapPin}>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <ChoiceCard active={departmentMode === 'all'} onClick={() => setDepartmentMode('all')} title="Todo el pa?s" description="No limitar por departamento" />
-          <ChoiceCard active={departmentMode === 'selected'} onClick={() => setDepartmentMode('selected')} title="Departamentos puntuales" description="Replicar el paso territorial del terminal" />
+        <div className="rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
+          Selecciona al menos un departamento. Las descargas globales estan bloqueadas para mantener el servicio en costo $0.00 y evitar procesos masivos accidentales.
         </div>
-        {departmentMode === 'selected' ? (
-          <>
-            <div className="flex flex-wrap gap-2">
-              {(meta?.departments || []).map((department) => (
-                <button
-                  key={department}
-                  type="button"
-                  onClick={() => onToggleDepartment(department)}
-                  className={`rounded-full border px-3 py-2 text-xs font-semibold transition-all ${
-                    selectedDepartments.includes(department)
-                      ? 'border-accent bg-accent/15 text-accent'
-                      : 'border-border bg-background text-muted-foreground hover:border-accent/40'
-                  }`}
-                >
-                  {department}
-                </button>
-              ))}
-            </div>
-            <div className="rounded-lg border border-border bg-background p-3 text-sm text-muted-foreground">
-              Seleccion actual: {selectedDepartments.length ? selectedDepartments.join(', ') : 'Sin departamentos seleccionados'}
-            </div>
-          </>
-        ) : (
-          <div className="rounded-lg border border-border bg-background p-4 text-sm text-muted-foreground">
-            La consulta se realizara sobre todos los departamentos disponibles en la fuente.
-          </div>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {(meta?.departments || []).map((department) => (
+            <button
+              key={department}
+              type="button"
+              onClick={() => onToggleDepartment(department)}
+              className={`rounded-full border px-3 py-2 text-xs font-semibold transition-all ${
+                selectedDepartments.includes(department)
+                  ? 'border-accent bg-accent/15 text-accent'
+                  : 'border-border bg-background text-muted-foreground hover:border-accent/40'
+              }`}
+            >
+              {department}
+            </button>
+          ))}
+        </div>
+        <div className="rounded-lg border border-border bg-background p-3 text-sm text-muted-foreground">
+          Seleccion actual: {selectedDepartments.length ? selectedDepartments.join(', ') : 'Sin departamentos seleccionados'}
+        </div>
       </Section>
     );
   }

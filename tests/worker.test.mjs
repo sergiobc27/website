@@ -9,12 +9,14 @@ import {
   createArchivePart,
   departmentVariants,
   ExportJobDurableObject,
+  ExportRateLimitDurableObject,
   expandStationCodes,
   getConfig,
   handleExportPlan,
   normalizeLabel,
   rowsToCsv,
   sanitizeRequestedFormats,
+  validateRequiredDepartments,
 } from '../src/worker/index.js';
 
 test('normalizeLabel removes accents and normalizes case', () => {
@@ -33,6 +35,15 @@ test('buildDepartmentFilter includes configured and normalized variants', () => 
   assert.match(filter.filter, /ATLANTICO/);
   assert.match(filter.filter, /ATL\u00c1NTICO|ATL?/);
   assert.equal(filter.replacements.ATLANTICO, 'ATLANTICO');
+});
+
+test('validateRequiredDepartments blocks global and invalid export requests', () => {
+  assert.equal(validateRequiredDepartments({ departments: [] }).ok, false);
+  assert.equal(validateRequiredDepartments({ departments: ['NO EXISTE'] }).ok, false);
+
+  const valid = validateRequiredDepartments({ departments: ['Atl\u00e1ntico'] });
+  assert.equal(valid.ok, true);
+  assert.deepEqual(valid.departments, ['ATLANTICO']);
 });
 
 test('expandStationCodes keeps both 8 and 10 digit variants', () => {
@@ -93,6 +104,12 @@ test('handleExportPlan allows very large exports without 413 and computes pages 
   const originalFetch = global.fetch;
   global.fetch = async (url) => {
     const parsed = new URL(String(url));
+    if (parsed.pathname.includes('/hp9r-jxuu.json') && parsed.searchParams.get('$select') === 'codigo') {
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
     if (parsed.searchParams.get('$select') === 'count(*) as total') {
       return new Response(JSON.stringify([{ total: '250000' }]), {
         status: 200,
@@ -108,7 +125,7 @@ test('handleExportPlan allows very large exports without 413 and computes pages 
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         datasetId: 's54a-sgyg',
-        departments: [],
+        departments: ['ATLANTICO'],
         stationCodes: ['0029045180'],
         startDate: '2024-01-01',
         endDate: '2024-01-31',
@@ -127,10 +144,35 @@ test('handleExportPlan allows very large exports without 413 and computes pages 
   }
 });
 
+test('handleExportPlan rejects global exports without department', async () => {
+  const request = new Request('https://example.com/api/export-plan', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      datasetId: 's54a-sgyg',
+      departments: [],
+      stationCodes: ['0029045180'],
+      startDate: '2024-01-01',
+      endDate: '2024-01-31',
+    }),
+  });
+
+  await assert.rejects(
+    () => handleExportPlan(request, { EXPORT_PAGE_SIZE: '50000' }),
+    /descargas globales no estan permitidas/
+  );
+});
+
 test('handleExportPlan supports very small exports', async () => {
   const originalFetch = global.fetch;
   global.fetch = async (url) => {
     const parsed = new URL(String(url));
+    if (parsed.pathname.includes('/hp9r-jxuu.json') && parsed.searchParams.get('$select') === 'codigo') {
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
     if (parsed.searchParams.get('$select') === 'count(*) as total') {
       return new Response(JSON.stringify([{ total: '17' }]), {
         status: 200,
@@ -146,7 +188,7 @@ test('handleExportPlan supports very small exports', async () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         datasetId: 's54a-sgyg',
-        departments: [],
+        departments: ['ATLANTICO'],
         stationCodes: ['0029045180'],
         startDate: '2024-01-01',
         endDate: '2024-01-02',
@@ -168,6 +210,12 @@ test('handleExportPlan supports multi-plan exports from large station sets', asy
   const originalFetch = global.fetch;
   global.fetch = async (url) => {
     const parsed = new URL(String(url));
+    if (parsed.pathname.includes('/hp9r-jxuu.json') && parsed.searchParams.get('$select') === 'codigo') {
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
     if (parsed.searchParams.get('$select') === 'count(*) as total') {
       const where = parsed.searchParams.get('$where') || '';
       const total = where.includes('STA0400') ? '55' : '80000';
@@ -186,7 +234,7 @@ test('handleExportPlan supports multi-plan exports from large station sets', asy
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         datasetId: 's54a-sgyg',
-        departments: [],
+        departments: ['ATLANTICO'],
         stationCodes,
         startDate: '2024-01-01',
         endDate: '2024-01-31',
@@ -216,6 +264,34 @@ test('sanitizeRequestedFormats keeps stable fallback output', () => {
 
 test('buildJobPartBaseName creates padded part names', () => {
   assert.equal(buildJobPartBaseName('precipitacion_atlantico', 7), 'precipitacion_atlantico_part_0007');
+});
+
+test('ExportRateLimitDurableObject enforces 30 export requests per hour per key', async () => {
+  const storageMap = new Map();
+  const state = {
+    storage: {
+      async get(key) {
+        return storageMap.get(key);
+      },
+      async put(key, value) {
+        storageMap.set(key, value);
+      },
+    },
+  };
+
+  const limiter = new ExportRateLimitDurableObject(state, {});
+  let response;
+  for (let index = 0; index < 30; index += 1) {
+    response = await limiter.fetch(new Request('https://export-rate-limit/check', { method: 'POST' }));
+    assert.equal(response.status, 200);
+  }
+
+  response = await limiter.fetch(new Request('https://export-rate-limit/check', { method: 'POST' }));
+  const data = await response.json();
+
+  assert.equal(response.status, 429);
+  assert.equal(response.headers.get('retry-after') !== null, true);
+  assert.equal(data.limit, 30);
 });
 
 test('createArchivePart generates a zip payload', async () => {
@@ -259,6 +335,9 @@ test('ExportJobDurableObject creates downloadable parts end to end', async () =>
           httpMetadata: item.options.httpMetadata || {},
         };
       },
+      async delete(key) {
+        objects.delete(key);
+      },
     },
     EXPORT_PAGE_SIZE: '50000',
   };
@@ -267,6 +346,9 @@ test('ExportJobDurableObject creates downloadable parts end to end', async () =>
   global.fetch = async (url) => {
     const parsed = new URL(String(url));
     const select = parsed.searchParams.get('$select');
+    if (parsed.pathname.includes('/hp9r-jxuu.json') && select === 'codigo') {
+      return new Response(JSON.stringify([]), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
     if (select === 'count(*) as total') {
       return new Response(JSON.stringify([{ total: '2' }]), { status: 200, headers: { 'content-type': 'application/json' } });
     }
@@ -292,7 +374,7 @@ test('ExportJobDurableObject creates downloadable parts end to end', async () =>
           jobId: 'job-e2e',
           payload: {
             datasetId: 's54a-sgyg',
-            departments: [],
+            departments: ['ATLANTICO'],
             stationCodes: ['STA0001'],
             startDate: '2024-01-01',
             endDate: '2024-01-02',
@@ -315,6 +397,14 @@ test('ExportJobDurableObject creates downloadable parts end to end', async () =>
     const partResponse = await durableObject.fetch(new Request('https://export-job/parts/1'));
     assert.equal(partResponse.status, 200);
     assert.equal(partResponse.headers.get('content-type'), 'application/zip');
+    assert.equal(partResponse.headers.get('x-robots-tag'), 'noindex, nofollow, noarchive');
+
+    const deleteResponse = await durableObject.fetch(new Request('https://export-job/parts/1', { method: 'DELETE' }));
+    assert.equal(deleteResponse.status, 200);
+    assert.equal(objects.size, 0);
+
+    const secondPartResponse = await durableObject.fetch(new Request('https://export-job/parts/1'));
+    assert.equal(secondPartResponse.status, 410);
   } finally {
     global.fetch = originalFetch;
   }

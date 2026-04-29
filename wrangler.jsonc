@@ -22,6 +22,10 @@
       {
         "name": "EXPORT_JOBS",
         "class_name": "ExportJobDurableObject"
+      },
+      {
+        "name": "EXPORT_RATE_LIMITER",
+        "class_name": "ExportRateLimitDurableObject"
       }
     ]
   },
@@ -29,6 +33,10 @@
     {
       "tag": "v2_export_jobs",
       "new_sqlite_classes": ["ExportJobDurableObject"]
+    },
+    {
+      "tag": "v3_export_rate_limiter",
+      "new_sqlite_classes": ["ExportRateLimitDurableObject"]
     }
   ],
   "r2_buckets": [

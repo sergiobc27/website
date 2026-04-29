@@ -1,0 +1,17 @@
+{
+  "rules": [
+    {
+      "id": "delete-async-exports-after-1-hour",
+      "enabled": true,
+      "conditions": {
+        "prefix": "exports/"
+      },
+      "deleteObjectsTransition": {
+        "condition": {
+          "type": "Age",
+          "maxAge": 3600
+        }
+      }
+    }
+  ]
+}
