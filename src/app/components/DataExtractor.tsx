@@ -906,8 +906,8 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   }, [activeTask, elapsedMs, isBusy, onRuntimeChange, progress, runtimeElapsedMs, runtimeRows, runtimeTotalRows]);
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 min-h-[calc(100vh-7rem)]">
-      <div className="xl:col-span-4 space-y-6">
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-12 min-h-[calc(100vh-7rem)]">
+      <div className="space-y-6 xl:col-span-4 xl:sticky xl:top-6 self-start">
         <div className="bg-card border border-border rounded-xl p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
           <h2 className="text-card-foreground text-xl font-bold mb-4">Asistente de extraccion</h2>
           <div className="space-y-3">
@@ -1021,7 +1021,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
             />
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             <MetricCard title="Variable" value={selectedDataset?.name || 'Sin seleccion'} icon={Database} />
             <MetricCard
               title="Filas"
@@ -1037,7 +1037,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           <div className="bg-card border border-border rounded-xl p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
             <h3 className="text-card-foreground font-bold mb-4">Resumen configurado</h3>
             <div className="space-y-3 text-sm">
@@ -1286,7 +1286,7 @@ function StepPanel({
   if (step === 'territory') {
     return (
       <Section title="Cobertura territorial" icon={MapPin}>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <ChoiceCard active={departmentMode === 'all'} onClick={() => setDepartmentMode('all')} title="Todo el pais" description="No limitar por departamento" />
           <ChoiceCard active={departmentMode === 'selected'} onClick={() => setDepartmentMode('selected')} title="Departamentos puntuales" description="Replicar el paso territorial del terminal" />
         </div>
@@ -1330,7 +1330,12 @@ function StepPanel({
         </div>
         {(meta?.catalogFilters || []).map((definition) => (
           <div key={definition.key} className="space-y-2">
-            <label className="text-sm font-semibold text-card-foreground">{definition.label}</label>
+            <label className="flex items-center justify-between gap-3 text-sm font-semibold text-card-foreground">
+              <span>{definition.label}</span>
+              <span className="rounded-full border border-border bg-card px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                {(catalogFilters[definition.key] || []).length} seleccionados
+              </span>
+            </label>
             <div className="max-h-40 overflow-y-auto rounded-lg border border-border bg-background p-3">
               {(catalogOptions[definition.key] || []).length === 0 ? (
                 <p className="text-sm text-muted-foreground">Sin opciones para los filtros actuales.</p>
@@ -1364,7 +1369,7 @@ function StepPanel({
             placeholder="Ej: 21205790, 29045180"
             className="w-full rounded-lg border border-border bg-input px-4 py-3 text-card-foreground focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
           />
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
             <span className="text-xs text-muted-foreground">
               Estaciones cargadas manualmente: {selectionSummary.stationCodes.length}
             </span>
@@ -1408,7 +1413,7 @@ function StepPanel({
   if (step === 'time') {
     return (
       <Section title="Marco temporal" icon={Calendar}>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <ChoiceCard active={timeMode === 'full'} onClick={() => setTimeMode('full')} title="Todo el historico" description="Usar todo el rango disponible" />
           <ChoiceCard active={timeMode === 'custom'} onClick={() => setTimeMode('custom')} title="Rango personalizado" description="Definir fechas exactas" />
         </div>
@@ -1417,7 +1422,7 @@ function StepPanel({
           {dateRange?.endYear || 'N/D'})
         </div>
         {timeMode === 'custom' ? (
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <InputField label="Fecha inicio" type="date" value={startDate} onChange={onStartDateChange} />
             <InputField label="Fecha fin" type="date" value={endDate} onChange={onEndDateChange} />
           </div>
@@ -1449,7 +1454,7 @@ function StepPanel({
 
       <div className="space-y-3">
         <p className="text-sm font-semibold text-card-foreground">Formatos dentro del ZIP</p>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {(['csv', 'json', 'parquet'] as OutputFormat[]).map((format) => (
             <button
               key={format}
@@ -1541,11 +1546,13 @@ function ChoiceCard({
       type="button"
       onClick={onClick}
       className={`rounded-xl border p-4 text-left transition-all ${
-        active ? 'border-accent bg-accent/10 text-card-foreground' : 'border-border bg-background text-muted-foreground hover:border-accent/40'
+        active
+          ? 'border-accent bg-accent/10 text-card-foreground shadow-[0_0_24px_rgba(201,162,39,0.12)]'
+          : 'border-border bg-background text-muted-foreground hover:border-accent/40 hover:bg-muted/40'
       }`}
     >
       <p className="font-bold text-sm">{title}</p>
-      <p className="text-xs mt-1">{description}</p>
+      <p className="mt-1 text-xs leading-5">{description}</p>
     </button>
   );
 }
@@ -1604,21 +1611,21 @@ function SelectInput({
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-start justify-between gap-3 border-b border-border/60 pb-2">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="text-right font-semibold text-card-foreground">{value}</span>
+    <div className="flex flex-col gap-1 border-b border-border/60 pb-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="text-sm font-semibold text-card-foreground sm:text-right">{value}</span>
     </div>
   );
 }
 
 function MetricCard({ title, value, icon: Icon }: { title: string; value: string; icon: React.ElementType }) {
   return (
-    <div className="rounded-lg border border-border bg-background p-4">
-      <div className="flex items-center justify-between mb-2">
+    <div className="rounded-lg border border-border bg-background p-4 min-h-[96px]">
+      <div className="mb-2 flex items-center justify-between gap-3">
         <span className="text-xs font-semibold text-muted-foreground">{title}</span>
         <Icon className="h-4 w-4 text-accent" />
       </div>
-      <p className="text-sm font-bold text-card-foreground break-words">{value}</p>
+      <p className="text-sm font-bold leading-6 text-card-foreground break-words">{value}</p>
     </div>
   );
 }

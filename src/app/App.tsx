@@ -19,7 +19,9 @@ export default function App() {
   });
 
   useEffect(() => {
-    document.documentElement.classList.add('dark');
+    const storedTheme = window.localStorage.getItem('ideam-theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.classList.toggle('dark', storedTheme ? storedTheme === 'dark' : prefersDark);
   }, []);
 
   const getBreadcrumbs = () => {
@@ -53,7 +55,7 @@ export default function App() {
       <Sidebar currentView={currentView} onNavigate={setCurrentView} />
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <Navbar breadcrumbs={getBreadcrumbs()} runtime={runtime} onNavigate={setCurrentView} />
-        <main className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-[#2a2a2a] scrollbar-track-transparent">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 scrollbar-thin scrollbar-thumb-[#2a2a2a] scrollbar-track-transparent">
           <div className={currentView === 'extractor' ? 'block' : 'hidden'}>
             <DataExtractor onRuntimeChange={setRuntime} />
           </div>
@@ -69,7 +71,7 @@ function SettingsView() {
     <div className="space-y-6">
       <div>
         <h2 className="text-card-foreground text-2xl font-bold">Ajustes de API</h2>
-        <p className="text-muted-foreground text-sm mt-1">Configuracion operativa visible para ejecutar consultas Socrata desde la web.</p>
+        <p className="text-muted-foreground text-sm mt-1">Configuración operativa visible para ejecutar consultas Socrata desde la web.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -95,7 +97,7 @@ function SettingsView() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <ChecklistItem text="No se exponen tokens de Socrata o Cloudflare al navegador." />
           <ChecklistItem text="Las consultas se paginan para evitar descargas masivas en una sola respuesta." />
-          <ChecklistItem text="La validacion territorial corre antes del ZIP cuando eliges departamentos." />
+          <ChecklistItem text="La validación territorial corre antes del ZIP cuando eliges departamentos." />
         </div>
       </div>
     </div>
@@ -105,14 +107,14 @@ function SettingsView() {
 function DocumentationView({ onOpenExtractor }: { onOpenExtractor: () => void }) {
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-card-foreground text-2xl font-bold">Documentacion</h2>
-          <p className="text-muted-foreground text-sm mt-1">Guia rapida del flujo web y de las validaciones que protegen la descarga.</p>
+          <h2 className="text-card-foreground text-2xl font-bold">Documentación</h2>
+          <p className="text-muted-foreground text-sm mt-1">Guía rápida del flujo web y de las validaciones que protegen la descarga.</p>
         </div>
         <button
           onClick={onOpenExtractor}
-          className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary to-accent px-4 py-2 text-sm font-semibold text-primary-foreground"
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-primary to-accent px-4 py-2 text-sm font-semibold text-primary-foreground sm:w-auto"
         >
           <Terminal className="h-4 w-4" />
           Abrir extractor
@@ -126,29 +128,29 @@ function DocumentationView({ onOpenExtractor }: { onOpenExtractor: () => void })
           items={[
             'Aceptar el aviso legal.',
             'Seleccionar variable IDEAM.',
-            'Elegir todo el pais o departamentos puntuales.',
-            'Aplicar filtros de catalogo o estaciones manuales.',
+            'Elegir todo el país o departamentos puntuales.',
+            'Aplicar filtros de catálogo o estaciones manuales.',
             'Definir temporalidad y descargar ZIP.',
           ]}
         />
         <DocCard
           icon={CheckCircle2}
-          title="Validaciones automaticas"
+          title="Validaciones automáticas"
           items={[
-            'Rango temporal valido.',
+            'Rango temporal válido.',
             'Departamentos requeridos si el modo es puntual.',
             'Cobertura territorial antes de exportar ZIP.',
-            'Particion automatica para archivos grandes.',
-            'Metricas de filas, estaciones, municipios, zonas, peso y tiempo.',
+            'Partición automática para archivos grandes.',
+            'Métricas de filas, estaciones, municipios, zonas, peso y tiempo.',
           ]}
         />
         <DocCard
           icon={BookOpen}
           title="Formatos disponibles"
           items={[
-            'CSV para Excel y analisis general.',
+            'CSV para Excel y análisis general.',
             'JSON para integraciones web o APIs.',
-            'Parquet para analitica eficiente cuando el navegador lo soporte.',
+            'Parquet para analítica eficiente cuando el navegador lo soporte.',
           ]}
         />
         <DocCard
@@ -157,7 +159,7 @@ function DocumentationView({ onOpenExtractor }: { onOpenExtractor: () => void })
           items={[
             'Cloudflare Worker sirve los endpoints /api.',
             'GitHub Actions publica los cambios del repositorio.',
-            'Las credenciales deben vivir en secrets, nunca en el codigo fuente.',
+            'Las credenciales deben vivir en secrets, nunca en el código fuente.',
           ]}
         />
       </div>

@@ -58,21 +58,21 @@ export function DownloadHistory() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-card-foreground text-2xl font-bold">Historial de descargas</h2>
-          <p className="text-muted-foreground text-sm mt-1">Registro local con volumen, tiempo, estaciones y cobertura procesada</p>
+          <h2 className="text-2xl font-bold text-card-foreground">Historial de descargas</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Registro local con volumen, tiempo, estaciones y cobertura procesada</p>
         </div>
         <button
           onClick={clearHistory}
-          className="flex items-center gap-2 px-4 py-2 bg-muted text-muted-foreground rounded-lg hover:bg-destructive/15 hover:text-destructive border border-transparent hover:border-destructive/30 transition-all font-semibold"
+          className="flex items-center justify-center gap-2 rounded-lg border border-transparent bg-muted px-4 py-2 font-semibold text-muted-foreground transition-all hover:border-destructive/30 hover:bg-destructive/15 hover:text-destructive sm:w-auto"
         >
-          <Trash2 className="w-4 h-4" />
+          <Trash2 className="h-4 w-4" />
           Limpiar
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard title="Descargas" value={String(stats.downloads)} icon={Download} />
         <StatCard title="Filas" value={stats.rows.toLocaleString('es-CO')} icon={Database} />
         <StatCard title="Estaciones" value={stats.stations.toLocaleString('es-CO')} icon={MapPin} />
@@ -80,20 +80,45 @@ export function DownloadHistory() {
         <StatCard title="Ultima ejecucion" value={stats.latest} icon={Calendar} compact />
       </div>
 
-      <div className="bg-card border border-border rounded-xl overflow-hidden shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+      {history.length > 0 && (
+        <div className="space-y-3 md:hidden">
+          {history.map((item, index) => (
+            <div key={`${item.fileName}-${index}`} className="rounded-xl border border-border bg-card p-4 shadow-[0_0_20px] shadow-accent/5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-semibold text-card-foreground">{item.variable}</p>
+                  <p className="mt-1 break-words font-mono text-xs text-muted-foreground">{item.fileName}</p>
+                </div>
+                <span className="shrink-0 text-xs font-semibold text-muted-foreground">{item.format.toUpperCase()}</span>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <MiniStat label="Filas" value={Number(item.rowCount || 0).toLocaleString('es-CO')} />
+                <MiniStat label="Estaciones" value={Number(item.stationCount || 0).toLocaleString('es-CO')} />
+                <MiniStat label="Municipios" value={Number(item.municipalityCount || 0).toLocaleString('es-CO')} />
+                <MiniStat label="Zonas" value={Number(item.zoneCount || 0).toLocaleString('es-CO')} />
+                <MiniStat label="Tiempo" value={`${item.processingMs} ms`} />
+                <MiniStat label="Peso" value={formatBytes(item.sizeBytes || 0)} />
+              </div>
+              <p className="mt-4 text-xs text-muted-foreground">{item.timestamp}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="hidden overflow-hidden rounded-xl border border-border bg-card shadow-[0_0_40px_rgba(201,162,39,0.1)] md:block">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-background border-b border-border">
+            <thead className="border-b border-border bg-background">
               <tr>
-                <th className="text-left p-4 text-muted-foreground text-sm font-bold">Variable</th>
-                <th className="text-left p-4 text-muted-foreground text-sm font-bold">Filas</th>
-                <th className="text-left p-4 text-muted-foreground text-sm font-bold">Estaciones</th>
-                <th className="text-left p-4 text-muted-foreground text-sm font-bold">Municipios</th>
-                <th className="text-left p-4 text-muted-foreground text-sm font-bold">Zonas</th>
-                <th className="text-left p-4 text-muted-foreground text-sm font-bold">Tiempo</th>
-                <th className="text-left p-4 text-muted-foreground text-sm font-bold">Peso</th>
-                <th className="text-left p-4 text-muted-foreground text-sm font-bold">Archivo</th>
-                <th className="text-left p-4 text-muted-foreground text-sm font-bold">Descarga</th>
+                <th className="p-4 text-left text-sm font-bold text-muted-foreground">Variable</th>
+                <th className="p-4 text-left text-sm font-bold text-muted-foreground">Filas</th>
+                <th className="p-4 text-left text-sm font-bold text-muted-foreground">Estaciones</th>
+                <th className="p-4 text-left text-sm font-bold text-muted-foreground">Municipios</th>
+                <th className="p-4 text-left text-sm font-bold text-muted-foreground">Zonas</th>
+                <th className="p-4 text-left text-sm font-bold text-muted-foreground">Tiempo</th>
+                <th className="p-4 text-left text-sm font-bold text-muted-foreground">Peso</th>
+                <th className="p-4 text-left text-sm font-bold text-muted-foreground">Archivo</th>
+                <th className="p-4 text-left text-sm font-bold text-muted-foreground">Descarga</th>
               </tr>
             </thead>
             <tbody>
@@ -107,17 +132,17 @@ export function DownloadHistory() {
                 history.map((item, index) => (
                   <tr
                     key={`${item.fileName}-${index}`}
-                    className={`border-b border-border hover:bg-muted/50 transition-all ${index % 2 === 0 ? 'bg-card' : 'bg-background'}`}
+                    className={`border-b border-border transition-all hover:bg-muted/50 ${index % 2 === 0 ? 'bg-card' : 'bg-background'}`}
                   >
-                    <td className="p-4 text-card-foreground font-semibold">{item.variable}</td>
-                    <td className="p-4 text-card-foreground font-mono text-sm font-bold">{Number(item.rowCount || 0).toLocaleString('es-CO')}</td>
-                    <td className="p-4 text-muted-foreground text-sm">{Number(item.stationCount || 0).toLocaleString('es-CO')}</td>
-                    <td className="p-4 text-muted-foreground text-sm">{Number(item.municipalityCount || 0).toLocaleString('es-CO')}</td>
-                    <td className="p-4 text-muted-foreground text-sm">{Number(item.zoneCount || 0).toLocaleString('es-CO')}</td>
-                    <td className="p-4 text-card-foreground font-mono text-sm">{item.processingMs} ms</td>
-                    <td className="p-4 text-muted-foreground text-sm">{formatBytes(item.sizeBytes || 0)}</td>
-                    <td className="p-4 text-muted-foreground text-sm font-mono">{item.fileName}</td>
-                    <td className="p-4 text-muted-foreground text-xs font-mono">
+                    <td className="p-4 font-semibold text-card-foreground">{item.variable}</td>
+                    <td className="p-4 font-mono text-sm font-bold text-card-foreground">{Number(item.rowCount || 0).toLocaleString('es-CO')}</td>
+                    <td className="p-4 text-sm text-muted-foreground">{Number(item.stationCount || 0).toLocaleString('es-CO')}</td>
+                    <td className="p-4 text-sm text-muted-foreground">{Number(item.municipalityCount || 0).toLocaleString('es-CO')}</td>
+                    <td className="p-4 text-sm text-muted-foreground">{Number(item.zoneCount || 0).toLocaleString('es-CO')}</td>
+                    <td className="p-4 font-mono text-sm text-card-foreground">{item.processingMs} ms</td>
+                    <td className="p-4 text-sm text-muted-foreground">{formatBytes(item.sizeBytes || 0)}</td>
+                    <td className="p-4 font-mono text-sm text-muted-foreground">{item.fileName}</td>
+                    <td className="p-4 font-mono text-xs text-muted-foreground">
                       <div>{item.format.toUpperCase()}</div>
                       <div>{item.timestamp}</div>
                     </td>
@@ -144,14 +169,23 @@ function StatCard({
   compact?: boolean;
 }) {
   return (
-    <div className="bg-card border border-border rounded-xl p-4 hover:border-accent/50 hover:shadow-[0_0_30px] hover:shadow-accent/15 transition-all shadow-[0_0_20px] shadow-accent/5">
-      <div className="flex items-center justify-between mb-2">
-        <div className="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center border border-primary/30">
-          <Icon className="w-5 h-5 text-accent" />
+    <div className="rounded-xl border border-border bg-card p-4 shadow-[0_0_20px] shadow-accent/5 transition-all hover:border-accent/50 hover:shadow-[0_0_30px] hover:shadow-accent/15">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-primary/30 bg-primary/20">
+          <Icon className="h-5 w-5 text-accent" />
         </div>
       </div>
-      <p className={`text-card-foreground font-mono font-bold mb-1 ${compact ? 'text-sm' : 'text-2xl'}`}>{value}</p>
-      <p className="text-muted-foreground text-xs font-semibold">{title}</p>
+      <p className={`mb-1 font-mono font-bold text-card-foreground break-words ${compact ? 'text-sm' : 'text-2xl'}`}>{value}</p>
+      <p className="text-xs font-semibold text-muted-foreground">{title}</p>
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-background p-3">
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-card-foreground break-words">{value}</p>
     </div>
   );
 }

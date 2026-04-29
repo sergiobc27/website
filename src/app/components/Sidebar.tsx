@@ -21,13 +21,13 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
   ];
 
   return (
-    <div className={`${isCollapsed ? 'w-20' : 'w-64'} h-screen bg-[#A3161A] border-r border-[#8a1216] flex flex-col flex-shrink-0 transition-all duration-300`}>
+    <div className={`${isCollapsed ? 'w-20' : 'w-72'} h-screen bg-[#A3161A] border-r border-[#8a1216] flex flex-col flex-shrink-0 transition-all duration-300`}>
       <div className="p-6 border-b border-[#8a1216] relative">
         {!isCollapsed ? (
           <div className="space-y-3">
             <img src={logoVertical} alt="Universidad de la Costa CUC" className="w-full h-auto" />
             <div className="text-center pt-2">
-              <h1 className="text-white font-bold text-sm">AUTOMATIZACION DE DATOS HIDRICOS DEL IDEAM</h1>
+              <h1 className="text-white font-bold text-sm leading-5">AUTOMATIZACION DE DATOS HIDRICOS DEL IDEAM</h1>
               <p className="text-white/80 text-xs">Por: Sergio Beltran Coley</p>
             </div>
           </div>
@@ -59,14 +59,15 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'justify-start'} px-4 py-3 rounded-lg transition-all duration-200 ${
+              className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 justify-start'} px-4 py-3 rounded-lg transition-all duration-200 ${
                 isActive
                   ? 'bg-[#C9A227] text-[#0f0f0f] font-semibold shadow-[0_0_20px_rgba(201,162,39,0.4)]'
                   : 'text-white/80 hover:bg-[#8a1216] hover:text-white'
               }`}
               title={isCollapsed ? item.label : ''}
             >
-              {isCollapsed ? <Icon className="w-5 h-5 flex-shrink-0" /> : <span className="text-sm">{item.label}</span>}
+              <Icon className="w-5 h-5 flex-shrink-0" />
+              {!isCollapsed && <span className="text-sm truncate">{item.label}</span>}
             </button>
           );
         })}
@@ -76,7 +77,7 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
         {!isCollapsed ? (
           <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
             <img src={logoIdeam} alt="IDEAM" className="w-full h-auto" />
-            <p className="text-white/60 text-xs text-center mt-2">Instituto de Hidrologia, Meteorologia y Estudios Ambientales</p>
+            <p className="text-white/60 text-xs text-center mt-2 leading-5">Instituto de Hidrologia, Meteorologia y Estudios Ambientales</p>
           </div>
         ) : (
           <div className="flex justify-center">

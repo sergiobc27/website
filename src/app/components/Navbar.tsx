@@ -26,33 +26,39 @@ function readDownloadCount() {
 }
 
 export function Navbar({ breadcrumbs, runtime, onNavigate }: NavbarProps) {
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const toggleTheme = () => {
-    setIsDark(!isDark);
-    document.documentElement.classList.toggle('dark');
+    const nextValue = !isDark;
+    setIsDark(nextValue);
+    document.documentElement.classList.toggle('dark', nextValue);
+    window.localStorage.setItem('ideam-theme', nextValue ? 'dark' : 'light');
   };
 
   return (
-    <div className="relative h-16 bg-card border-b border-border px-6 flex items-center justify-between backdrop-blur-sm">
-      <div className="flex items-center gap-2 text-sm">
+    <div className="relative flex min-h-16 items-center justify-between gap-3 border-b border-border bg-card px-4 backdrop-blur-sm md:px-6">
+      <div className="min-w-0 flex items-center gap-2 overflow-hidden text-sm">
         {breadcrumbs.map((crumb, index) => (
-          <div key={index} className="flex items-center gap-2">
-            {index > 0 && <ChevronRight className="w-4 h-4 text-[#CCCCCC]" />}
-            <span className={`transition-colors ${index === breadcrumbs.length - 1 ? 'text-accent font-semibold' : 'text-muted-foreground hover:text-foreground cursor-pointer'}`}>
+          <div key={index} className="flex min-w-0 items-center gap-2">
+            {index > 0 && <ChevronRight className="h-4 w-4 shrink-0 text-[#CCCCCC]" />}
+            <span
+              className={`truncate transition-colors ${
+                index === breadcrumbs.length - 1 ? 'font-semibold text-accent' : 'cursor-pointer text-muted-foreground hover:text-foreground'
+              }`}
+            >
               {crumb}
             </span>
           </div>
         ))}
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex shrink-0 items-center gap-2 md:gap-3">
         {runtime.isBusy && (
           <button
             type="button"
             onClick={() => onNavigate('extractor')}
-            className="hidden md:flex items-center gap-3 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-left"
+            className="hidden items-center gap-3 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-left lg:flex"
             title="Ver descarga en curso"
           >
             <span className="relative flex h-2.5 w-2.5">
@@ -62,59 +68,74 @@ export function Navbar({ breadcrumbs, runtime, onNavigate }: NavbarProps) {
             <span className="min-w-0">
               <span className="block max-w-52 truncate text-xs font-semibold text-card-foreground">{runtime.activeTask}</span>
               <span className="block text-[11px] text-muted-foreground">
-                {runtime.progress}% · {runtime.downloadedRows.toLocaleString('es-CO')} / {runtime.totalRows.toLocaleString('es-CO')} filas ·{' '}
+                {runtime.progress}% | {runtime.downloadedRows.toLocaleString('es-CO')} / {runtime.totalRows.toLocaleString('es-CO')} filas |{' '}
                 {formatDuration(runtime.elapsedMs)}
               </span>
             </span>
           </button>
         )}
 
+        {runtime.isBusy && (
+          <button
+            type="button"
+            onClick={() => onNavigate('extractor')}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-accent/30 bg-accent/10 text-accent lg:hidden"
+            title={`${runtime.progress}% completado`}
+          >
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-accent" />
+            </span>
+          </button>
+        )}
+
         <button
+          type="button"
           onClick={toggleTheme}
-          className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-accent transition-all hover:scale-110"
+          className="rounded-lg p-2 text-muted-foreground transition-all hover:scale-110 hover:bg-muted hover:text-accent"
           title={isDark ? 'Modo claro' : 'Modo oscuro'}
         >
-          {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
         </button>
 
         <button
           type="button"
           onClick={() => onNavigate('docs')}
-          className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-accent transition-all hover:scale-110"
+          className="rounded-lg p-2 text-muted-foreground transition-all hover:scale-110 hover:bg-muted hover:text-accent"
           title="Ayuda"
         >
-          <HelpCircle className="w-5 h-5" />
+          <HelpCircle className="h-5 w-5" />
         </button>
 
         <button
           type="button"
           onClick={() => setIsProfileOpen((current) => !current)}
-          className="w-8 h-8 bg-gradient-to-br from-[#A3161A] to-[#C9A227] rounded-full flex items-center justify-center cursor-pointer hover:scale-110 transition-transform shadow-[0_0_15px_rgba(201,162,39,0.3)] hover:shadow-[0_0_25px_rgba(201,162,39,0.5)]"
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#A3161A] to-[#C9A227] shadow-[0_0_15px_rgba(201,162,39,0.3)] transition-transform hover:scale-110 hover:shadow-[0_0_25px_rgba(201,162,39,0.5)]"
           title="Perfil"
         >
-          <User className="w-4 h-4 text-white" />
+          <User className="h-4 w-4 text-white" />
         </button>
       </div>
 
       {isProfileOpen && (
-        <div className="absolute right-6 top-14 z-30 w-80 rounded-xl border border-border bg-card p-4 shadow-2xl">
+        <div className="absolute right-4 top-14 z-30 w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-border bg-card p-4 shadow-2xl md:right-6">
           <div className="flex items-center gap-3 border-b border-border pb-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#A3161A] to-[#C9A227] flex items-center justify-center">
-              <User className="w-5 h-5 text-white" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#A3161A] to-[#C9A227]">
+              <User className="h-5 w-5 text-white" />
             </div>
             <div>
-              <p className="text-card-foreground font-bold">Sesion local</p>
-              <p className="text-muted-foreground text-xs">Sin inicio de sesion requerido</p>
+              <p className="font-bold text-card-foreground">Sesion local</p>
+              <p className="text-xs text-muted-foreground">Sin inicio de sesion requerido</p>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3 py-4 text-sm">
             <div className="rounded-lg border border-border bg-background p-3">
-              <p className="text-muted-foreground text-xs">Descargas</p>
-              <p className="text-card-foreground font-mono font-bold">{readDownloadCount()}</p>
+              <p className="text-xs text-muted-foreground">Descargas</p>
+              <p className="font-mono font-bold text-card-foreground">{readDownloadCount()}</p>
             </div>
             <div className="rounded-lg border border-border bg-background p-3">
-              <p className="text-muted-foreground text-xs">Extractor</p>
-              <p className="text-card-foreground font-mono font-bold">{runtime.isBusy ? `${runtime.progress}%` : 'Libre'}</p>
+              <p className="text-xs text-muted-foreground">Extractor</p>
+              <p className="font-mono font-bold text-card-foreground">{runtime.isBusy ? `${runtime.progress}%` : 'Libre'}</p>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
