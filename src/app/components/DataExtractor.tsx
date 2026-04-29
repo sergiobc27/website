@@ -702,17 +702,17 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           }
 
           const [arrowModule, parquetModule] = parquetDependencies;
-          const arrowTable = arrowModule.tableFromJSON(rowsForPart);
-          const wasmTable = parquetModule.Table.fromIPCStream(arrowModule.tableToIPC(arrowTable, 'stream'));
-          const writerBuilder = new parquetModule.WriterPropertiesBuilder();
-          const writerProperties = writerBuilder.setCompression(parquetModule.Compression.SNAPPY).build();
-
           try {
+            const arrowTable = arrowModule.tableFromJSON(rowsForPart);
+            const wasmTable = parquetModule.Table.fromIPCStream(arrowModule.tableToIPC(arrowTable, 'stream'));
+            const writerBuilder = new parquetModule.WriterPropertiesBuilder();
+            const writerProperties = writerBuilder.setCompression(parquetModule.Compression.SNAPPY).build();
+
             zip.file(buildMemberName('parquet', partNumber), parquetModule.writeParquet(wasmTable, writerProperties));
-          } finally {
-            writerProperties.free();
-            writerBuilder.free();
-            wasmTable.free();
+          } catch (error) {
+            throw new Error(
+              `No fue posible generar Parquet para este bloque. ${error instanceof Error ? error.message : 'Error interno de exportacion.'}`
+            );
           }
         }
       };
