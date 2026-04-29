@@ -77,6 +77,7 @@ interface StationHelperRow {
 interface CoverageReport {
   department: string;
   configured_variants: string[];
+  matched: Array<{ departamento: string; normalized: string; total: number }>;
   matched_rows: number;
   unmatched_rows: number;
   unmatched_discovered: Array<{ departamento: string; normalized: string; total: number }>;
@@ -152,6 +153,15 @@ interface TransferProgress {
   downloadedRows: number;
   totalParts: number;
   completedParts: number;
+}
+
+export interface ExtractorRuntimeState {
+  isBusy: boolean;
+  activeTask: string;
+  progress: number;
+  elapsedMs: number;
+  downloadedRows: number;
+  totalRows: number;
 }
 
 interface HistoryEntry extends DownloadMetrics {
@@ -286,7 +296,7 @@ function summarizeRows(rows: Record<string, unknown>[], dateColumn: string) {
   return finalizeSummaryAccumulator(accumulator, rows.length);
 }
 
-export function DataExtractor() {
+export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: ExtractorRuntimeState) => void }) {
   const [meta, setMeta] = useState<MetaResponse | null>(null);
   const [step, setStep] = useState<StepId>('consent');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -497,14 +507,16 @@ export function DataExtractor() {
     );
   };
 
-  const runCoverage = async () => {
+  const validateCoverageForDownload = async () => {
+    if (departmentMode !== 'selected' || !selectedDepartments.length) {
+      setCoverageReports([]);
+      return executionPayload;
+    }
+
+    setCoverageLoading(true);
+    setActiveTask('Validando cobertura territorial...');
+    appendLog('INFO', 'Validando cobertura territorial antes de descargar...');
     try {
-      validateCurrentConfiguration();
-      if (departmentMode !== 'selected' || !selectedDepartments.length) {
-        throw new Error('La validacion territorial requiere al menos un departamento seleccionado.');
-      }
-      setCoverageLoading(true);
-      appendLog('INFO', 'Validando cobertura territorial del mapeo...');
       const response = await fetch('/api/coverage', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -514,10 +526,30 @@ export function DataExtractor() {
       if (!response.ok) {
         throw new Error(data.error || 'No fue posible validar la cobertura territorial.');
       }
-      setCoverageReports(data.reports || []);
-      appendLog('SUCCESS', 'Cobertura territorial validada.');
-    } catch (error) {
-      appendLog('ERROR', error instanceof Error ? error.message : 'Error validando cobertura.');
+
+      const reports = data.reports || [];
+      setCoverageReports(reports);
+
+      const discoveredDepartments = reports.flatMap((report) => [
+        ...report.matched.map((item) => item.departamento),
+        ...report.unmatched_discovered.map((item) => item.departamento),
+      ]);
+      const enhancedDepartments = Array.from(new Set([...selectedDepartments, ...discoveredDepartments].filter(Boolean)));
+      const unmatchedRows = reports.reduce((sum, report) => sum + report.unmatched_rows, 0);
+
+      if (unmatchedRows > 0) {
+        appendLog(
+          'INFO',
+          `Cobertura con variantes nuevas: ${unmatchedRows.toLocaleString('es-CO')} filas potenciales se incluiran en la descarga.`
+        );
+      } else {
+        appendLog('SUCCESS', 'Cobertura territorial validada sin variantes pendientes.');
+      }
+
+      return {
+        ...executionPayload,
+        departments: enhancedDepartments,
+      };
     } finally {
       setCoverageLoading(false);
     }
@@ -596,14 +628,17 @@ export function DataExtractor() {
       setDownloadMetrics(null);
       setTransferProgress(null);
       setProgress(2);
+      setActiveTask('Validando cobertura territorial...');
+      const startedAt = performance.now();
+      const downloadPayload = await validateCoverageForDownload();
+
       setActiveTask('Preparando plan de exportacion...');
       appendLog('INFO', 'Construyendo plan de descarga paginada...');
-      const startedAt = performance.now();
 
       const planResponse = await fetch('/api/export-plan', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(executionPayload),
+        body: JSON.stringify(downloadPayload),
       });
       const planData = (await planResponse.json()) as ExportPlanResponse & { error?: string };
       if (!planResponse.ok) {
@@ -859,6 +894,17 @@ export function DataExtractor() {
       ? `${downloadMetrics.archivePartCount}/${downloadMetrics.archivePartCount}`
       : '0/0';
 
+  useEffect(() => {
+    onRuntimeChange?.({
+      isBusy,
+      activeTask,
+      progress,
+      elapsedMs: runtimeElapsedMs,
+      downloadedRows: runtimeRows,
+      totalRows: runtimeTotalRows,
+    });
+  }, [activeTask, elapsedMs, isBusy, onRuntimeChange, progress, runtimeElapsedMs, runtimeRows, runtimeTotalRows]);
+
   return (
     <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 min-h-[calc(100vh-7rem)]">
       <div className="xl:col-span-4 space-y-6">
@@ -934,7 +980,6 @@ export function DataExtractor() {
             selectionSummary={selectionSummary}
             coverageReports={coverageReports}
             coverageLoading={coverageLoading}
-            onRunCoverage={runCoverage}
             onRunPreview={runPreview}
             onRunDownload={runDownload}
             isBusy={isBusy}
@@ -1156,7 +1201,6 @@ function StepPanel({
   selectionSummary,
   coverageReports,
   coverageLoading,
-  onRunCoverage,
   onRunPreview,
   onRunDownload,
   isBusy,
@@ -1197,7 +1241,6 @@ function StepPanel({
   };
   coverageReports: CoverageReport[];
   coverageLoading: boolean;
-  onRunCoverage: () => void;
   onRunPreview: () => void;
   onRunDownload: () => void;
   isBusy: boolean;
@@ -1427,16 +1470,7 @@ function StepPanel({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <button
-          type="button"
-          onClick={onRunCoverage}
-          disabled={coverageLoading}
-          className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-3 text-sm font-semibold text-card-foreground hover:border-accent/40 disabled:opacity-50"
-        >
-          <ShieldCheck className="h-4 w-4" />
-          {coverageLoading ? 'Validando...' : 'Cobertura'}
-        </button>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <button
           type="button"
           onClick={onRunPreview}
@@ -1449,11 +1483,11 @@ function StepPanel({
         <button
           type="button"
           onClick={onRunDownload}
-          disabled={isBusy}
+          disabled={isBusy || coverageLoading}
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-primary to-accent px-4 py-3 text-sm font-semibold text-primary-foreground hover:shadow-[0_0_24px] hover:shadow-accent/40 disabled:opacity-50"
         >
-          <Download className="h-4 w-4" />
-          Descargar ZIP
+          {coverageLoading ? <ShieldCheck className="h-4 w-4" /> : <Download className="h-4 w-4" />}
+          {coverageLoading ? 'Validando cobertura...' : 'Descargar ZIP'}
         </button>
       </div>
 

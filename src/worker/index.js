@@ -625,24 +625,32 @@ async function handleCoverage(request, env) {
     return jsonResponse({ error: "datasetId y departments son requeridos." }, 400);
   }
 
+  const discovered = await socrataGet(config, datasetId, {
+    "$select": "departamento, count(*) as total",
+    "$group": "departamento",
+    "$order": "departamento",
+    "$limit": 5000,
+  });
+
   const reports = [];
 
   for (const department of departments) {
     const configured = departmentVariants(department).map((value) => normalizeLabel(value));
-    const needle = normalizeLabel(department).slice(0, 4);
-    const discovered = await socrataGet(config, datasetId, {
-      "$select": "departamento, count(*) as total",
-      "$where": `upper(departamento) like ${quoteSoql(`%${needle}%`)}`,
-      "$group": "departamento",
-      "$order": "departamento",
-      "$limit": 5000,
-    });
+    const normalizedDepartment = normalizeLabel(department);
+    const needle = normalizedDepartment.slice(0, 4);
 
     const matched = [];
     const unmatched = [];
 
     discovered.forEach((row) => {
       const normalized = normalizeLabel(row.departamento);
+      const looksRelated =
+        normalized === normalizedDepartment ||
+        configured.includes(normalized) ||
+        (needle.length >= 4 && normalized.includes(needle));
+
+      if (!looksRelated) return;
+
       const record = {
         departamento: row.departamento,
         normalized,

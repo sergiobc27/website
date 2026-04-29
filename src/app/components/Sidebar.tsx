@@ -59,15 +59,14 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} px-4 py-3 rounded-lg transition-all duration-200 ${
+              className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'justify-start'} px-4 py-3 rounded-lg transition-all duration-200 ${
                 isActive
                   ? 'bg-[#C9A227] text-[#0f0f0f] font-semibold shadow-[0_0_20px_rgba(201,162,39,0.4)]'
                   : 'text-white/80 hover:bg-[#8a1216] hover:text-white'
               }`}
               title={isCollapsed ? item.label : ''}
             >
-              <Icon className="w-5 h-5 flex-shrink-0" />
-              {!isCollapsed && <span className="text-sm">{item.label}</span>}
+              {isCollapsed ? <Icon className="w-5 h-5 flex-shrink-0" /> : <span className="text-sm">{item.label}</span>}
             </button>
           );
         })}
