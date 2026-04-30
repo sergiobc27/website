@@ -356,6 +356,8 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   const [operationStartedAt, setOperationStartedAt] = useState<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   const handledJobIdsRef = useRef<Set<string>>(new Set());
+  const cleanupScheduledPartsRef = useRef<Set<string>>(new Set());
+  const [deletedPartKeys, setDeletedPartKeys] = useState<string[]>([]);
 
   const steps = useMemo(
     () => [
@@ -405,39 +407,43 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     setLogs((current) => [...current, { type, message }]);
   }, []);
 
-  const triggerBrowserDownload = (blob: Blob, fileName: string) => {
+  const triggerBrowserDownload = useCallback((downloadPath: string, fileName: string) => {
     const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
+    link.href = downloadPath;
     link.download = fileName;
+    link.rel = 'noopener';
     document.body.appendChild(link);
     link.click();
     link.remove();
-    URL.revokeObjectURL(link.href);
-  };
+  }, []);
 
-  const downloadJobParts = useCallback(async (job: ExportJobStatusResponse) => {
-    for (const part of job.parts) {
-      appendLog('INFO', `Descargando ${part.fileName}...`);
-      const response = await fetch(part.downloadPath);
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error((data as { error?: string }).error || `No fue posible descargar ${part.fileName}.`);
+  const cleanupDownloadedPart = useCallback(async (part: ExportJobPart, partKey: string) => {
+    try {
+      const cleanupResponse = await fetch(part.downloadPath, { method: 'DELETE' });
+      if (cleanupResponse.ok) {
+        setDeletedPartKeys((current) => (current.includes(partKey) ? current : [...current, partKey]));
+        appendLog('SUCCESS', `Archivo temporal eliminado de R2: ${part.fileName}.`);
+      } else {
+        appendLog('INFO', `El archivo temporal ${part.fileName} quedara cubierto por la limpieza automatica de 1 hora.`);
       }
-      const blob = await response.blob();
-      triggerBrowserDownload(blob, part.fileName);
-      try {
-        const cleanupResponse = await fetch(part.downloadPath, { method: 'DELETE' });
-        if (cleanupResponse.ok) {
-          appendLog('SUCCESS', `Archivo temporal eliminado de R2: ${part.fileName}.`);
-        } else {
-          appendLog('INFO', `El archivo temporal ${part.fileName} quedara cubierto por la limpieza automatica de 1 hora.`);
-        }
-      } catch {
-        appendLog('INFO', `No se pudo confirmar limpieza inmediata de ${part.fileName}; lifecycle lo eliminara automaticamente.`);
-      }
-      await new Promise((resolve) => window.setTimeout(resolve, 120));
+    } catch {
+      appendLog('INFO', `No se pudo confirmar limpieza inmediata de ${part.fileName}; lifecycle lo eliminara automaticamente.`);
     }
   }, [appendLog]);
+
+  const downloadJobPart = useCallback((job: ExportJobStatusResponse, part: ExportJobPart) => {
+    const partKey = `${job.jobId}:${part.index}`;
+    triggerBrowserDownload(part.downloadPath, part.fileName);
+    appendLog('SUCCESS', `Descarga iniciada: ${part.fileName}.`);
+
+    if (!cleanupScheduledPartsRef.current.has(partKey)) {
+      cleanupScheduledPartsRef.current.add(partKey);
+      appendLog('INFO', `La limpieza de R2 para ${part.fileName} se ejecutara en unos segundos.`);
+      window.setTimeout(() => {
+        void cleanupDownloadedPart(part, partKey);
+      }, 45000);
+    }
+  }, [appendLog, cleanupDownloadedPart, triggerBrowserDownload]);
 
   const finalizeCompletedJob = useCallback(async (job: ExportJobStatusResponse) => {
     if (handledJobIdsRef.current.has(job.jobId)) return;
@@ -462,12 +468,11 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       return;
     }
 
-    await downloadJobParts(job);
     appendLog(
       'SUCCESS',
-      `Job completado: ${job.parts.length} archivo(s), ${job.processedRows.toLocaleString('es-CO')} filas y ${formatDuration(job.metrics?.processingMs || 0)}.`
+      `Job listo: ${job.parts.length} archivo(s), ${job.processedRows.toLocaleString('es-CO')} filas y ${formatDuration(job.metrics?.processingMs || 0)}. Usa el boton de descarga para guardar el ZIP.`
     );
-  }, [appendLog, catalogFilters, datasetId, downloadJobParts, selectedDataset?.name, selectedDepartments]);
+  }, [appendLog, catalogFilters, datasetId, selectedDataset?.name, selectedDepartments]);
 
   useEffect(() => {
     const boot = async () => {
@@ -597,7 +602,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           setActiveTask(`Procesando ${data.completedPages}/${Math.max(data.totalPages, 1)} paginas...`);
         } else if (data.status === 'completed') {
           setProgress(100);
-          setActiveTask('Descarga lista');
+          setActiveTask('ZIP listo para descargar');
           setIsBusy(false);
           await finalizeCompletedJob(data);
         } else if (data.status === 'failed') {
@@ -780,6 +785,8 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       setTransferProgress(null);
       setCurrentJob(null);
       setCurrentJobId(null);
+      setDeletedPartKeys([]);
+      cleanupScheduledPartsRef.current.clear();
       setProgress(2);
       setActiveTask('Validando cobertura territorial...');
 
@@ -860,6 +867,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     : downloadMetrics
       ? `${downloadMetrics.archivePartCount}/${downloadMetrics.archivePartCount}`
       : '0/0';
+  const readyDownloadJob = currentJob?.status === 'completed' && currentJob.parts.length ? currentJob : null;
 
   useEffect(() => {
     onRuntimeChange?.({
@@ -1001,6 +1009,45 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
             <MetricCard title="Proceso" value={activeTask} icon={LoaderCircle} />
           </div>
         </div>
+
+        {readyDownloadJob && (
+          <div className="bg-card border border-success/30 rounded-xl p-6 shadow-[0_0_40px_rgba(32,197,121,0.12)]">
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-card-foreground font-bold">ZIP listo para descargar</h3>
+                <p className="text-sm text-muted-foreground">
+                  La descarga se inicia con un clic directo del usuario para evitar bloqueos del navegador.
+                </p>
+              </div>
+              <span className="rounded-full border border-success/30 bg-success/10 px-3 py-1 text-xs font-semibold text-success">
+                Disponible por 1 hora
+              </span>
+            </div>
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              {readyDownloadJob.parts.map((part) => {
+                const partKey = `${readyDownloadJob.jobId}:${part.index}`;
+                const wasDeleted = deletedPartKeys.includes(partKey);
+                return (
+                  <button
+                    key={partKey}
+                    type="button"
+                    onClick={() => downloadJobPart(readyDownloadJob, part)}
+                    disabled={wasDeleted}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-4 py-3 text-left transition-all hover:border-accent/40 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold text-card-foreground">{part.fileName}</span>
+                      <span className="block text-xs text-muted-foreground">
+                        {part.rowCount.toLocaleString('es-CO')} filas | {formatBytes(part.sizeBytes)}
+                      </span>
+                    </span>
+                    <Download className="h-4 w-4 shrink-0 text-accent" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           <div className="bg-card border border-border rounded-xl p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
