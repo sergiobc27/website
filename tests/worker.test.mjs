@@ -307,10 +307,10 @@ test('handleExportPlan supports multi-plan exports from large station sets', asy
 
 
 
-test('sanitizeRequestedFormats keeps stable fallback output', () => {
+test('sanitizeRequestedFormats keeps parquet as an effective output', () => {
   const formatState = sanitizeRequestedFormats(['parquet']);
-  assert.deepEqual(formatState.effective, ['csv']);
-  assert.ok(formatState.warnings.length >= 1);
+  assert.deepEqual(formatState.effective, ['parquet']);
+  assert.deepEqual(formatState.warnings, []);
 });
 
 test('buildJobPartBaseName creates padded part names', () => {

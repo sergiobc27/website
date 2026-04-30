@@ -1,4 +1,11 @@
 import JSZip from "jszip";
+import { tableFromArrays, tableToIPC } from "apache-arrow";
+import initParquetWasm, {
+  Compression,
+  Table as ParquetTable,
+  WriterPropertiesBuilder,
+  writeParquet,
+} from "parquet-wasm/esm/parquet_wasm.js";
 
 const ASYNC_EXPORT_PAGE_BATCH = 1;
 const EXPORT_RATE_LIMIT = 30;
@@ -6,6 +13,7 @@ const EXPORT_RATE_WINDOW_MS = 60 * 60 * 1000;
 const EXPORT_OBJECT_TTL_SECONDS = 60 * 60;
 const SOCRATA_MAX_ATTEMPTS = 4;
 const SOCRATA_RETRY_BASE_MS = 350;
+let parquetWasmReady = null;
 
 const DEFAULT_CONFIG = {
   socrataDomain: "https://www.datos.gov.co",
@@ -440,12 +448,7 @@ function normalizeRows(rows, datasetId, replacements, dateColumn) {
 function rowsToCsv(rows) {
   if (!rows.length) return "";
 
-  const columns = Array.from(
-    rows.reduce((set, row) => {
-      Object.keys(row).forEach((key) => set.add(key));
-      return set;
-    }, new Set())
-  );
+  const columns = getRowColumns(rows);
 
   const escape = (value) => {
     const text = value === null || value === undefined ? "" : String(value);
@@ -455,6 +458,47 @@ function rowsToCsv(rows) {
   const header = columns.join(",");
   const body = rows.map((row) => columns.map((column) => escape(row[column])).join(","));
   return [header, ...body].join("\n");
+}
+
+function getRowColumns(rows) {
+  return Array.from(
+    rows.reduce((set, row) => {
+      Object.keys(row).forEach((key) => set.add(key));
+      return set;
+    }, new Set())
+  );
+}
+
+async function ensureParquetWasm() {
+  if (!parquetWasmReady) {
+    const { default: parquetWasmModule } = await import("parquet-wasm/esm/parquet_wasm_bg.wasm");
+    parquetWasmReady = initParquetWasm(parquetWasmModule);
+  }
+  return parquetWasmReady;
+}
+
+async function rowsToParquet(rows) {
+  await ensureParquetWasm();
+  const columns = rows.length ? getRowColumns(rows) : ["sin_datos"];
+  const arrays = {};
+
+  columns.forEach((column) => {
+    arrays[column] = rows.map((row) => {
+      const value = row[column];
+      if (value === undefined) return null;
+      if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+        return value;
+      }
+      return JSON.stringify(value);
+    });
+  });
+
+  const arrowTable = tableFromArrays(arrays);
+  const wasmTable = ParquetTable.fromIPCStream(tableToIPC(arrowTable, "stream"));
+  const writerProperties = new WriterPropertiesBuilder()
+    .setCompression(Compression.SNAPPY)
+    .build();
+  return writeParquet(wasmTable, writerProperties);
 }
 
 function expandStationCodes(values) {
@@ -945,12 +989,8 @@ async function handleExport(request, env) {
 function sanitizeRequestedFormats(formats) {
   const requested = Array.isArray(formats) ? formats.filter(Boolean) : [];
   const normalized = Array.from(new Set(requested.map((value) => String(value).toLowerCase())));
-  const effective = normalized.filter((value) => value === "csv" || value === "json");
+  const effective = normalized.filter((value) => value === "csv" || value === "json" || value === "parquet");
   const warnings = [];
-
-  if (normalized.includes("parquet")) {
-    warnings.push("El formato Parquet todavia no esta disponible en la exportacion asincrona. Se omitio para priorizar estabilidad.");
-  }
 
   if (!effective.length) {
     effective.push("csv");
@@ -1031,6 +1071,10 @@ async function createArchivePart(rows, formats, baseName, metadata) {
 
   if (formats.includes("json")) {
     zip.file(`${baseName}.json`, JSON.stringify(rows, null, 2));
+  }
+
+  if (formats.includes("parquet")) {
+    zip.file(`${baseName}.parquet`, await rowsToParquet(rows));
   }
 
   zip.file(`${baseName}_manifest.json`, JSON.stringify(metadata, null, 2));
