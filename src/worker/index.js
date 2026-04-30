@@ -1,5 +1,4 @@
 import JSZip from "jszip";
-import parquet from "parquetjs-lite";
 
 const ASYNC_EXPORT_PAGE_BATCH = 1;
 const EXPORT_RATE_LIMIT = 30;
@@ -460,52 +459,6 @@ function getRowColumns(rows) {
       return set;
     }, new Set())
   );
-}
-
-async function rowsToParquet(rows) {
-  const columns = rows.length ? getRowColumns(rows) : ["sin_datos"];
-  const schemaDefinition = {};
-
-  columns.forEach((column) => {
-    const values = rows.map((row) => row[column]).filter((value) => value !== null && value !== undefined);
-    const isBoolean = values.length > 0 && values.every((value) => typeof value === "boolean");
-    const isNumber = values.length > 0 && values.every((value) => typeof value === "number" && Number.isFinite(value));
-    schemaDefinition[column] = {
-      type: isBoolean ? "BOOLEAN" : isNumber ? "DOUBLE" : "UTF8",
-      optional: true,
-      compression: "SNAPPY",
-    };
-  });
-
-  const chunks = [];
-  const sink = {
-    write(buffer, callback) {
-      chunks.push(Buffer.from(buffer));
-      if (callback) callback();
-    },
-    end(callback) {
-      if (callback) callback();
-    },
-  };
-  const schema = new parquet.ParquetSchema(schemaDefinition);
-  const writer = await parquet.ParquetWriter.openStream(schema, sink, { rowGroupSize: 5000 });
-
-  for (const row of rows) {
-    const parquetRow = {};
-    columns.forEach((column) => {
-      const value = row[column];
-      if (value === null || value === undefined) return;
-      if (schemaDefinition[column].type === "UTF8" && typeof value !== "string") {
-        parquetRow[column] = typeof value === "object" ? JSON.stringify(value) : String(value);
-      } else {
-        parquetRow[column] = value;
-      }
-    });
-    await writer.appendRow(parquetRow);
-  }
-
-  await writer.close();
-  return Buffer.concat(chunks);
 }
 
 function expandStationCodes(values) {
@@ -996,8 +949,12 @@ async function handleExport(request, env) {
 function sanitizeRequestedFormats(formats) {
   const requested = Array.isArray(formats) ? formats.filter(Boolean) : [];
   const normalized = Array.from(new Set(requested.map((value) => String(value).toLowerCase())));
-  const effective = normalized.filter((value) => value === "csv" || value === "json" || value === "parquet");
+  const effective = normalized.filter((value) => value === "csv" || value === "json");
   const warnings = [];
+
+  if (normalized.includes("parquet")) {
+    warnings.push("El formato Parquet fue solicitado, pero el runtime de Cloudflare no permite las librerias Parquet evaluadas. Se entregara CSV comprimido para garantizar la descarga.");
+  }
 
   if (!effective.length) {
     effective.push("csv");
@@ -1078,10 +1035,6 @@ async function createArchivePart(rows, formats, baseName, metadata) {
 
   if (formats.includes("json")) {
     zip.file(`${baseName}.json`, JSON.stringify(rows, null, 2));
-  }
-
-  if (formats.includes("parquet")) {
-    zip.file(`${baseName}.parquet`, await rowsToParquet(rows));
   }
 
   zip.file(`${baseName}_manifest.json`, JSON.stringify(metadata, null, 2));
