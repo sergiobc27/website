@@ -23,7 +23,7 @@ import { EmptyState } from './EmptyState';
 const HISTORY_KEY = 'ideam-history';
 
 type StepId = 'consent' | 'variable' | 'territory' | 'advanced' | 'time' | 'execute';
-type OutputFormat = 'csv' | 'json' | 'parquet';
+type OutputFormat = 'csv' | 'json';
 type LogLevel = 'INFO' | 'SUCCESS' | 'ERROR';
 type TimeMode = 'full' | 'custom';
 
@@ -449,7 +449,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     if (handledJobIdsRef.current.has(job.jobId)) return;
     handledJobIdsRef.current.add(job.jobId);
 
-    job.warnings.forEach((warning) => appendLog('INFO', warning));
+    Array.from(new Set(job.warnings)).forEach((warning) => appendLog('INFO', warning));
 
     if (job.metrics) {
       setDownloadMetrics(job.metrics);
@@ -463,14 +463,11 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       });
     }
 
-    if (!job.parts.length) {
-      appendLog('INFO', 'El job termino correctamente, pero la consulta no produjo archivos descargables.');
-      return;
-    }
-
     appendLog(
-      'SUCCESS',
-      `Job listo: ${job.parts.length} archivo(s), ${job.processedRows.toLocaleString('es-CO')} filas y ${formatDuration(job.metrics?.processingMs || 0)}. Usa el boton de descarga para guardar el ZIP.`
+      job.processedRows > 0 ? 'SUCCESS' : 'INFO',
+      job.processedRows > 0
+        ? `Job listo: ${job.parts.length} archivo(s), ${job.processedRows.toLocaleString('es-CO')} filas y ${formatDuration(job.metrics?.processingMs || 0)}. Usa el boton de descarga para guardar el ZIP.`
+        : 'La consulta no encontro filas con esos filtros. Se genero un ZIP con manifest y archivo vacio para dejar evidencia de la ejecucion.'
     );
   }, [appendLog, catalogFilters, datasetId, selectedDataset?.name, selectedDepartments]);
 
@@ -821,7 +818,6 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       setProgress(5);
       setActiveTask('Job creado, esperando procesamiento...');
       appendLog('SUCCESS', `Job ${data.jobId.slice(0, 8)} creado. El backend continuara la exportacion por lotes.`);
-      data.warnings.forEach((warning) => appendLog('INFO', warning));
     } catch (error) {
       setProgress(100);
       setActiveTask('Error en descarga');
@@ -1454,7 +1450,7 @@ function StepPanel({
       <div className="space-y-3">
         <p className="text-sm font-semibold text-card-foreground">Formatos dentro del ZIP</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {(['csv', 'json', 'parquet'] as OutputFormat[]).map((format) => (
+          {(['csv', 'json'] as OutputFormat[]).map((format) => (
             <button
               key={format}
               type="button"

@@ -409,3 +409,91 @@ test('ExportJobDurableObject creates downloadable parts end to end', async () =>
     global.fetch = originalFetch;
   }
 });
+
+test('ExportJobDurableObject creates a no-data zip when filters return zero rows', async () => {
+  const storageMap = new Map();
+  const state = {
+    storage: {
+      async get(key) {
+        return storageMap.get(key);
+      },
+      async put(key, value) {
+        storageMap.set(key, value);
+      },
+      async setAlarm(value) {
+        storageMap.set('__alarm__', value);
+      },
+    },
+  };
+
+  const objects = new Map();
+  const env = {
+    EXPORTS_BUCKET: {
+      async put(key, value, options = {}) {
+        objects.set(key, { value, options });
+      },
+      async get(key) {
+        const item = objects.get(key);
+        if (!item) return null;
+        return {
+          body: new Blob([item.value]).stream(),
+          httpMetadata: item.options.httpMetadata || {},
+        };
+      },
+      async delete(key) {
+        objects.delete(key);
+      },
+    },
+    EXPORT_PAGE_SIZE: '50000',
+  };
+
+  const originalFetch = global.fetch;
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+    const select = parsed.searchParams.get('$select');
+    if (parsed.pathname.includes('/hp9r-jxuu.json') && select === 'codigo') {
+      return new Response(JSON.stringify([]), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    if (select === 'count(*) as total') {
+      return new Response(JSON.stringify([{ total: '0' }]), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    throw new Error(`Unexpected fetch call: ${parsed.toString()}`);
+  };
+
+  try {
+    const durableObject = new ExportJobDurableObject(state, env);
+    const createResponse = await durableObject.fetch(
+      new Request('https://export-job/create', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          jobId: 'job-empty',
+          payload: {
+            datasetId: 's54a-sgyg',
+            departments: ['ATLANTICO'],
+            stationCodes: ['STA0001'],
+            startDate: '1900-01-01',
+            endDate: '1900-01-02',
+          },
+          formats: ['csv'],
+        }),
+      })
+    );
+    assert.equal(createResponse.status, 202);
+
+    await durableObject.alarm();
+
+    const statusResponse = await durableObject.fetch(new Request('https://export-job/status'));
+    const statusData = await statusResponse.json();
+    assert.equal(statusData.status, 'completed');
+    assert.equal(statusData.rowCount, 0);
+    assert.equal(statusData.parts.length, 1);
+    assert.equal(statusData.metrics.archivePartCount, 1);
+
+    const partResponse = await durableObject.fetch(new Request('https://export-job/parts/1'));
+    assert.equal(partResponse.status, 200);
+    assert.equal(partResponse.headers.get('content-type'), 'application/zip');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});

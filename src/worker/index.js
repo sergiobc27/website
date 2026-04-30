@@ -1100,21 +1100,58 @@ async function planExportJob(env, job) {
   job.planCursor = { planIndex: 0, pageIndex: 0 };
 
   if (!plan.rowCount) {
+    if (!env.EXPORTS_BUCKET) {
+      throw new Error("EXPORTS_BUCKET no esta configurado en Cloudflare. Configura el bucket R2 antes de usar exportaciones asincronas.");
+    }
+
+    const baseName = `${job.fileStem}_sin_datos`;
+    const archiveBuffer = await createArchivePart([], job.effectiveFormats, baseName, {
+      jobId: job.id,
+      datasetId: dataset.id,
+      datasetName: dataset.name,
+      rowCount: 0,
+      formats: job.effectiveFormats,
+      requestedFormats: job.selectedFormats,
+      warnings: job.warnings || [],
+      message: "La consulta no encontro filas para los filtros seleccionados.",
+    });
+    const key = `exports/${job.id}/${baseName}.zip`;
+    await env.EXPORTS_BUCKET.put(key, archiveBuffer, {
+      httpMetadata: {
+        contentType: "application/zip",
+        cacheControl: "no-store",
+        contentDisposition: `attachment; filename="${baseName}.zip"`,
+      },
+      customMetadata: {
+        jobId: job.id,
+        expiresAt: new Date(Date.now() + EXPORT_OBJECT_TTL_SECONDS * 1000).toISOString(),
+      },
+    });
+
     const summary = finalizeAccumulatorState(job.summaryState, 0);
+    job.parts = [{
+      index: 1,
+      key,
+      fileName: `${baseName}.zip`,
+      rowCount: 0,
+      sizeBytes: archiveBuffer.byteLength,
+      formats: job.effectiveFormats,
+      downloadPath: `/api/jobs/${job.id}/parts/1`,
+    }];
     job.metrics = {
-      fileName: `${job.fileStem}_sin_datos`,
+      fileName: `${baseName}.zip`,
       rowCount: 0,
       stationCount: summary.stationCount,
       municipalityCount: summary.municipalityCount,
       departmentCount: summary.departmentCount,
       zoneCount: summary.zoneCount,
       processingMs: 0,
-      sizeBytes: 0,
+      sizeBytes: archiveBuffer.byteLength,
       observedStart: summary.observedStart,
       observedEnd: summary.observedEnd,
       queryPlans: plan.queryPlans,
       stationPoolSize: plan.stationPoolSize,
-      archivePartCount: 0,
+      archivePartCount: 1,
       downloadedPages: 0,
     };
     job.finishedAt = new Date().toISOString();
