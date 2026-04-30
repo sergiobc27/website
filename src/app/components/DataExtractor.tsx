@@ -21,9 +21,10 @@ import {
 import { EmptyState } from './EmptyState';
 
 const HISTORY_KEY = 'ideam-history';
+const PRODUCTION_API_ORIGIN = 'https://ideam.sergiobc.com';
 
 type StepId = 'consent' | 'variable' | 'territory' | 'advanced' | 'time' | 'execute';
-type OutputFormat = 'csv' | 'json';
+type OutputFormat = 'csv' | 'json' | 'parquet';
 type LogLevel = 'INFO' | 'SUCCESS' | 'ERROR';
 type TimeMode = 'full' | 'custom';
 
@@ -251,6 +252,40 @@ function parseStationCodes(value: string) {
   );
 }
 
+function apiUrl(path: string) {
+  if (path.startsWith('http')) return path;
+  if (typeof window === 'undefined') return path;
+  return window.location.hostname === 'ideam.sergiobc.com' ? path : `${PRODUCTION_API_ORIGIN}${path}`;
+}
+
+async function parseJsonResponse<T>(response: Response, fallbackMessage: string): Promise<T & { error?: string }> {
+  const contentType = response.headers.get('content-type') || '';
+  const bodyText = await response.text();
+
+  if (!contentType.includes('application/json')) {
+    const isHtml = bodyText.trimStart().startsWith('<!DOCTYPE') || bodyText.trimStart().startsWith('<html');
+    const detail = isHtml
+      ? 'La ruta API devolvio HTML. Revisa que estes usando ideam.sergiobc.com y no una ruta cacheada o dominio incorrecto.'
+      : bodyText.slice(0, 240);
+    throw new Error(`${fallbackMessage} ${detail}`);
+  }
+
+  try {
+    return JSON.parse(bodyText) as T & { error?: string };
+  } catch {
+    throw new Error(`${fallbackMessage} La respuesta JSON esta corrupta o incompleta.`);
+  }
+}
+
+async function apiJson<T>(path: string, init: RequestInit | undefined, fallbackMessage: string) {
+  const response = await fetch(apiUrl(path), init);
+  const data = await parseJsonResponse<T>(response, fallbackMessage);
+  if (!response.ok) {
+    throw new Error(data.error || fallbackMessage);
+  }
+  return data;
+}
+
 function rowsToCsv(rows: Record<string, unknown>[]) {
   if (!rows.length) return '';
 
@@ -419,7 +454,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
 
   const cleanupDownloadedPart = useCallback(async (part: ExportJobPart, partKey: string) => {
     try {
-      const cleanupResponse = await fetch(part.downloadPath, { method: 'DELETE' });
+      const cleanupResponse = await fetch(apiUrl(part.downloadPath), { method: 'DELETE' });
       if (cleanupResponse.ok) {
         setDeletedPartKeys((current) => (current.includes(partKey) ? current : [...current, partKey]));
         appendLog('SUCCESS', `Archivo temporal eliminado de R2: ${part.fileName}.`);
@@ -433,7 +468,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
 
   const downloadJobPart = useCallback((job: ExportJobStatusResponse, part: ExportJobPart) => {
     const partKey = `${job.jobId}:${part.index}`;
-    triggerBrowserDownload(part.downloadPath, part.fileName);
+    triggerBrowserDownload(apiUrl(part.downloadPath), part.fileName);
     appendLog('SUCCESS', `Descarga iniciada: ${part.fileName}.`);
 
     if (!cleanupScheduledPartsRef.current.has(partKey)) {
@@ -475,11 +510,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     const boot = async () => {
       appendLog('INFO', 'Cargando metadata operativa del sistema...');
       try {
-        const response = await fetch('/api/meta');
-        const data = (await response.json()) as MetaResponse & { error?: string };
-        if (!response.ok) {
-          throw new Error(data.error || 'No fue posible cargar la metadata.');
-        }
+        const data = await apiJson<MetaResponse>('/api/meta', undefined, 'No fue posible cargar la metadata.');
         setMeta(data);
         setDatasetId(data.datasets[0]?.id || '');
         appendLog('SUCCESS', 'Metadata cargada correctamente.');
@@ -495,11 +526,11 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       if (!datasetId) return;
       appendLog('INFO', 'Consultando rango temporal disponible...');
       try {
-        const response = await fetch(`/api/date-range?datasetId=${encodeURIComponent(datasetId)}`);
-        const data = (await response.json()) as DateRangeResponse & { error?: string };
-        if (!response.ok) {
-          throw new Error(data.error || 'No fue posible cargar el rango temporal.');
-        }
+        const data = await apiJson<DateRangeResponse>(
+          `/api/date-range?datasetId=${encodeURIComponent(datasetId)}`,
+          undefined,
+          'No fue posible cargar el rango temporal.'
+        );
         setDateRange(data);
         setStartDate(data.startDate || '');
         setEndDate(data.endDate || '');
@@ -525,7 +556,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
 
       for (const definition of meta.catalogFilters) {
         try {
-          const response = await fetch('/api/catalog-options', {
+          const data = await apiJson<{ options?: OptionItem[] }>('/api/catalog-options', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
@@ -533,11 +564,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
               catalogFilters,
               attributeKey: definition.key,
             }),
-          });
-          const data = (await response.json()) as { error?: string; options?: OptionItem[] };
-          if (!response.ok) {
-            throw new Error(data.error || `No fue posible cargar ${definition.label}.`);
-          }
+          }, `No fue posible cargar ${definition.label}.`);
           nextOptions[definition.key] = data.options || [];
         } catch (error) {
           appendLog('ERROR', error instanceof Error ? error.message : `Error cargando ${definition.label}.`);
@@ -570,11 +597,11 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
 
     const pollJob = async () => {
       try {
-        const response = await fetch(`/api/jobs/${currentJobId}`);
-        const data = (await response.json()) as ExportJobStatusResponse & { error?: string };
-        if (!response.ok) {
-          throw new Error(data.error || 'No fue posible consultar el estado del job.');
-        }
+        const data = await apiJson<ExportJobStatusResponse>(
+          `/api/jobs/${currentJobId}`,
+          undefined,
+          'No fue posible consultar el estado del job.'
+        );
         if (cancelled) return;
 
         setCurrentJob(data);
@@ -673,15 +700,11 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     setActiveTask('Validando cobertura territorial...');
     appendLog('INFO', 'Validando cobertura territorial antes de descargar...');
     try {
-      const response = await fetch('/api/coverage', {
+      const data = await apiJson<{ reports?: CoverageReport[] }>('/api/coverage', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(executionPayload),
-      });
-      const data = (await response.json()) as { error?: string; reports?: CoverageReport[] };
-      if (!response.ok) {
-        throw new Error(data.error || 'No fue posible validar la cobertura territorial.');
-      }
+      }, 'No fue posible validar la cobertura territorial.');
 
       const reports = data.reports || [];
       setCoverageReports(reports);
@@ -712,18 +735,14 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     setStationHelperLoading(true);
     appendLog('INFO', 'Consultando estaciones del catalogo segun los filtros actuales...');
     try {
-      const response = await fetch('/api/stations-helper', {
+      const data = await apiJson<{ stations?: StationHelperRow[] }>('/api/stations-helper', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           departments: selectedDepartments,
           catalogFilters,
         }),
-      });
-      const data = (await response.json()) as { error?: string; stations?: StationHelperRow[] };
-      if (!response.ok) {
-        throw new Error(data.error || 'No fue posible cargar estaciones de apoyo.');
-      }
+      }, 'No fue posible cargar estaciones de apoyo.');
       setStationHelperRows(data.stations || []);
       appendLog('SUCCESS', `Estaciones de apoyo cargadas: ${data.stations?.length || 0}.`);
     } catch (error) {
@@ -743,15 +762,11 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       setProgress(20);
       setActiveTask('Generando vista previa...');
       appendLog('INFO', 'Generando vista previa operativa...');
-      const response = await fetch('/api/preview', {
+      const data = await apiJson<PreviewResponse>('/api/preview', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(executionPayload),
-      });
-      const data = (await response.json()) as PreviewResponse & { error?: string };
-      if (!response.ok) {
-        throw new Error(data.error || 'No fue posible generar la vista previa.');
-      }
+      }, 'No fue posible generar la vista previa.');
       setPreview(data);
       setProgress(100);
       setActiveTask('Vista previa completada');
@@ -790,19 +805,14 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       const downloadPayload = await validateCoverageForDownload();
       appendLog('INFO', 'Creando job asincrono de exportacion...');
 
-      const response = await fetch('/api/jobs', {
+      const data = await apiJson<ExportJobStatusResponse>('/api/jobs', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           ...downloadPayload,
           formats: selectedFormats,
         }),
-      });
-
-      const data = (await response.json()) as ExportJobStatusResponse & { error?: string };
-      if (!response.ok) {
-        throw new Error(data.error || 'No fue posible crear el job de exportacion.');
-      }
+      }, 'No fue posible crear el job de exportacion.');
 
       handledJobIdsRef.current.delete(data.jobId);
       setCurrentJobId(data.jobId);
@@ -1450,7 +1460,7 @@ function StepPanel({
       <div className="space-y-3">
         <p className="text-sm font-semibold text-card-foreground">Formatos dentro del ZIP</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {(['csv', 'json'] as OutputFormat[]).map((format) => (
+          {(['csv', 'json', 'parquet'] as OutputFormat[]).map((format) => (
             <button
               key={format}
               type="button"
