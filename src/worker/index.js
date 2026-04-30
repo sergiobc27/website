@@ -1,11 +1,5 @@
 import JSZip from "jszip";
-import { tableFromArrays, tableToIPC } from "apache-arrow";
-import initParquetWasm, {
-  Compression,
-  Table as ParquetTable,
-  WriterPropertiesBuilder,
-  writeParquet,
-} from "parquet-wasm/esm/parquet_wasm.js";
+import parquet from "parquetjs-lite";
 
 const ASYNC_EXPORT_PAGE_BATCH = 1;
 const EXPORT_RATE_LIMIT = 30;
@@ -13,7 +7,6 @@ const EXPORT_RATE_WINDOW_MS = 60 * 60 * 1000;
 const EXPORT_OBJECT_TTL_SECONDS = 60 * 60;
 const SOCRATA_MAX_ATTEMPTS = 4;
 const SOCRATA_RETRY_BASE_MS = 350;
-let parquetWasmReady = null;
 
 const DEFAULT_CONFIG = {
   socrataDomain: "https://www.datos.gov.co",
@@ -469,36 +462,50 @@ function getRowColumns(rows) {
   );
 }
 
-async function ensureParquetWasm() {
-  if (!parquetWasmReady) {
-    const { default: parquetWasmModule } = await import("parquet-wasm/esm/parquet_wasm_bg.wasm");
-    parquetWasmReady = initParquetWasm(parquetWasmModule);
-  }
-  return parquetWasmReady;
-}
-
 async function rowsToParquet(rows) {
-  await ensureParquetWasm();
   const columns = rows.length ? getRowColumns(rows) : ["sin_datos"];
-  const arrays = {};
+  const schemaDefinition = {};
 
   columns.forEach((column) => {
-    arrays[column] = rows.map((row) => {
-      const value = row[column];
-      if (value === undefined) return null;
-      if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-        return value;
-      }
-      return JSON.stringify(value);
-    });
+    const values = rows.map((row) => row[column]).filter((value) => value !== null && value !== undefined);
+    const isBoolean = values.length > 0 && values.every((value) => typeof value === "boolean");
+    const isNumber = values.length > 0 && values.every((value) => typeof value === "number" && Number.isFinite(value));
+    schemaDefinition[column] = {
+      type: isBoolean ? "BOOLEAN" : isNumber ? "DOUBLE" : "UTF8",
+      optional: true,
+      compression: "SNAPPY",
+    };
   });
 
-  const arrowTable = tableFromArrays(arrays);
-  const wasmTable = ParquetTable.fromIPCStream(tableToIPC(arrowTable, "stream"));
-  const writerProperties = new WriterPropertiesBuilder()
-    .setCompression(Compression.SNAPPY)
-    .build();
-  return writeParquet(wasmTable, writerProperties);
+  const chunks = [];
+  const sink = {
+    write(buffer, callback) {
+      chunks.push(Buffer.from(buffer));
+      if (callback) callback();
+    },
+    end(callback) {
+      if (callback) callback();
+    },
+  };
+  const schema = new parquet.ParquetSchema(schemaDefinition);
+  const writer = await parquet.ParquetWriter.openStream(schema, sink, { rowGroupSize: 5000 });
+
+  for (const row of rows) {
+    const parquetRow = {};
+    columns.forEach((column) => {
+      const value = row[column];
+      if (value === null || value === undefined) return;
+      if (schemaDefinition[column].type === "UTF8" && typeof value !== "string") {
+        parquetRow[column] = typeof value === "object" ? JSON.stringify(value) : String(value);
+      } else {
+        parquetRow[column] = value;
+      }
+    });
+    await writer.appendRow(parquetRow);
+  }
+
+  await writer.close();
+  return Buffer.concat(chunks);
 }
 
 function expandStationCodes(values) {

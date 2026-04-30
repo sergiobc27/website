@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import JSZip from 'jszip';
 
 import {
   buildDepartmentFilter,
@@ -353,6 +354,21 @@ test('createArchivePart generates a zip payload', async () => {
     { rowCount: 1 }
   );
   assert.ok(buffer.byteLength > 0);
+});
+
+test('createArchivePart generates a real parquet file inside the zip', async () => {
+  const buffer = await createArchivePart(
+    [{ codigoestacion: '29045180', valorobservado: 12.5 }],
+    ['parquet'],
+    'demo_part_0001',
+    { rowCount: 1 }
+  );
+  const zip = await JSZip.loadAsync(buffer);
+  const parquetFile = zip.file('demo_part_0001.parquet');
+  assert.ok(parquetFile);
+  const parquetBytes = await parquetFile.async('uint8array');
+  assert.equal(Buffer.from(parquetBytes.slice(0, 4)).toString('utf8'), 'PAR1');
+  assert.equal(Buffer.from(parquetBytes.slice(-4)).toString('utf8'), 'PAR1');
 });
 
 
