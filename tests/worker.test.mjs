@@ -144,6 +144,57 @@ test('handleExportPlan allows very large exports without 413 and computes pages 
   }
 });
 
+test('handleExportPlan retries transient Socrata 500 responses', async () => {
+  const originalFetch = global.fetch;
+  let countCalls = 0;
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+    if (parsed.pathname.includes('/hp9r-jxuu.json') && parsed.searchParams.get('$select') === 'codigo') {
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    if (parsed.searchParams.get('$select') === 'count(*) as total') {
+      countCalls += 1;
+      if (countCalls === 1) {
+        return new Response(JSON.stringify({ error: 'temporary' }), {
+          status: 500,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify([{ total: '9' }]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    throw new Error(`Unexpected fetch call: ${parsed.toString()}`);
+  };
+
+  try {
+    const request = new Request('https://example.com/api/export-plan', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        datasetId: 's54a-sgyg',
+        departments: ['ATLANTICO'],
+        stationCodes: ['0029045180'],
+        startDate: '2024-01-01',
+        endDate: '2024-01-01',
+      }),
+    });
+
+    const response = await handleExportPlan(request, { EXPORT_PAGE_SIZE: '50000' });
+    const data = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(data.rowCount, 9);
+    assert.equal(countCalls, 2);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('handleExportPlan rejects global exports without department', async () => {
   const request = new Request('https://example.com/api/export-plan', {
     method: 'POST',

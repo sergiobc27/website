@@ -4,6 +4,8 @@ const ASYNC_EXPORT_PAGE_BATCH = 1;
 const EXPORT_RATE_LIMIT = 30;
 const EXPORT_RATE_WINDOW_MS = 60 * 60 * 1000;
 const EXPORT_OBJECT_TTL_SECONDS = 60 * 60;
+const SOCRATA_MAX_ATTEMPTS = 4;
+const SOCRATA_RETRY_BASE_MS = 350;
 
 const DEFAULT_CONFIG = {
   socrataDomain: "https://www.datos.gov.co",
@@ -325,13 +327,34 @@ async function socrataGet(config, datasetId, params) {
       url.searchParams.set(key, String(value));
     }
   });
-  const response = await fetch(url.toString(), {
-    headers: { accept: "application/json" },
-  });
-  if (!response.ok) {
-    throw new Error(`Socrata respondio con estado ${response.status} para ${datasetId}.`);
+
+  let lastError = null;
+  for (let attempt = 1; attempt <= SOCRATA_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetch(url.toString(), {
+        headers: { accept: "application/json" },
+      });
+      if (response.ok) {
+        return response.json();
+      }
+
+      const retryable = response.status === 429 || response.status >= 500;
+      const body = await response.text().catch(() => "");
+      lastError = new Error(`Socrata respondio con estado ${response.status} para ${datasetId}.${body ? ` ${body.slice(0, 180)}` : ""}`);
+      if (!retryable || attempt === SOCRATA_MAX_ATTEMPTS) {
+        throw lastError;
+      }
+    } catch (error) {
+      lastError = error;
+      if (attempt === SOCRATA_MAX_ATTEMPTS) {
+        break;
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, SOCRATA_RETRY_BASE_MS * attempt));
   }
-  return response.json();
+
+  throw lastError || new Error(`No fue posible consultar Socrata para ${datasetId}.`);
 }
 
 async function fetchCount(config, datasetId, where) {
