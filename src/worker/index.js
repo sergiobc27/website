@@ -492,6 +492,13 @@ function buildCatalogWhere(payload, excludeKey = null) {
 
 async function resolveStationPool(config, payload) {
   const manualCodes = expandStationCodes(payload.stationCodes || payload.stationCode);
+  const catalogFilters = payload.catalogFilters || {};
+  const hasCatalogSelections = CATALOG_FILTERS.some((definition) => asArray(catalogFilters[definition.key]).length);
+
+  if (!hasCatalogSelections) {
+    return manualCodes.length ? uniqueSorted(manualCodes) : null;
+  }
+
   const catalogWhere = buildCatalogWhere(payload);
   if (!catalogWhere) {
     return manualCodes.length ? uniqueSorted(manualCodes) : null;
