@@ -1,4 +1,9 @@
 import JSZip from "jszip";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const { ParquetWriter } = require("parquetjs-lite/lib/writer.js");
+const { ParquetSchema } = require("parquetjs-lite/lib/schema.js");
 
 const ASYNC_EXPORT_PAGE_BATCH = 1;
 const EXPORT_RATE_LIMIT = 30;
@@ -93,13 +98,13 @@ const CLEAN_DEPARTMENT_MAP = {
 };
 
 const CATALOG_FILTERS = [
-  { key: "hydrologicZones", label: "Zona Hidrografica", column: "zona_hidrografica" },
-  { key: "categories", label: "Categoria", column: "categoria" },
-  { key: "technologies", label: "Tecnologia", column: "tecnologia" },
-  { key: "states", label: "Estado", column: "estado" },
-  { key: "currents", label: "Corriente", column: "corriente" },
-  { key: "entities", label: "Entidad", column: "entidad" },
   { key: "municipalities", label: "Municipio", column: "municipio" },
+  { key: "hydrologicZones", label: "Zona hidrografica", column: "zonahidrografica" },
+  { key: "stations", label: "Codigo de estacion", column: "codigoestacion", labelColumn: "nombreestacion" },
+  { key: "stationNames", label: "Nombre de estacion", column: "nombreestacion" },
+  { key: "sensors", label: "Codigo de sensor", column: "codigosensor" },
+  { key: "sensorDescriptions", label: "Descripcion del sensor", column: "descripcionsensor" },
+  { key: "units", label: "Unidad de medida", column: "unidadmedida" },
 ];
 
 function getConfig(env) {
@@ -473,78 +478,66 @@ function expandStationCodes(values) {
   return Array.from(codes);
 }
 
-function buildCatalogWhere(payload, excludeKey = null) {
-  const filters = [];
-  const departments = asArray(payload.departments ?? payload.department);
-
-  if (departments.length) {
-    const department = buildDepartmentFilter(departments, "departamento");
-    if (department.filter) filters.push(department.filter);
+function buildDatasetFilterClause(definition, values) {
+  if (!values.length) return null;
+  if (definition.column === "codigoestacion") {
+    return buildExactInFilter(expandStationCodes(values), definition.column);
   }
-
-  const catalogFilters = payload.catalogFilters || {};
-  CATALOG_FILTERS.forEach((definition) => {
-    if (definition.key === excludeKey) return;
-    const values = asArray(catalogFilters[definition.key]);
-    if (values.length) {
-      filters.push(buildUpperInFilter(values, definition.column));
-    }
-  });
-
-  return filters.filter(Boolean).join(" AND ") || null;
+  return buildUpperInFilter(values, definition.column);
 }
 
-async function resolveStationPool(config, payload) {
-  const manualCodes = expandStationCodes(payload.stationCodes || payload.stationCode);
-  const catalogFilters = payload.catalogFilters || {};
-  const hasCatalogSelections = CATALOG_FILTERS.some((definition) => asArray(catalogFilters[definition.key]).length);
-
-  if (!hasCatalogSelections) {
-    return manualCodes.length ? uniqueSorted(manualCodes) : null;
-  }
-
-  const catalogWhere = buildCatalogWhere(payload);
-  if (!catalogWhere) {
-    return manualCodes.length ? uniqueSorted(manualCodes) : null;
-  }
-  const catalogRows = await fetchAllRows(
-    config,
-    config.catalogDatasetId,
-    catalogWhere,
-    "codigo",
-    config.maxCatalogStations ?? Number.POSITIVE_INFINITY,
-    { "$select": "codigo" }
-  );
-  const combined = new Set(manualCodes);
-  catalogRows.forEach((row) => {
-    expandStationCodes(row.codigo).forEach((code) => combined.add(code));
-  });
-  return uniqueSorted(Array.from(combined));
-}
-
-async function buildQueryPlans(config, payload, dataset) {
+function collectDatasetFilters(payload, dataset, excludeKey = null, includeDepartment = true) {
   const filters = [];
   const replacements = {};
   const departments = asArray(payload.departments ?? payload.department);
 
-  if (departments.length) {
+  if (includeDepartment && departments.length) {
     const department = buildDepartmentFilter(departments, "departamento");
     if (department.filter) filters.push(department.filter);
     Object.assign(replacements, department.replacements);
   }
 
-  const outputMunicipalities = asArray(payload.outputMunicipalities ?? payload.municipality);
-  if (outputMunicipalities.length) {
-    filters.push(buildUpperInFilter(outputMunicipalities, "municipio"));
-  }
+  const catalogFilters = payload.catalogFilters || {};
+  CATALOG_FILTERS.forEach((definition) => {
+    if (definition.key === excludeKey) return;
+    let values = asArray(catalogFilters[definition.key]);
+    if (definition.key === "municipalities") {
+      values = uniqueSorted(values.concat(asArray(payload.outputMunicipalities ?? payload.municipality)));
+    }
+    const clause = buildDatasetFilterClause(definition, values);
+    if (clause) filters.push(clause);
+  });
 
   buildDateFilters(dataset, payload.startDate, payload.endDate).forEach((filter) => filters.push(filter));
 
+  return {
+    filters: filters.filter(Boolean),
+    where: filters.filter(Boolean).join(" AND ") || null,
+    replacements,
+  };
+}
+
+function buildCatalogWhere(payload, dataset, excludeKey = null) {
+  return collectDatasetFilters(payload, dataset, excludeKey).where;
+}
+
+async function resolveStationPool(_config, payload) {
+  const manualCodes = expandStationCodes(payload.stationCodes || payload.stationCode);
+  const catalogFilters = payload.catalogFilters || {};
+  const combined = new Set(manualCodes);
+  asArray(catalogFilters.stations).forEach((code) => {
+    expandStationCodes(code).forEach((expanded) => combined.add(expanded));
+  });
+  return combined.size ? uniqueSorted(Array.from(combined)) : null;
+}
+
+async function buildQueryPlans(config, payload, dataset) {
+  const base = collectDatasetFilters(payload, dataset, "stations");
   const stationPool = await resolveStationPool(config, payload);
   if (stationPool === null) {
     return {
-      plans: [{ where: filters.filter(Boolean).join(" AND ") || null }],
-      replacements,
+      plans: [{ where: base.where }],
+      replacements: base.replacements,
       stationPoolSize: 0,
     };
   }
@@ -552,50 +545,25 @@ async function buildQueryPlans(config, payload, dataset) {
   if (!stationPool.length) {
     return {
       plans: [],
-      replacements,
+      replacements: base.replacements,
       stationPoolSize: 0,
     };
   }
 
   return {
     plans: chunkArray(stationPool, 400).map((chunk) => ({
-      where: filters.concat([buildExactInFilter(chunk, "codigoestacion")]).filter(Boolean).join(" AND "),
+      where: base.filters.concat([buildExactInFilter(chunk, "codigoestacion")]).filter(Boolean).join(" AND "),
     })),
-    replacements,
+    replacements: base.replacements,
     stationPoolSize: stationPool.length,
   };
 }
 
 async function buildCoveragePlans(config, payload, dataset) {
-  const filters = [];
-
-  const outputMunicipalities = asArray(payload.outputMunicipalities ?? payload.municipality);
-  if (outputMunicipalities.length) {
-    filters.push(buildUpperInFilter(outputMunicipalities, "municipio"));
-  }
-
-  buildDateFilters(dataset, payload.startDate, payload.endDate).forEach((filter) => filters.push(filter));
-
-  const stationPool = await resolveStationPool(config, payload);
-  if (stationPool === null) {
-    return {
-      plans: [{ where: filters.filter(Boolean).join(" AND ") || null }],
-      stationPoolSize: 0,
-    };
-  }
-
-  if (!stationPool.length) {
-    return {
-      plans: [],
-      stationPoolSize: 0,
-    };
-  }
-
+  const built = await buildQueryPlans(config, payload, dataset);
   return {
-    plans: chunkArray(stationPool, 400).map((chunk) => ({
-      where: filters.concat([buildExactInFilter(chunk, "codigoestacion")]).filter(Boolean).join(" AND "),
-    })),
-    stationPoolSize: stationPool.length,
+    plans: built.plans,
+    stationPoolSize: built.stationPoolSize,
   };
 }
 
@@ -788,16 +756,26 @@ async function handleMunicipalities(request, env) {
 async function handleCatalogOptions(request, env) {
   const config = getConfig(env);
   const payload = await request.json();
+  const dataset = resolveDataset(payload.datasetId);
+  if (!dataset) {
+    return jsonResponse({ error: "Dataset no soportado para filtros." }, 400);
+  }
   const definition = resolveCatalogFilter(payload.attributeKey);
   if (!definition) {
     return jsonResponse({ error: "Filtro de catalogo no soportado." }, 400);
   }
 
-  const where = buildCatalogWhere(payload, definition.key);
-  const rows = await socrataGet(config, config.catalogDatasetId, {
-    "$select": `${definition.column}, count(*) as total`,
+  const where = buildCatalogWhere(payload, dataset, definition.key);
+  const selectColumns = definition.labelColumn
+    ? `${definition.column}, ${definition.labelColumn}, count(*) as total`
+    : `${definition.column}, count(*) as total`;
+  const groupColumns = definition.labelColumn
+    ? `${definition.column}, ${definition.labelColumn}`
+    : definition.column;
+  const rows = await socrataGet(config, dataset.id, {
+    "$select": selectColumns,
     "$where": where,
-    "$group": definition.column,
+    "$group": groupColumns,
     "$order": definition.column,
     "$limit": 5000,
   });
@@ -805,7 +783,13 @@ async function handleCatalogOptions(request, env) {
   return jsonResponse({
     attributeKey: definition.key,
     options: rows
-      .map((row) => ({ value: row[definition.column], total: Number(row.total || 0) }))
+      .map((row) => ({
+        value: row[definition.column],
+        label: definition.labelColumn && row[definition.labelColumn]
+          ? `${row[definition.column]} - ${row[definition.labelColumn]}`
+          : row[definition.column],
+        total: Number(row.total || 0),
+      }))
       .filter((row) => row.value),
   });
 }
@@ -813,22 +797,27 @@ async function handleCatalogOptions(request, env) {
 async function handleStationHelper(request, env) {
   const config = getConfig(env);
   const payload = await request.json();
-  const where = buildCatalogWhere(payload);
-  const rows = await socrataGet(config, config.catalogDatasetId, {
-    "$select": "codigo, nombre, departamento, municipio, zona_hidrografica, entidad",
+  const dataset = resolveDataset(payload.datasetId);
+  if (!dataset) {
+    return jsonResponse({ error: "Dataset no soportado para estaciones." }, 400);
+  }
+  const where = buildCatalogWhere(payload, dataset);
+  const rows = await socrataGet(config, dataset.id, {
+    "$select": "codigoestacion, nombreestacion, departamento, municipio, zonahidrografica, count(*) as total",
     "$where": where,
-    "$order": "nombre",
+    "$group": "codigoestacion, nombreestacion, departamento, municipio, zonahidrografica",
+    "$order": "nombreestacion",
     "$limit": 500,
   });
 
   return jsonResponse({
     stations: rows.map((row) => ({
-      code: row.codigo || "",
-      name: row.nombre || "",
+      code: row.codigoestacion || "",
+      name: row.nombreestacion || "",
       department: row.departamento || "",
       municipality: row.municipio || "",
-      zone: row.zona_hidrografica || "",
-      entity: row.entidad || "",
+      zone: row.zonahidrografica || "",
+      entity: `${Number(row.total || 0).toLocaleString("es-CO")} filas`,
     })),
   });
 }
@@ -949,12 +938,8 @@ async function handleExport(request, env) {
 function sanitizeRequestedFormats(formats) {
   const requested = Array.isArray(formats) ? formats.filter(Boolean) : [];
   const normalized = Array.from(new Set(requested.map((value) => String(value).toLowerCase())));
-  const effective = normalized.filter((value) => value === "csv" || value === "json");
+  const effective = normalized.filter((value) => value === "csv" || value === "json" || value === "parquet");
   const warnings = [];
-
-  if (normalized.includes("parquet")) {
-    warnings.push("El formato Parquet fue solicitado, pero el runtime de Cloudflare no permite las librerias Parquet evaluadas. Se entregara CSV comprimido para garantizar la descarga.");
-  }
 
   if (!effective.length) {
     effective.push("csv");
@@ -964,6 +949,52 @@ function sanitizeRequestedFormats(formats) {
   }
 
   return { requested: normalized, effective, warnings };
+}
+
+async function rowsToParquet(rows) {
+  const columns = rows.length ? getRowColumns(rows) : ["sin_datos"];
+  const schemaDefinition = {};
+
+  columns.forEach((column) => {
+    const values = rows.map((row) => row[column]).filter((value) => value !== null && value !== undefined);
+    const isBoolean = values.length > 0 && values.every((value) => typeof value === "boolean");
+    const isNumber = values.length > 0 && values.every((value) => typeof value === "number" && Number.isFinite(value));
+    schemaDefinition[column] = {
+      type: isBoolean ? "BOOLEAN" : isNumber ? "DOUBLE" : "UTF8",
+      optional: true,
+      compression: "UNCOMPRESSED",
+    };
+  });
+
+  const chunks = [];
+  const sink = {
+    write(buffer, callback) {
+      chunks.push(Buffer.from(buffer));
+      if (callback) callback();
+    },
+    end(callback) {
+      if (callback) callback();
+    },
+  };
+  const schema = new ParquetSchema(schemaDefinition);
+  const writer = await ParquetWriter.openStream(schema, sink, { rowGroupSize: 5000 });
+
+  for (const row of rows) {
+    const parquetRow = {};
+    columns.forEach((column) => {
+      const value = row[column];
+      if (value === null || value === undefined) return;
+      if (schemaDefinition[column].type === "UTF8" && typeof value !== "string") {
+        parquetRow[column] = typeof value === "object" ? JSON.stringify(value) : String(value);
+      } else {
+        parquetRow[column] = value;
+      }
+    });
+    await writer.appendRow(parquetRow);
+  }
+
+  await writer.close();
+  return Buffer.concat(chunks);
 }
 
 function buildJobPartBaseName(fileStem, partIndex) {
@@ -1028,16 +1059,36 @@ function finalizeAccumulatorState(state, rowCount) {
 
 async function createArchivePart(rows, formats, baseName, metadata) {
   const zip = new JSZip();
+  const manifest = {
+    ...metadata,
+    generatedFormats: [],
+    warnings: Array.from(new Set(metadata?.warnings || [])),
+  };
 
   if (formats.includes("csv")) {
     zip.file(`${baseName}.csv`, rowsToCsv(rows));
+    manifest.generatedFormats.push("csv");
   }
 
   if (formats.includes("json")) {
     zip.file(`${baseName}.json`, JSON.stringify(rows, null, 2));
+    manifest.generatedFormats.push("json");
   }
 
-  zip.file(`${baseName}_manifest.json`, JSON.stringify(metadata, null, 2));
+  if (formats.includes("parquet")) {
+    try {
+      zip.file(`${baseName}.parquet`, await rowsToParquet(rows));
+      manifest.generatedFormats.push("parquet");
+    } catch (error) {
+      manifest.warnings.push(`No fue posible generar Parquet en este lote: ${error?.message || "error desconocido"}.`);
+      if (!formats.includes("csv")) {
+        zip.file(`${baseName}.csv`, rowsToCsv(rows));
+        manifest.generatedFormats.push("csv");
+      }
+    }
+  }
+
+  zip.file(`${baseName}_manifest.json`, JSON.stringify(manifest, null, 2));
 
   return zip.generateAsync({
     type: "uint8array",
@@ -1386,8 +1437,18 @@ class ExportJobDurableObject {
         metrics: null,
       };
       await saveJobToStorage(this.state.storage, job);
-      await this.state.storage.setAlarm(Date.now());
-      return jsonResponse(buildJobResponse(job), 202);
+      try {
+        await runJobStep(this.env, job);
+      } catch (error) {
+        job.status = "failed";
+        job.error = error?.message || "Fallo interno iniciando el job de exportacion.";
+        job.finishedAt = new Date().toISOString();
+      }
+      await saveJobToStorage(this.state.storage, job);
+      if (job.status !== "completed" && job.status !== "failed") {
+        await this.state.storage.setAlarm(Date.now() + 50);
+      }
+      return jsonResponse(buildJobResponse(job), job.status === "completed" ? 200 : 202);
     }
 
     const job = await loadJobFromStorage(this.state.storage);
@@ -1453,14 +1514,7 @@ class ExportJobDurableObject {
     }
 
     try {
-      if (!job.plan) {
-        job.status = "planning";
-        await saveJobToStorage(this.state.storage, job);
-        await planExportJob(this.env, job);
-      } else if (job.status !== "completed") {
-        job.status = "processing";
-        await processExportJobBatch(this.env, job);
-      }
+      await runJobStep(this.env, job);
     } catch (error) {
       job.status = "failed";
       job.error = error?.message || "Fallo interno procesando el job de exportacion.";
@@ -1472,6 +1526,18 @@ class ExportJobDurableObject {
     if (job.status !== "completed" && job.status !== "failed") {
       await this.state.storage.setAlarm(Date.now() + 250);
     }
+  }
+}
+
+async function runJobStep(env, job) {
+  if (!job.plan) {
+    job.status = "planning";
+    await planExportJob(env, job);
+  }
+
+  if (job.status !== "completed" && job.status !== "failed") {
+    job.status = "processing";
+    await processExportJobBatch(env, job);
   }
 }
 

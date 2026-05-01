@@ -60,6 +60,7 @@ interface DateRangeResponse {
 
 interface OptionItem {
   value: string;
+  label?: string;
   total: number;
 }
 
@@ -252,6 +253,13 @@ function parseStationCodes(value: string) {
   );
 }
 
+function normalizeText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 function apiUrl(path: string) {
   if (path.startsWith('http')) return path;
   if (typeof window === 'undefined') return path;
@@ -387,7 +395,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   const [logs, setLogs] = useState<Array<{ type: LogLevel; message: string }>>([]);
   const [isBusy, setIsBusy] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [activeTask, setActiveTask] = useState('Esperando configuraci?n');
+  const [activeTask, setActiveTask] = useState('Esperando configuracion');
   const [operationStartedAt, setOperationStartedAt] = useState<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   const handledJobIdsRef = useRef<Set<string>>(new Set());
@@ -401,7 +409,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       { id: 'territory' as StepId, title: 'Territorio', icon: MapPin },
       { id: 'advanced' as StepId, title: 'Filtros avanzados', icon: Filter },
       { id: 'time' as StepId, title: 'Temporalidad', icon: Calendar },
-      { id: 'execute' as StepId, title: 'Ejecuci?n', icon: Rocket },
+      { id: 'execute' as StepId, title: 'Ejecucion', icon: Rocket },
     ],
     []
   );
@@ -550,34 +558,58 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   }, [dateRange, timeMode]);
 
   useEffect(() => {
+    setCatalogFilters({});
+    setCatalogOptions({});
+    setStationCodesText('');
+    setStationHelperRows([]);
+    setPreview(null);
+    setDownloadMetrics(null);
+  }, [datasetId, selectedDepartments.join('|')]);
+
+  useEffect(() => {
     const loadCatalogOptionGroups = async () => {
-      if (!meta?.catalogFilters?.length) return;
+      if (!datasetId || !selectedDepartments.length || !startDate || !endDate || !meta?.catalogFilters?.length) {
+        setCatalogOptions({});
+        return;
+      }
       const nextOptions: Record<string, OptionItem[]> = {};
 
-      for (const definition of meta.catalogFilters) {
-        try {
+      await Promise.all(
+        meta.catalogFilters.map(async (definition) => {
           const data = await apiJson<{ options?: OptionItem[] }>('/api/catalog-options', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
+              datasetId,
               departments: selectedDepartments,
+              startDate,
+              endDate,
               catalogFilters,
               attributeKey: definition.key,
             }),
           }, `No fue posible cargar ${definition.label}.`);
           nextOptions[definition.key] = data.options || [];
-        } catch (error) {
-          appendLog('ERROR', error instanceof Error ? error.message : `Error cargando ${definition.label}.`);
-        }
-      }
+        })
+      ).catch((error) => {
+        appendLog('ERROR', error instanceof Error ? error.message : 'Error cargando filtros disponibles.');
+      });
 
       setCatalogOptions(nextOptions);
+      setCatalogFilters((current) => {
+        const pruned: Record<string, string[]> = {};
+        for (const [key, values] of Object.entries(current)) {
+          const allowed = new Set((nextOptions[key] || []).map((option) => option.value));
+          const kept = values.filter((value) => allowed.has(value));
+          if (kept.length) pruned[key] = kept;
+        }
+        return JSON.stringify(pruned) === JSON.stringify(current) ? current : pruned;
+      });
     };
 
     if (step === 'advanced' && acceptedTerms) {
       void loadCatalogOptionGroups();
     }
-  }, [acceptedTerms, appendLog, catalogFilters, meta?.catalogFilters, selectedDepartments, step]);
+  }, [acceptedTerms, appendLog, catalogFilters, datasetId, endDate, meta?.catalogFilters, selectedDepartments, startDate, step]);
 
   useEffect(() => {
     if (!isBusy || operationStartedAt === null) return undefined;
@@ -739,7 +771,10 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
+          datasetId,
           departments: selectedDepartments,
+          startDate,
+          endDate,
           catalogFilters,
         }),
       }, 'No fue posible cargar estaciones de apoyo.');
@@ -800,9 +835,9 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       setDeletedPartKeys([]);
       cleanupScheduledPartsRef.current.clear();
       setProgress(2);
-      setActiveTask('Validando cobertura territorial...');
+      setActiveTask('Creando job de exportacion...');
 
-      const downloadPayload = await validateCoverageForDownload();
+      const downloadPayload = executionPayload;
       appendLog('INFO', 'Creando job asincrono de exportacion...');
 
       const data = await apiJson<ExportJobStatusResponse>('/api/jobs', {
@@ -890,45 +925,15 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-12 min-h-[calc(100vh-7rem)]">
       <div className="space-y-6 xl:col-span-4 xl:sticky xl:top-6 self-start">
         <div className="bg-card border border-border rounded-xl p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
-          <h2 className="text-card-foreground text-xl font-bold mb-4">Asistente de extraccion</h2>
-          <div className="space-y-3">
-            {steps.map((item, index) => {
-              const Icon = item.icon;
-              const isActive = step === item.id;
-              const isDone = selectedStepIndex > index && acceptedTerms;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    if (item.id !== 'consent' && !acceptedTerms) {
-                      appendLog('ERROR', 'Debes aceptar el consentimiento antes de abrir otros pasos.');
-                      return;
-                    }
-                    setStep(item.id);
-                  }}
-                  className={`w-full flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-all ${
-                    isActive
-                      ? 'border-accent bg-accent/10 text-card-foreground'
-                      : isDone
-                      ? 'border-success/30 bg-success/10 text-card-foreground'
-                      : 'border-border bg-background text-muted-foreground hover:border-accent/40'
-                  }`}
-                >
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-full ${isDone ? 'bg-success/20' : 'bg-muted'}`}>
-                    {isDone ? <CheckCircle2 className="h-5 w-5 text-success" /> : <Icon className="h-5 w-5 text-accent" />}
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold">{item.title}</p>
-                    <p className="text-xs opacity-80">Paso {index + 1}</p>
-                  </div>
-                </button>
-              );
-            })}
+          <div className="mb-5 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Paso {selectedStepIndex + 1} de {steps.length}</p>
+              <h2 className="text-card-foreground text-xl font-bold">Configurar descarga</h2>
+            </div>
+            <span className="rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-semibold text-accent">
+              {steps[selectedStepIndex]?.title}
+            </span>
           </div>
-        </div>
-
-        <div className="bg-card border border-border rounded-xl p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
           <StepPanel
             step={step}
             meta={meta}
@@ -983,6 +988,43 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
               Siguiente
               <ChevronRight className="h-4 w-4" />
             </button>
+          </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-xl p-4 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+          <h2 className="text-card-foreground text-sm font-bold mb-3">Navegacion del flujo</h2>
+          <div className="grid grid-cols-2 gap-2">
+            {steps.map((item, index) => {
+              const Icon = item.icon;
+              const isActive = step === item.id;
+              const isDone = selectedStepIndex > index && acceptedTerms;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    if (item.id !== 'consent' && !acceptedTerms) {
+                      appendLog('ERROR', 'Debes aceptar el consentimiento antes de abrir otros pasos.');
+                      return;
+                    }
+                    setStep(item.id);
+                  }}
+                  className={`flex min-h-16 items-center gap-2 rounded-lg border px-3 py-2 text-left transition-all ${
+                    isActive
+                      ? 'border-accent bg-accent/10 text-card-foreground'
+                      : isDone
+                      ? 'border-success/30 bg-success/10 text-card-foreground'
+                      : 'border-border bg-background text-muted-foreground hover:border-accent/40'
+                  }`}
+                >
+                  {isDone ? <CheckCircle2 className="h-4 w-4 shrink-0 text-success" /> : <Icon className="h-4 w-4 shrink-0 text-accent" />}
+                  <span className="min-w-0">
+                    <span className="block truncate text-xs font-bold">{item.title}</span>
+                    <span className="block text-[11px] opacity-80">Paso {index + 1}</span>
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -1259,6 +1301,8 @@ function StepPanel({
   onRunDownload: () => void;
   isBusy: boolean;
 }) {
+  const [filterSearch, setFilterSearch] = useState<Record<string, string>>({});
+
   if (step === 'consent') {
     return (
       <Section title="Aviso legal" icon={ShieldCheck}>
@@ -1330,8 +1374,8 @@ function StepPanel({
     return (
       <Section title="Personalizacion avanzada" icon={Filter}>
         <div className="rounded-lg border border-border bg-background p-4 text-sm text-muted-foreground">
-          Este bloque replica la logica del terminal: zonas, categoria, tecnologia, estado, corriente, entidad,
-          municipio de catalogo y carga manual de estaciones.
+          Estos filtros se calculan contra el dataset seleccionado y el departamento elegido. Solo aparecen opciones
+          que tienen filas reales para la consulta actual.
         </div>
         {(meta?.catalogFilters || []).map((definition) => (
           <div key={definition.key} className="space-y-2">
@@ -1341,12 +1385,26 @@ function StepPanel({
                 {(catalogFilters[definition.key] || []).length} seleccionados
               </span>
             </label>
-            <div className="max-h-40 overflow-y-auto rounded-lg border border-border bg-background p-3">
-              {(catalogOptions[definition.key] || []).length === 0 ? (
+            <input
+              value={filterSearch[definition.key] || ''}
+              onChange={(event) => setFilterSearch((current) => ({ ...current, [definition.key]: event.target.value }))}
+              placeholder={`Buscar ${definition.label.toLowerCase()}`}
+              className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-card-foreground focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+            />
+            <div className="max-h-48 overflow-y-auto rounded-lg border border-border bg-background p-3">
+              {(() => {
+                const search = normalizeText(filterSearch[definition.key] || '');
+                const options = (catalogOptions[definition.key] || []).filter((option) =>
+                  normalizeText(`${option.label || option.value} ${option.total}`).includes(search)
+                );
+                if (!options.length) {
+                  return (
                 <p className="text-sm text-muted-foreground">Sin opciones para los filtros actuales.</p>
-              ) : (
+                  );
+                }
+                return (
                 <div className="flex flex-wrap gap-2">
-                  {(catalogOptions[definition.key] || []).map((option) => (
+                  {options.slice(0, 80).map((option) => (
                     <button
                       key={`${definition.key}-${option.value}`}
                       type="button"
@@ -1357,11 +1415,12 @@ function StepPanel({
                           : 'border-border bg-card text-muted-foreground hover:border-accent/40'
                       }`}
                     >
-                      {option.value} ({option.total})
+                      {option.label || option.value} ({option.total})
                     </button>
                   ))}
                 </div>
-              )}
+                );
+              })()}
             </div>
           </div>
         ))}
@@ -1441,7 +1500,7 @@ function StepPanel({
   }
 
   return (
-    <Section title="Ejecuci?n y descarga" icon={Rocket}>
+    <Section title="Ejecucion y descarga" icon={Rocket}>
       <div className="rounded-lg border border-border bg-background p-4 text-sm text-muted-foreground space-y-2">
         <p>
           <span className="font-semibold text-card-foreground">Departamentos:</span> {selectionSummary.departments}

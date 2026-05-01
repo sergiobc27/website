@@ -10,6 +10,7 @@ on:
       - "tests/**"
       - "wrangler.jsonc"
       - "cloudflare/**"
+      - "scripts/**"
       - "package.json"
       - "package-lock.json"
       - "vite.config.ts"

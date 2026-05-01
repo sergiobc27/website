@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import JSZip from 'jszip';
 
 import {
   buildDepartmentFilter,
@@ -307,10 +308,10 @@ test('handleExportPlan supports multi-plan exports from large station sets', asy
 
 
 
-test('sanitizeRequestedFormats falls back safely when parquet is requested', () => {
+test('sanitizeRequestedFormats keeps parquet as an effective output', () => {
   const formatState = sanitizeRequestedFormats(['parquet']);
-  assert.deepEqual(formatState.effective, ['csv']);
-  assert.ok(formatState.warnings.some((warning) => warning.includes('Parquet')));
+  assert.deepEqual(formatState.effective, ['parquet']);
+  assert.deepEqual(formatState.warnings, []);
 });
 
 test('buildJobPartBaseName creates padded part names', () => {
@@ -353,6 +354,21 @@ test('createArchivePart generates a zip payload', async () => {
     { rowCount: 1 }
   );
   assert.ok(buffer.byteLength > 0);
+});
+
+test('createArchivePart generates a parquet file inside the zip', async () => {
+  const buffer = await createArchivePart(
+    [{ codigoestacion: '29045180', valorobservado: 12.5, departamento: 'ATLANTICO' }],
+    ['parquet'],
+    'demo_part_0001',
+    { rowCount: 1 }
+  );
+  const zip = await JSZip.loadAsync(buffer);
+  const parquetFile = zip.file('demo_part_0001.parquet');
+  assert.ok(parquetFile);
+  const parquetBytes = await parquetFile.async('uint8array');
+  assert.equal(Buffer.from(parquetBytes.slice(0, 4)).toString('utf8'), 'PAR1');
+  assert.equal(Buffer.from(parquetBytes.slice(-4)).toString('utf8'), 'PAR1');
 });
 
 test('ExportJobDurableObject creates downloadable parts end to end', async () => {
@@ -433,7 +449,7 @@ test('ExportJobDurableObject creates downloadable parts end to end', async () =>
         }),
       })
     );
-    assert.equal(createResponse.status, 202);
+    assert.equal(createResponse.status, 200);
 
     await durableObject.alarm();
     await durableObject.alarm();
@@ -529,7 +545,7 @@ test('ExportJobDurableObject creates a no-data zip when filters return zero rows
         }),
       })
     );
-    assert.equal(createResponse.status, 202);
+    assert.equal(createResponse.status, 200);
 
     await durableObject.alarm();
 

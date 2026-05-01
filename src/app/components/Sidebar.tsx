@@ -17,7 +17,7 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
     { id: 'extractor', icon: Database, label: 'Extractor de Datos' },
     { id: 'history', icon: Download, label: 'Historial' },
     { id: 'settings', icon: Settings, label: 'Ajustes de API' },
-    { id: 'docs', icon: FileText, label: 'Documentaci?n' },
+    { id: 'docs', icon: FileText, label: 'Documentacion' },
   ];
 
   return (
@@ -77,7 +77,7 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
         {!isCollapsed ? (
           <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
             <img src={logoIdeam} alt="IDEAM" className="w-full h-auto" />
-            <p className="text-white/60 text-xs text-center mt-2 leading-5">Instituto de Hidrolog?a, Meteorolog?a y Estudios Ambientales</p>
+            <p className="text-white/60 text-xs text-center mt-2 leading-5">Instituto de Hidrologia, Meteorologia y Estudios Ambientales</p>
           </div>
         ) : (
           <div className="flex justify-center">
