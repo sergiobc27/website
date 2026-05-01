@@ -1,9 +1,9 @@
 import JSZip from "jszip";
-import { createRequire } from "node:module";
+import writerModule from "parquetjs-lite/lib/writer.js";
+import schemaModule from "parquetjs-lite/lib/schema.js";
 
-const require = createRequire(import.meta.url);
-const { ParquetWriter } = require("parquetjs-lite/lib/writer.js");
-const { ParquetSchema } = require("parquetjs-lite/lib/schema.js");
+const { ParquetWriter } = writerModule;
+const { ParquetSchema } = schemaModule;
 
 const ASYNC_EXPORT_PAGE_BATCH = 1;
 const EXPORT_RATE_LIMIT = 30;
