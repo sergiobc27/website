@@ -526,6 +526,9 @@ test('ExportJobDurableObject creates a no-data zip when filters return zero rows
     if (select === 'count(*) as total') {
       return new Response(JSON.stringify([{ total: '0' }]), { status: 200, headers: { 'content-type': 'application/json' } });
     }
+    if (parsed.searchParams.get('$limit') === '50000' && parsed.searchParams.get('$offset') === '0') {
+      return new Response(JSON.stringify([]), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
     throw new Error(`Unexpected fetch call: ${parsed.toString()}`);
   };
 

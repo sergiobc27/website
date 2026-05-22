@@ -1112,8 +1112,8 @@ function buildJobResponse(job) {
     error: job.error || null,
     selectedFormats: job.selectedFormats || [],
     effectiveFormats: job.effectiveFormats || [],
-    rowCount: job.plan?.rowCount || 0,
-    totalPages: job.plan?.totalPages || 0,
+    rowCount: Number.isFinite(job.plan?.rowCount) ? job.plan.rowCount : (job.metrics?.rowCount ?? job.processedRows ?? 0),
+    totalPages: Number.isFinite(job.plan?.totalPages) ? job.plan.totalPages : (job.completedPages || 0),
     completedPages: job.completedPages || 0,
     processedRows: job.processedRows || 0,
     queryPlans: job.plan?.queryPlans || 0,
@@ -1138,7 +1138,8 @@ function getNextPageDescriptor(job) {
 
   while (planCursor.planIndex < planPages.length) {
     const planPage = planPages[planCursor.planIndex];
-    if (planCursor.pageIndex < planPage.pageCount) {
+    const pageCount = Number.isFinite(planPage.pageCount) ? planPage.pageCount : Infinity;
+    if (planCursor.pageIndex < pageCount) {
       return {
         planIndex: planCursor.planIndex,
         pageIndex: planCursor.pageIndex,
@@ -1154,11 +1155,23 @@ function getNextPageDescriptor(job) {
   return null;
 }
 
-function advanceJobCursor(job) {
+function advanceJobCursor(job, planFinished = false) {
   const planPages = job.plan?.planPages || [];
   job.planCursor = job.planCursor || { planIndex: 0, pageIndex: 0 };
+
+  const currentPlan = planPages[job.planCursor.planIndex];
+  if (planFinished || !currentPlan) {
+    job.planCursor.planIndex += 1;
+    job.planCursor.pageIndex = 0;
+    return;
+  }
+
   job.planCursor.pageIndex += 1;
-  while (job.planCursor.planIndex < planPages.length && job.planCursor.pageIndex >= planPages[job.planCursor.planIndex].pageCount) {
+  while (
+    job.planCursor.planIndex < planPages.length &&
+    Number.isFinite(planPages[job.planCursor.planIndex].pageCount) &&
+    job.planCursor.pageIndex >= planPages[job.planCursor.planIndex].pageCount
+  ) {
     job.planCursor.planIndex += 1;
     job.planCursor.pageIndex = 0;
   }
@@ -1171,8 +1184,24 @@ async function planExportJob(env, job) {
     throw new Error("Dataset no soportado para el job de exportacion.");
   }
 
-  const plan = await buildExportPlan(config, job.payload, dataset);
-  job.status = plan.rowCount ? "processing" : "completed";
+  const built = await buildQueryPlans(config, job.payload, dataset);
+  const plan = {
+    dataset,
+    replacements: built.replacements,
+    stationPoolSize: built.stationPoolSize,
+    queryPlans: built.plans.length,
+    rowCount: null,
+    pageSize: config.exportPageSize,
+    totalPages: null,
+    fileStem: buildFileStem(job.payload, dataset),
+    planPages: built.plans.map((planPage, index) => ({
+      planIndex: index,
+      where: planPage.where,
+      rowCount: null,
+      pageCount: null,
+    })),
+  };
+  job.status = "processing";
   job.startedAt = job.startedAt || new Date().toISOString();
   job.datasetName = dataset.name;
   job.dateColumn = dataset.dateColumn || "fechaobservacion";
@@ -1183,64 +1212,59 @@ async function planExportJob(env, job) {
   job.parts = [];
   job.summaryState = createAccumulatorState();
   job.planCursor = { planIndex: 0, pageIndex: 0 };
+}
 
-  if (!plan.rowCount) {
-    if (!env.EXPORTS_BUCKET) {
-      throw new Error("EXPORTS_BUCKET no esta configurado en Cloudflare. Configura el bucket R2 antes de usar exportaciones asincronas.");
-    }
-
-    const baseName = `${job.fileStem}_sin_datos`;
-    const archiveBuffer = await createArchivePart([], job.effectiveFormats, baseName, {
+async function createNoDataJobArchive(env, job, dataset) {
+  const baseName = `${job.fileStem}_sin_datos`;
+  const archiveBuffer = await createArchivePart([], job.effectiveFormats, baseName, {
+    jobId: job.id,
+    datasetId: dataset.id,
+    datasetName: dataset.name,
+    rowCount: 0,
+    formats: job.effectiveFormats,
+    requestedFormats: job.selectedFormats,
+    warnings: job.warnings || [],
+    message: "La consulta no encontro filas para los filtros seleccionados.",
+  });
+  const key = `exports/${job.id}/${baseName}.zip`;
+  await env.EXPORTS_BUCKET.put(key, archiveBuffer, {
+    httpMetadata: {
+      contentType: "application/zip",
+      cacheControl: "no-store",
+      contentDisposition: `attachment; filename="${baseName}.zip"`,
+    },
+    customMetadata: {
       jobId: job.id,
-      datasetId: dataset.id,
-      datasetName: dataset.name,
-      rowCount: 0,
-      formats: job.effectiveFormats,
-      requestedFormats: job.selectedFormats,
-      warnings: job.warnings || [],
-      message: "La consulta no encontro filas para los filtros seleccionados.",
-    });
-    const key = `exports/${job.id}/${baseName}.zip`;
-    await env.EXPORTS_BUCKET.put(key, archiveBuffer, {
-      httpMetadata: {
-        contentType: "application/zip",
-        cacheControl: "no-store",
-        contentDisposition: `attachment; filename="${baseName}.zip"`,
-      },
-      customMetadata: {
-        jobId: job.id,
-        expiresAt: new Date(Date.now() + EXPORT_OBJECT_TTL_SECONDS * 1000).toISOString(),
-      },
-    });
+      expiresAt: new Date(Date.now() + EXPORT_OBJECT_TTL_SECONDS * 1000).toISOString(),
+    },
+  });
 
-    const summary = finalizeAccumulatorState(job.summaryState, 0);
-    job.parts = [{
-      index: 1,
-      key,
-      fileName: `${baseName}.zip`,
-      rowCount: 0,
-      sizeBytes: archiveBuffer.byteLength,
-      formats: job.effectiveFormats,
-      downloadPath: `/api/jobs/${job.id}/parts/1`,
-    }];
-    job.metrics = {
-      fileName: `${baseName}.zip`,
-      rowCount: 0,
-      stationCount: summary.stationCount,
-      municipalityCount: summary.municipalityCount,
-      departmentCount: summary.departmentCount,
-      zoneCount: summary.zoneCount,
-      processingMs: 0,
-      sizeBytes: archiveBuffer.byteLength,
-      observedStart: summary.observedStart,
-      observedEnd: summary.observedEnd,
-      queryPlans: plan.queryPlans,
-      stationPoolSize: plan.stationPoolSize,
-      archivePartCount: 1,
-      downloadedPages: 0,
-    };
-    job.finishedAt = new Date().toISOString();
-  }
+  const summary = finalizeAccumulatorState(job.summaryState, 0);
+  job.parts = [{
+    index: 1,
+    key,
+    fileName: `${baseName}.zip`,
+    rowCount: 0,
+    sizeBytes: archiveBuffer.byteLength,
+    formats: job.effectiveFormats,
+    downloadPath: `/api/jobs/${job.id}/parts/1`,
+  }];
+  job.metrics = {
+    fileName: `${baseName}.zip`,
+    rowCount: 0,
+    stationCount: summary.stationCount,
+    municipalityCount: summary.municipalityCount,
+    departmentCount: summary.departmentCount,
+    zoneCount: summary.zoneCount,
+    processingMs: 0,
+    sizeBytes: archiveBuffer.byteLength,
+    observedStart: summary.observedStart,
+    observedEnd: summary.observedEnd,
+    queryPlans: job.plan?.queryPlans || 0,
+    stationPoolSize: job.plan?.stationPoolSize || 0,
+    archivePartCount: 1,
+    downloadedPages: 0,
+  };
 }
 
 async function processExportJobBatch(env, job) {
@@ -1269,6 +1293,13 @@ async function processExportJobBatch(env, job) {
       job.plan.pageSize
     );
     const normalized = normalizeRows(rows, dataset.id, job.plan.replacements || {}, dataset.dateColumn);
+    const planFinished = rows.length < job.plan.pageSize;
+    if (!normalized.length) {
+      advanceJobCursor(job, true);
+      processedAnyPage = true;
+      continue;
+    }
+
     const partIndex = (job.parts || []).length + 1;
     const baseName = buildJobPartBaseName(job.fileStem, partIndex);
     const archiveBuffer = await createArchivePart(normalized, job.effectiveFormats, baseName, {
@@ -1309,11 +1340,15 @@ async function processExportJobBatch(env, job) {
       downloadPath: `/api/jobs/${job.id}/parts/${partIndex}`,
     });
 
-    advanceJobCursor(job);
+    advanceJobCursor(job, planFinished);
     processedAnyPage = true;
   }
 
-  if (!processedAnyPage || job.completedPages >= (job.plan?.totalPages || 0)) {
+  if (!processedAnyPage || !getNextPageDescriptor(job)) {
+    if (!(job.parts || []).length) {
+      await createNoDataJobArchive(env, job, dataset);
+    }
+
     const summary = finalizeAccumulatorState(job.summaryState, job.processedRows || 0);
     const startedAt = job.startedAt ? new Date(job.startedAt).valueOf() : Date.now();
     job.status = "completed";
@@ -1504,6 +1539,10 @@ class ExportJobDurableObject {
     }
 
     try {
+      if (!job.plan) {
+        job.status = "planning";
+        await saveJobToStorage(this.state.storage, job);
+      }
       await runJobStep(this.env, job);
     } catch (error) {
       job.status = "failed";
