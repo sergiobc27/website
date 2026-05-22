@@ -1113,7 +1113,11 @@ function buildJobResponse(job) {
     selectedFormats: job.selectedFormats || [],
     effectiveFormats: job.effectiveFormats || [],
     rowCount: Number.isFinite(job.plan?.rowCount) ? job.plan.rowCount : (job.metrics?.rowCount ?? job.processedRows ?? 0),
-    totalPages: Number.isFinite(job.plan?.totalPages) ? job.plan.totalPages : (job.completedPages || 0),
+    totalPages: Number.isFinite(job.plan?.totalPages)
+      ? job.plan.totalPages
+      : job.status === "completed"
+        ? (job.completedPages || 0)
+        : Math.max((job.completedPages || 0) + 1, 1),
     completedPages: job.completedPages || 0,
     processedRows: job.processedRows || 0,
     queryPlans: job.plan?.queryPlans || 0,
