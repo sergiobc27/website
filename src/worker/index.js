@@ -1437,18 +1437,8 @@ class ExportJobDurableObject {
         metrics: null,
       };
       await saveJobToStorage(this.state.storage, job);
-      try {
-        await runJobStep(this.env, job);
-      } catch (error) {
-        job.status = "failed";
-        job.error = error?.message || "Fallo interno iniciando el job de exportacion.";
-        job.finishedAt = new Date().toISOString();
-      }
-      await saveJobToStorage(this.state.storage, job);
-      if (job.status !== "completed" && job.status !== "failed") {
-        await this.state.storage.setAlarm(Date.now() + 50);
-      }
-      return jsonResponse(buildJobResponse(job), job.status === "completed" ? 200 : 202);
+      await this.state.storage.setAlarm(Date.now() + 50);
+      return jsonResponse(buildJobResponse(job), 202);
     }
 
     const job = await loadJobFromStorage(this.state.storage);

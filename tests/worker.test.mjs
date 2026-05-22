@@ -449,7 +449,10 @@ test('ExportJobDurableObject creates downloadable parts end to end', async () =>
         }),
       })
     );
-    assert.equal(createResponse.status, 200);
+    assert.equal(createResponse.status, 202);
+    const queuedData = await createResponse.json();
+    assert.equal(queuedData.status, 'queued');
+    assert.equal(storageMap.has('__alarm__'), true);
 
     await durableObject.alarm();
     await durableObject.alarm();
@@ -545,7 +548,10 @@ test('ExportJobDurableObject creates a no-data zip when filters return zero rows
         }),
       })
     );
-    assert.equal(createResponse.status, 200);
+    assert.equal(createResponse.status, 202);
+    const queuedData = await createResponse.json();
+    assert.equal(queuedData.status, 'queued');
+    assert.equal(storageMap.has('__alarm__'), true);
 
     await durableObject.alarm();
 
