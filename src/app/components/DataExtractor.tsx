@@ -27,6 +27,7 @@ type StepId = 'consent' | 'variable' | 'territory' | 'advanced' | 'time' | 'exec
 type OutputFormat = 'csv' | 'json' | 'parquet';
 type LogLevel = 'INFO' | 'SUCCESS' | 'ERROR';
 type TimeMode = 'full' | 'custom';
+type CatalogOptionStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 interface DatasetMeta {
   id: string;
@@ -377,6 +378,8 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
   const [catalogFilters, setCatalogFilters] = useState<Record<string, string[]>>({});
   const [catalogOptions, setCatalogOptions] = useState<Record<string, OptionItem[]>>({});
+  const [catalogOptionStatus, setCatalogOptionStatus] = useState<Record<string, CatalogOptionStatus>>({});
+  const [catalogOptionErrors, setCatalogOptionErrors] = useState<Record<string, string>>({});
   const [stationCodesText, setStationCodesText] = useState('');
   const [stationHelperRows, setStationHelperRows] = useState<StationHelperRow[]>([]);
   const [stationHelperLoading, setStationHelperLoading] = useState(false);
@@ -560,6 +563,8 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   useEffect(() => {
     setCatalogFilters({});
     setCatalogOptions({});
+    setCatalogOptionStatus({});
+    setCatalogOptionErrors({});
     setStationCodesText('');
     setStationHelperRows([]);
     setPreview(null);
@@ -570,12 +575,22 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     const loadCatalogOptionGroups = async () => {
       if (!datasetId || !selectedDepartments.length || !startDate || !endDate || !meta?.catalogFilters?.length) {
         setCatalogOptions({});
+        setCatalogOptionStatus({});
+        setCatalogOptionErrors({});
         return;
       }
-      const nextOptions: Record<string, OptionItem[]> = {};
 
-      await Promise.all(
-        meta.catalogFilters.map(async (definition) => {
+      const definitions = meta.catalogFilters;
+      setCatalogOptionErrors({});
+      setCatalogOptionStatus(
+        Object.fromEntries(definitions.map((definition) => [definition.key, 'loading' as CatalogOptionStatus]))
+      );
+      setCatalogOptions((current) =>
+        Object.fromEntries(definitions.map((definition) => [definition.key, current[definition.key] || []]))
+      );
+
+      const results = await Promise.allSettled(
+        definitions.map(async (definition) => {
           const data = await apiJson<{ options?: OptionItem[] }>('/api/catalog-options', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
@@ -588,13 +603,28 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
               attributeKey: definition.key,
             }),
           }, `No fue posible cargar ${definition.label}.`);
-          nextOptions[definition.key] = data.options || [];
+
+          const options = data.options || [];
+          setCatalogOptions((current) => ({ ...current, [definition.key]: options }));
+          setCatalogOptionStatus((current) => ({ ...current, [definition.key]: 'ready' }));
+          return { key: definition.key, options };
         })
-      ).catch((error) => {
-        appendLog('ERROR', error instanceof Error ? error.message : 'Error cargando filtros disponibles.');
+      );
+
+      const nextOptions: Record<string, OptionItem[]> = {};
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          nextOptions[result.value.key] = result.value.options;
+          return;
+        }
+        const definition = definitions[index];
+        const message = result.reason instanceof Error ? result.reason.message : `No fue posible cargar ${definition.label}.`;
+        nextOptions[definition.key] = [];
+        setCatalogOptionStatus((current) => ({ ...current, [definition.key]: 'error' }));
+        setCatalogOptionErrors((current) => ({ ...current, [definition.key]: message }));
+        appendLog('ERROR', message);
       });
 
-      setCatalogOptions(nextOptions);
       setCatalogFilters((current) => {
         const pruned: Record<string, string[]> = {};
         for (const [key, values] of Object.entries(current)) {
@@ -606,10 +636,10 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       });
     };
 
-    if (step === 'advanced' && acceptedTerms) {
+    if (acceptedTerms) {
       void loadCatalogOptionGroups();
     }
-  }, [acceptedTerms, appendLog, catalogFilters, datasetId, endDate, meta?.catalogFilters, selectedDepartments, startDate, step]);
+  }, [acceptedTerms, appendLog, catalogFilters, datasetId, endDate, meta?.catalogFilters, selectedDepartments, startDate]);
 
   useEffect(() => {
     if (!isBusy || operationStartedAt === null) return undefined;
@@ -945,6 +975,8 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
             onToggleDepartment={toggleDepartment}
             catalogFilters={catalogFilters}
             catalogOptions={catalogOptions}
+            catalogOptionStatus={catalogOptionStatus}
+            catalogOptionErrors={catalogOptionErrors}
             onToggleCatalogValue={toggleCatalogValue}
             stationCodesText={stationCodesText}
             onStationCodesTextChange={setStationCodesText}
@@ -1240,6 +1272,8 @@ function StepPanel({
   onToggleDepartment,
   catalogFilters,
   catalogOptions,
+  catalogOptionStatus,
+  catalogOptionErrors,
   onToggleCatalogValue,
   stationCodesText,
   onStationCodesTextChange,
@@ -1273,6 +1307,8 @@ function StepPanel({
   onToggleDepartment: (department: string) => void;
   catalogFilters: Record<string, string[]>;
   catalogOptions: Record<string, OptionItem[]>;
+  catalogOptionStatus: Record<string, CatalogOptionStatus>;
+  catalogOptionErrors: Record<string, string>;
   onToggleCatalogValue: (filterKey: string, value: string) => void;
   stationCodesText: string;
   onStationCodesTextChange: (value: string) => void;
@@ -1393,32 +1429,61 @@ function StepPanel({
             />
             <div className="max-h-48 overflow-y-auto rounded-lg border border-border bg-background p-3">
               {(() => {
+                const status = catalogOptionStatus[definition.key] || 'idle';
+                const error = catalogOptionErrors[definition.key];
                 const search = normalizeText(filterSearch[definition.key] || '');
                 const options = (catalogOptions[definition.key] || []).filter((option) =>
                   normalizeText(`${option.label || option.value} ${option.total}`).includes(search)
                 );
+                if (status === 'loading' && !options.length) {
+                  return (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <LoaderCircle className="h-4 w-4 animate-spin text-accent" />
+                      Cargando opciones disponibles...
+                    </div>
+                  );
+                }
+                if (status === 'error') {
+                  return (
+                    <p className="text-sm text-destructive">
+                      {error || 'No fue posible cargar este filtro. Puedes continuar sin seleccionarlo.'}
+                    </p>
+                  );
+                }
                 if (!options.length) {
                   return (
-                <p className="text-sm text-muted-foreground">Sin opciones para los filtros actuales.</p>
+                    <p className="text-sm text-muted-foreground">
+                      {status === 'idle'
+                        ? 'Selecciona variable, departamento y rango temporal para calcular opciones.'
+                        : 'Sin opciones para los filtros actuales.'}
+                    </p>
                   );
                 }
                 return (
-                <div className="flex flex-wrap gap-2">
-                  {options.slice(0, 80).map((option) => (
-                    <button
-                      key={`${definition.key}-${option.value}`}
-                      type="button"
-                      onClick={() => onToggleCatalogValue(definition.key, option.value)}
-                      className={`rounded-full border px-3 py-2 text-xs font-semibold transition-all ${
-                        (catalogFilters[definition.key] || []).includes(option.value)
-                          ? 'border-accent bg-accent/15 text-accent'
-                          : 'border-border bg-card text-muted-foreground hover:border-accent/40'
-                      }`}
-                    >
-                      {option.label || option.value} ({option.total})
-                    </button>
-                  ))}
-                </div>
+                  <div className="space-y-2">
+                    {status === 'loading' && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <LoaderCircle className="h-3.5 w-3.5 animate-spin text-accent" />
+                        Actualizando opciones...
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      {options.slice(0, 80).map((option) => (
+                        <button
+                          key={`${definition.key}-${option.value}`}
+                          type="button"
+                          onClick={() => onToggleCatalogValue(definition.key, option.value)}
+                          className={`rounded-full border px-3 py-2 text-xs font-semibold transition-all ${
+                            (catalogFilters[definition.key] || []).includes(option.value)
+                              ? 'border-accent bg-accent/15 text-accent'
+                              : 'border-border bg-card text-muted-foreground hover:border-accent/40'
+                          }`}
+                        >
+                          {option.label || option.value} ({option.total})
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 );
               })()}
             </div>
