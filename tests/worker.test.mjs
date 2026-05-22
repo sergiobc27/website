@@ -391,7 +391,8 @@ test('ExportJobDurableObject creates downloadable parts end to end', async () =>
   const env = {
     EXPORTS_BUCKET: {
       async put(key, value, options = {}) {
-        objects.set(key, { value, options });
+        const storedValue = value?.getReader ? new Uint8Array(await new Response(value).arrayBuffer()) : value;
+        objects.set(key, { value: storedValue, options });
       },
       async get(key) {
         const item = objects.get(key);
@@ -462,11 +463,19 @@ test('ExportJobDurableObject creates downloadable parts end to end', async () =>
     assert.equal(statusData.status, 'completed');
     assert.equal(statusData.parts.length, 1);
     assert.equal(statusData.processedRows, 2);
+    assert.match(statusData.parts[0].fileName, /^precipitacion_\d{8}\.zip$/);
 
     const partResponse = await durableObject.fetch(new Request('https://export-job/parts/1'));
     assert.equal(partResponse.status, 200);
     assert.equal(partResponse.headers.get('content-type'), 'application/zip');
     assert.equal(partResponse.headers.get('x-robots-tag'), 'noindex, nofollow, noarchive');
+    const zip = await JSZip.loadAsync(await partResponse.arrayBuffer());
+    const names = Object.keys(zip.files).sort();
+    assert.ok(names.includes('_manifest.json'));
+    assert.ok(names.some((name) => name.startsWith('precipitacion/atlantico/barranquilla/')));
+    assert.ok(names.some((name) => name.startsWith('precipitacion/atl_ntico/soledad/')));
+    assert.ok(names.some((name) => name.endsWith('.csv')));
+    assert.ok(names.some((name) => name.endsWith('.json')));
 
     const deleteResponse = await durableObject.fetch(new Request('https://export-job/parts/1', { method: 'DELETE' }));
     assert.equal(deleteResponse.status, 200);
@@ -499,7 +508,8 @@ test('ExportJobDurableObject creates a no-data zip when filters return zero rows
   const env = {
     EXPORTS_BUCKET: {
       async put(key, value, options = {}) {
-        objects.set(key, { value, options });
+        const storedValue = value?.getReader ? new Uint8Array(await new Response(value).arrayBuffer()) : value;
+        objects.set(key, { value: storedValue, options });
       },
       async get(key) {
         const item = objects.get(key);
@@ -564,10 +574,15 @@ test('ExportJobDurableObject creates a no-data zip when filters return zero rows
     assert.equal(statusData.rowCount, 0);
     assert.equal(statusData.parts.length, 1);
     assert.equal(statusData.metrics.archivePartCount, 1);
+    assert.match(statusData.parts[0].fileName, /^precipitacion_\d{8}\.zip$/);
 
     const partResponse = await durableObject.fetch(new Request('https://export-job/parts/1'));
     assert.equal(partResponse.status, 200);
     assert.equal(partResponse.headers.get('content-type'), 'application/zip');
+    const zip = await JSZip.loadAsync(await partResponse.arrayBuffer());
+    const names = Object.keys(zip.files).sort();
+    assert.ok(names.includes('_manifest.json'));
+    assert.ok(names.some((name) => name.startsWith('precipitacion/sin_datos/')));
   } finally {
     global.fetch = originalFetch;
   }

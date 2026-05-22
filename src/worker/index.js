@@ -280,6 +280,12 @@ function timestampStamp() {
   return `${hh}${mm}_${dd}${month}${yy}`;
 }
 
+function dateStamp(date = new Date()) {
+  const dd = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${dd}${month}${date.getFullYear()}`;
+}
+
 function buildFileStem(payload, dataset) {
   return [
     fileSafePart(dataset.name, "variable").toLowerCase(),
@@ -287,6 +293,14 @@ function buildFileStem(payload, dataset) {
     fileSafePart(asArray(payload.outputMunicipalities ?? payload.municipality).join("-") || "todos", "todos").toLowerCase(),
     timestampStamp(),
   ].join("_");
+}
+
+function buildJobZipFileName(dataset, date = new Date()) {
+  return `${fileSafePart(dataset.name, "variable").toLowerCase()}_${dateStamp(date)}.zip`;
+}
+
+function hierarchyPart(value, fallback) {
+  return fileSafePart(value || fallback || "sin_dato", fallback || "sin_dato").toLowerCase();
 }
 
 function parseDate(value) {
@@ -997,6 +1011,104 @@ async function rowsToParquet(rows) {
   return Buffer.concat(chunks);
 }
 
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let index = 0; index < 256; index += 1) {
+    let value = index;
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+    }
+    table[index] = value >>> 0;
+  }
+  return table;
+})();
+
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc = CRC32_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function encodeUtf8(value) {
+  return new TextEncoder().encode(value);
+}
+
+function dosDateTime(date = new Date()) {
+  const year = Math.max(1980, date.getFullYear());
+  return {
+    dosTime: (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2),
+    dosDate: ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate(),
+  };
+}
+
+function writeUint16(view, offset, value) {
+  view.setUint16(offset, value, true);
+}
+
+function writeUint32(view, offset, value) {
+  view.setUint32(offset, value >>> 0, true);
+}
+
+function zipLocalHeader(entry, encodedName, modifiedAt) {
+  const { dosTime, dosDate } = dosDateTime(modifiedAt);
+  const buffer = new Uint8Array(30 + encodedName.length);
+  const view = new DataView(buffer.buffer);
+  writeUint32(view, 0, 0x04034b50);
+  writeUint16(view, 4, 20);
+  writeUint16(view, 6, 0);
+  writeUint16(view, 8, 0);
+  writeUint16(view, 10, dosTime);
+  writeUint16(view, 12, dosDate);
+  writeUint32(view, 14, entry.crc32);
+  writeUint32(view, 18, entry.size);
+  writeUint32(view, 22, entry.size);
+  writeUint16(view, 26, encodedName.length);
+  writeUint16(view, 28, 0);
+  buffer.set(encodedName, 30);
+  return buffer;
+}
+
+function zipCentralHeader(entry, encodedName, offset, modifiedAt) {
+  const { dosTime, dosDate } = dosDateTime(modifiedAt);
+  const buffer = new Uint8Array(46 + encodedName.length);
+  const view = new DataView(buffer.buffer);
+  writeUint32(view, 0, 0x02014b50);
+  writeUint16(view, 4, 20);
+  writeUint16(view, 6, 20);
+  writeUint16(view, 8, 0);
+  writeUint16(view, 10, 0);
+  writeUint16(view, 12, dosTime);
+  writeUint16(view, 14, dosDate);
+  writeUint32(view, 16, entry.crc32);
+  writeUint32(view, 20, entry.size);
+  writeUint32(view, 24, entry.size);
+  writeUint16(view, 28, encodedName.length);
+  writeUint16(view, 30, 0);
+  writeUint16(view, 32, 0);
+  writeUint16(view, 34, 0);
+  writeUint16(view, 36, 0);
+  writeUint32(view, 38, 0);
+  writeUint32(view, 42, offset);
+  buffer.set(encodedName, 46);
+  return buffer;
+}
+
+function zipEndRecord(entryCount, centralSize, centralOffset) {
+  const buffer = new Uint8Array(22);
+  const view = new DataView(buffer.buffer);
+  writeUint32(view, 0, 0x06054b50);
+  writeUint16(view, 4, 0);
+  writeUint16(view, 6, 0);
+  writeUint16(view, 8, entryCount);
+  writeUint16(view, 10, entryCount);
+  writeUint32(view, 12, centralSize);
+  writeUint32(view, 16, centralOffset);
+  writeUint16(view, 20, 0);
+  return buffer;
+}
+
 function buildJobPartBaseName(fileStem, partIndex) {
   return `${fileStem}_part_${String(partIndex).padStart(4, "0")}`;
 }
@@ -1095,6 +1207,216 @@ async function createArchivePart(rows, formats, baseName, metadata) {
     compression: "DEFLATE",
     compressionOptions: { level: 6 },
   });
+}
+
+function groupRowsForArchive(rows, payload) {
+  const groups = new Map();
+  const fallbackDepartment = asArray(payload.departments ?? payload.department)[0] || "todos";
+  const fallbackMunicipality = asArray(payload.catalogFilters?.municipalities ?? payload.outputMunicipalities ?? payload.municipality)[0] || "todos";
+
+  rows.forEach((row) => {
+    const department = row.departamento || fallbackDepartment;
+    const municipality = row.municipio || fallbackMunicipality;
+    const key = `${department}\u0000${municipality}`;
+    if (!groups.has(key)) {
+      groups.set(key, { department, municipality, rows: [] });
+    }
+    groups.get(key).rows.push(row);
+  });
+
+  return Array.from(groups.values());
+}
+
+async function buildArchiveEntryFiles(rows, formats, basePath, metadata) {
+  const files = [];
+  const manifest = {
+    ...metadata,
+    generatedFormats: [],
+    warnings: Array.from(new Set(metadata?.warnings || [])),
+  };
+
+  if (formats.includes("csv")) {
+    files.push({ path: `${basePath}.csv`, bytes: encodeUtf8(rowsToCsv(rows)) });
+    manifest.generatedFormats.push("csv");
+  }
+
+  if (formats.includes("json")) {
+    files.push({ path: `${basePath}.json`, bytes: encodeUtf8(JSON.stringify(rows, null, 2)) });
+    manifest.generatedFormats.push("json");
+  }
+
+  if (formats.includes("parquet")) {
+    try {
+      files.push({ path: `${basePath}.parquet`, bytes: await rowsToParquet(rows) });
+      manifest.generatedFormats.push("parquet");
+    } catch (error) {
+      manifest.warnings.push(`No fue posible generar Parquet en este lote: ${error?.message || "error desconocido"}.`);
+      if (!formats.includes("csv")) {
+        files.push({ path: `${basePath}.csv`, bytes: encodeUtf8(rowsToCsv(rows)) });
+        manifest.generatedFormats.push("csv");
+      }
+    }
+  }
+
+  files.push({ path: `${basePath}_manifest.json`, bytes: encodeUtf8(JSON.stringify(manifest, null, 2)) });
+  return files;
+}
+
+async function storeArchiveEntry(env, job, file) {
+  const key = `exports/${job.id}/entries/${crypto.randomUUID()}`;
+  const bytes = file.bytes instanceof Uint8Array ? file.bytes : new Uint8Array(file.bytes);
+  await env.EXPORTS_BUCKET.put(key, bytes, {
+    httpMetadata: { contentType: "application/octet-stream", cacheControl: "no-store" },
+    customMetadata: {
+      jobId: job.id,
+      temporary: "true",
+      expiresAt: new Date(Date.now() + EXPORT_OBJECT_TTL_SECONDS * 1000).toISOString(),
+    },
+  });
+  return {
+    path: file.path.replace(/^\/+/, ""),
+    key,
+    size: bytes.byteLength,
+    crc32: crc32(bytes),
+  };
+}
+
+async function storeJobArchiveEntries(env, job, dataset, rows, partIndex, descriptor) {
+  const groups = groupRowsForArchive(rows, job.payload);
+  const stored = [];
+
+  for (const group of groups) {
+    const variable = hierarchyPart(dataset.name, "variable");
+    const department = hierarchyPart(group.department, "departamento");
+    const municipality = hierarchyPart(group.municipality, "municipio");
+    const suffix = String(partIndex).padStart(4, "0");
+    const baseName = `${variable}_${department}_${municipality}_${suffix}`;
+    const basePath = `${variable}/${department}/${municipality}/${baseName}`;
+    const files = await buildArchiveEntryFiles(group.rows, job.effectiveFormats, basePath, {
+      jobId: job.id,
+      datasetId: dataset.id,
+      datasetName: dataset.name,
+      partIndex,
+      pageIndex: descriptor.pageIndex + 1,
+      planIndex: descriptor.planIndex + 1,
+      rowCount: group.rows.length,
+      department: group.department,
+      municipality: group.municipality,
+      formats: job.effectiveFormats,
+      requestedFormats: job.selectedFormats,
+      warnings: job.warnings || [],
+    });
+
+    for (const file of files) {
+      stored.push(await storeArchiveEntry(env, job, file));
+    }
+  }
+
+  job.archiveEntries = (job.archiveEntries || []).concat(stored);
+}
+
+function buildZipAssembly(entries, modifiedAt = new Date()) {
+  const prepared = entries.map((entry) => ({
+    ...entry,
+    encodedName: encodeUtf8(entry.path),
+  }));
+  const centralRecords = [];
+  let offset = 0;
+  prepared.forEach((entry) => {
+    entry.offset = offset;
+    offset += 30 + entry.encodedName.length + entry.size;
+  });
+  const centralOffset = offset;
+  prepared.forEach((entry) => {
+    const record = zipCentralHeader(entry, entry.encodedName, entry.offset, modifiedAt);
+    centralRecords.push(record);
+    offset += record.byteLength;
+  });
+  const centralSize = offset - centralOffset;
+  const endRecord = zipEndRecord(prepared.length, centralSize, centralOffset);
+  const sizeBytes = offset + endRecord.byteLength;
+  return { entries: prepared, centralRecords, centralOffset, centralSize, endRecord, sizeBytes };
+}
+
+function createZipReadableStream(env, assembly, modifiedAt = new Date()) {
+  return new ReadableStream({
+    async start(controller) {
+      try {
+        for (const entry of assembly.entries) {
+          controller.enqueue(zipLocalHeader(entry, entry.encodedName, modifiedAt));
+          if (entry.bytes) {
+            controller.enqueue(entry.bytes);
+            continue;
+          }
+          const object = await env.EXPORTS_BUCKET.get(entry.key);
+          if (!object) {
+            throw new Error(`Archivo temporal no disponible para ${entry.path}.`);
+          }
+          const reader = object.body.getReader();
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            controller.enqueue(value);
+          }
+        }
+        assembly.centralRecords.forEach((record) => controller.enqueue(record));
+        controller.enqueue(assembly.endRecord);
+        controller.close();
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+  });
+}
+
+async function createFinalJobArchive(env, job, dataset, summary) {
+  const fileName = buildJobZipFileName(dataset, job.finishedAt ? new Date(job.finishedAt) : new Date());
+  const key = `exports/${job.id}/${fileName}`;
+  const manifestBytes = encodeUtf8(JSON.stringify({
+    jobId: job.id,
+    datasetId: dataset.id,
+    datasetName: dataset.name,
+    generatedAt: new Date().toISOString(),
+    fileName,
+    rowCount: summary.rowCount,
+    formats: job.effectiveFormats,
+    requestedFormats: job.selectedFormats,
+    warnings: job.warnings || [],
+    hierarchy: "variable/departamento/municipio",
+    entries: (job.archiveEntries || []).map((entry) => ({ path: entry.path, size: entry.size })),
+  }, null, 2));
+  const manifestEntry = {
+    path: "_manifest.json",
+    bytes: manifestBytes,
+    size: manifestBytes.byteLength,
+    crc32: crc32(manifestBytes),
+  };
+  const archiveEntries = [manifestEntry].concat(job.archiveEntries || []);
+  const modifiedAt = new Date();
+  const assembly = buildZipAssembly(archiveEntries, modifiedAt);
+  await env.EXPORTS_BUCKET.put(key, createZipReadableStream(env, assembly, modifiedAt), {
+    httpMetadata: {
+      contentType: "application/zip",
+      cacheControl: "no-store",
+      contentDisposition: `attachment; filename="${fileName}"`,
+    },
+    customMetadata: {
+      jobId: job.id,
+      expiresAt: new Date(Date.now() + EXPORT_OBJECT_TTL_SECONDS * 1000).toISOString(),
+    },
+  });
+
+  await Promise.all((job.archiveEntries || []).map((entry) => env.EXPORTS_BUCKET.delete(entry.key).catch(() => null)));
+  job.archiveEntries = [];
+  job.parts = [{
+    index: 1,
+    key,
+    fileName,
+    rowCount: summary.rowCount,
+    sizeBytes: assembly.sizeBytes,
+    formats: job.effectiveFormats,
+    downloadPath: `/api/jobs/${job.id}/parts/1`,
+  }];
 }
 
 function buildJobResponse(job) {
@@ -1214,13 +1536,18 @@ async function planExportJob(env, job) {
   job.completedPages = 0;
   job.processedRows = 0;
   job.parts = [];
+  job.archiveEntries = [];
   job.summaryState = createAccumulatorState();
   job.planCursor = { planIndex: 0, pageIndex: 0 };
 }
 
 async function createNoDataJobArchive(env, job, dataset) {
-  const baseName = `${job.fileStem}_sin_datos`;
-  const archiveBuffer = await createArchivePart([], job.effectiveFormats, baseName, {
+  job.status = "completed";
+  job.finishedAt = new Date().toISOString();
+  const summary = finalizeAccumulatorState(job.summaryState, 0);
+  const variable = hierarchyPart(dataset.name, "variable");
+  const basePath = `${variable}/sin_datos/${variable}_sin_datos`;
+  const files = await buildArchiveEntryFiles([], job.effectiveFormats, basePath, {
     jobId: job.id,
     datasetId: dataset.id,
     datasetName: dataset.name,
@@ -1230,38 +1557,21 @@ async function createNoDataJobArchive(env, job, dataset) {
     warnings: job.warnings || [],
     message: "La consulta no encontro filas para los filtros seleccionados.",
   });
-  const key = `exports/${job.id}/${baseName}.zip`;
-  await env.EXPORTS_BUCKET.put(key, archiveBuffer, {
-    httpMetadata: {
-      contentType: "application/zip",
-      cacheControl: "no-store",
-      contentDisposition: `attachment; filename="${baseName}.zip"`,
-    },
-    customMetadata: {
-      jobId: job.id,
-      expiresAt: new Date(Date.now() + EXPORT_OBJECT_TTL_SECONDS * 1000).toISOString(),
-    },
-  });
 
-  const summary = finalizeAccumulatorState(job.summaryState, 0);
-  job.parts = [{
-    index: 1,
-    key,
-    fileName: `${baseName}.zip`,
-    rowCount: 0,
-    sizeBytes: archiveBuffer.byteLength,
-    formats: job.effectiveFormats,
-    downloadPath: `/api/jobs/${job.id}/parts/1`,
-  }];
+  job.archiveEntries = [];
+  for (const file of files) {
+    job.archiveEntries.push(await storeArchiveEntry(env, job, file));
+  }
+  await createFinalJobArchive(env, job, dataset, summary);
   job.metrics = {
-    fileName: `${baseName}.zip`,
+    fileName: job.parts[0]?.fileName || buildJobZipFileName(dataset),
     rowCount: 0,
     stationCount: summary.stationCount,
     municipalityCount: summary.municipalityCount,
     departmentCount: summary.departmentCount,
     zoneCount: summary.zoneCount,
     processingMs: 0,
-    sizeBytes: archiveBuffer.byteLength,
+    sizeBytes: job.parts[0]?.sizeBytes || 0,
     observedStart: summary.observedStart,
     observedEnd: summary.observedEnd,
     queryPlans: job.plan?.queryPlans || 0,
@@ -1304,61 +1614,30 @@ async function processExportJobBatch(env, job) {
       continue;
     }
 
-    const partIndex = (job.parts || []).length + 1;
-    const baseName = buildJobPartBaseName(job.fileStem, partIndex);
-    const archiveBuffer = await createArchivePart(normalized, job.effectiveFormats, baseName, {
-      jobId: job.id,
-      datasetId: dataset.id,
-      datasetName: dataset.name,
-      partIndex,
-      pageIndex: descriptor.pageIndex + 1,
-      planIndex: descriptor.planIndex + 1,
-      rowCount: normalized.length,
-      formats: job.effectiveFormats,
-      requestedFormats: job.selectedFormats,
-      warnings: job.warnings || [],
-    });
-    const key = `exports/${job.id}/${baseName}.zip`;
-    await env.EXPORTS_BUCKET.put(key, archiveBuffer, {
-      httpMetadata: {
-        contentType: "application/zip",
-        cacheControl: "no-store",
-        contentDisposition: `attachment; filename="${baseName}.zip"`,
-      },
-      customMetadata: {
-        jobId: job.id,
-        expiresAt: new Date(Date.now() + EXPORT_OBJECT_TTL_SECONDS * 1000).toISOString(),
-      },
-    });
+    const partIndex = job.completedPages + 1;
+    await storeJobArchiveEntries(env, job, dataset, normalized, partIndex, descriptor);
 
     job.summaryState = mergeAccumulatorState(job.summaryState, normalized, dataset.dateColumn);
     job.processedRows += normalized.length;
     job.completedPages += 1;
-    job.parts.push({
-      index: partIndex,
-      key,
-      fileName: `${baseName}.zip`,
-      rowCount: normalized.length,
-      sizeBytes: archiveBuffer.byteLength,
-      formats: job.effectiveFormats,
-      downloadPath: `/api/jobs/${job.id}/parts/${partIndex}`,
-    });
 
     advanceJobCursor(job, planFinished);
     processedAnyPage = true;
   }
 
   if (!processedAnyPage || !getNextPageDescriptor(job)) {
-    if (!(job.parts || []).length) {
+    if (!(job.archiveEntries || []).length) {
       await createNoDataJobArchive(env, job, dataset);
+      return;
     }
 
     const summary = finalizeAccumulatorState(job.summaryState, job.processedRows || 0);
     const startedAt = job.startedAt ? new Date(job.startedAt).valueOf() : Date.now();
     job.status = "completed";
     job.finishedAt = new Date().toISOString();
+    await createFinalJobArchive(env, job, dataset, summary);
     job.metrics = {
-      fileName: `${job.fileStem}_partes`,
+      fileName: job.parts[0]?.fileName || buildJobZipFileName(dataset),
       rowCount: summary.rowCount,
       stationCount: summary.stationCount,
       municipalityCount: summary.municipalityCount,
@@ -1471,6 +1750,7 @@ class ExportJobDurableObject {
         completedPages: 0,
         processedRows: 0,
         parts: [],
+        archiveEntries: [],
         summaryState: createAccumulatorState(),
         planCursor: { planIndex: 0, pageIndex: 0 },
         metrics: null,

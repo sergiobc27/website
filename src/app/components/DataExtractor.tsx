@@ -512,7 +512,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     appendLog(
       job.processedRows > 0 ? 'SUCCESS' : 'INFO',
       job.processedRows > 0
-        ? `Job listo: ${job.parts.length} archivo(s), ${job.processedRows.toLocaleString('es-CO')} filas y ${formatDuration(job.metrics?.processingMs || 0)}. Usa el boton de descarga para guardar el ZIP.`
+        ? `Job listo: ZIP unico organizado, ${job.processedRows.toLocaleString('es-CO')} filas y ${formatDuration(job.metrics?.processingMs || 0)}. Usa el boton de descarga para guardarlo.`
         : 'La consulta no encontro filas con esos filtros. Se genero un ZIP con manifest y archivo vacio para dejar evidencia de la ejecucion.'
     );
   }, [appendLog, catalogFilters, datasetId, selectedDataset?.name, selectedDepartments]);
@@ -1082,7 +1082,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
               icon={FileSearch}
             />
             <MetricCard title="Paginas" value={runtimePages} icon={Layers} />
-            <MetricCard title="Partes ZIP" value={runtimeParts} icon={FileArchive} />
+            <MetricCard title="ZIP" value={readyDownloadJob ? '1 archivo' : runtimeParts} icon={FileArchive} />
             <MetricCard title="Estaciones" value={String(downloadMetrics?.stationCount || preview?.summary.stationCount || 0)} icon={MapPin} />
             <MetricCard title="Tiempo" value={formatDuration(runtimeElapsedMs)} icon={Clock3} />
             <MetricCard title="Peso" value={formatBytes(downloadMetrics?.sizeBytes || 0)} icon={Download} />
@@ -1151,11 +1151,11 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           <div className="bg-card border border-border rounded-xl p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
             <h3 className="text-card-foreground font-bold mb-4">Salida esperada</h3>
             <div className="space-y-3 text-sm">
-              <SummaryRow label="Entrega" value="ZIP comprimido con particion automatica" />
+              <SummaryRow label="Entrega" value="ZIP unico organizado por carpetas" />
               <SummaryRow label="Formatos" value={selectionSummary.formats.length ? selectionSummary.formats.join(', ').toUpperCase() : 'Sin seleccion'} />
               <SummaryRow label="Pool de estaciones" value={String(downloadMetrics?.stationPoolSize || preview?.stationPoolSize || 0)} />
               <SummaryRow label="Planes de consulta" value={String(downloadMetrics?.queryPlans || preview?.queryPlans || 0)} />
-              <SummaryRow label="Partes esperadas" value={transferProgress ? String(transferProgress.totalParts) : String(downloadMetrics?.archivePartCount || 0)} />
+              <SummaryRow label="ZIP esperado" value={readyDownloadJob || downloadMetrics ? '1 archivo' : 'Pendiente'} />
               <SummaryRow label="Municipios cubiertos" value={String(downloadMetrics?.municipalityCount || preview?.summary.municipalityCount || 0)} />
             </div>
           </div>
