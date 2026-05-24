@@ -57,6 +57,16 @@ Secrets requeridos en GitHub:
 
 El token debe incluir permisos de Workers y `Workers R2 Storage Write` para poder aplicar lifecycle.
 
+Secret opcional recomendado en Cloudflare Worker:
+
+- `SOCRATA_APP_TOKEN`: token SODA/Socrata para enviar como `X-App-Token` en las consultas a `datos.gov.co`.
+
+Configuralo sin subirlo al repositorio:
+
+```bash
+npx wrangler secret put SOCRATA_APP_TOKEN
+```
+
 ## Controles de costo $0.00
 
 - No se permiten descargas globales: cada preview/exportacion debe incluir al menos un departamento valido.

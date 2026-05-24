@@ -22,6 +22,7 @@ import { EmptyState } from './EmptyState';
 
 const HISTORY_KEY = 'ideam-history';
 const PRODUCTION_API_ORIGIN = 'https://ideam.sergiobc.com';
+const MAX_OPERATION_LOGS = 80;
 
 type StepId = 'consent' | 'variable' | 'territory' | 'advanced' | 'time' | 'execute';
 type OutputFormat = 'csv' | 'json' | 'parquet';
@@ -403,6 +404,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   const [elapsedMs, setElapsedMs] = useState(0);
   const handledJobIdsRef = useRef<Set<string>>(new Set());
   const cleanupScheduledPartsRef = useRef<Set<string>>(new Set());
+  const pollFailuresRef = useRef(0);
   const [deletedPartKeys, setDeletedPartKeys] = useState<string[]>([]);
 
   const steps = useMemo(
@@ -450,7 +452,13 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   const previewColumns = preview?.rows.length ? Object.keys(preview.rows[0]).slice(0, 8) : [];
 
   const appendLog = useCallback((type: LogLevel, message: string) => {
-    setLogs((current) => [...current, { type, message }]);
+    setLogs((current) => {
+      const last = current[current.length - 1];
+      if (last?.type === type && last.message === message) {
+        return current;
+      }
+      return [...current.slice(-(MAX_OPERATION_LOGS - 1)), { type, message }];
+    });
   }, []);
 
   const triggerBrowserDownload = useCallback((downloadPath: string, fileName: string) => {
@@ -666,6 +674,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         );
         if (cancelled) return;
 
+        pollFailuresRef.current = 0;
         setCurrentJob(data);
         setTransferProgress({
           totalPages: Math.max(data.totalPages, 1),
@@ -695,12 +704,18 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           setProgress(100);
           setActiveTask('Error en descarga');
           setIsBusy(false);
-          throw new Error(data.error || 'El job de exportacion fallo.');
+          setCurrentJobId(null);
+          appendLog('ERROR', data.error || 'El job de exportacion fallo.');
         }
       } catch (error) {
         if (cancelled) return;
+        pollFailuresRef.current += 1;
         setIsBusy(false);
         appendLog('ERROR', error instanceof Error ? error.message : 'Error consultando el job.');
+        if (pollFailuresRef.current >= 3) {
+          setCurrentJobId(null);
+          setActiveTask('No fue posible consultar el job');
+        }
       }
     };
 
@@ -862,6 +877,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       setTransferProgress(null);
       setCurrentJob(null);
       setCurrentJobId(null);
+      pollFailuresRef.current = 0;
       setDeletedPartKeys([]);
       cleanupScheduledPartsRef.current.clear();
       setProgress(2);

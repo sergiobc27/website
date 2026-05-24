@@ -63,10 +63,20 @@ test('rowsToCsv escapes commas, quotes and line breaks', () => {
 
 test('getConfig keeps MAX_EXPORT_ROWS available but nullable by default', () => {
   const defaultConfig = getConfig({});
-  const customConfig = getConfig({ MAX_EXPORT_ROWS: '2500', EXPORT_PAGE_SIZE: '800' });
+  const customConfig = getConfig({
+    MAX_EXPORT_ROWS: '2500',
+    EXPORT_PAGE_SIZE: '800',
+    SOCRATA_APP_TOKEN: 'token-123',
+    SOCRATA_TIMEOUT_MS: '12000',
+  });
   assert.equal(defaultConfig.maxExportRows, null);
+  assert.equal(defaultConfig.socrataAppToken, '');
+  assert.equal(defaultConfig.socrataTimeoutMs, 30000);
   assert.equal(customConfig.maxExportRows, 2500);
   assert.equal(customConfig.exportPageSize, 800);
+  assert.equal(customConfig.socrataAppToken, 'token-123');
+  assert.equal(customConfig.socrataTimeoutMs, 12000);
+  assert.equal(getConfig({ SODA_APP_TOKEN: 'legacy-token' }).socrataAppToken, 'legacy-token');
 });
 
 test('classifyCoverageRows separates configured and discovered variants', () => {
@@ -191,6 +201,43 @@ test('handleExportPlan retries transient Socrata 500 responses', async () => {
     assert.equal(response.status, 200);
     assert.equal(data.rowCount, 9);
     assert.equal(countCalls, 2);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('handleExportPlan sends Socrata app token header when configured', async () => {
+  const originalFetch = global.fetch;
+  const appTokens = [];
+
+  global.fetch = async (_url, init = {}) => {
+    const headers = new Headers(init.headers || {});
+    appTokens.push(headers.get('X-App-Token'));
+    return new Response(JSON.stringify([{ total: '1' }]), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  try {
+    const request = new Request('https://example.com/api/export-plan', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        datasetId: 's54a-sgyg',
+        departments: ['ATLANTICO'],
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+      }),
+    });
+
+    const response = await handleExportPlan(request, {
+      EXPORT_PAGE_SIZE: '50000',
+      SOCRATA_APP_TOKEN: 'secret-token',
+    });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(appTokens, ['secret-token']);
   } finally {
     global.fetch = originalFetch;
   }
@@ -410,6 +457,15 @@ test('ExportJobDurableObject creates downloadable parts end to end', async () =>
   };
 
   const originalFetch = global.fetch;
+  const originalFixedLengthStream = globalThis.FixedLengthStream;
+  const fixedLengths = [];
+  globalThis.FixedLengthStream = class {
+    constructor(length) {
+      fixedLengths.push(Number(length));
+      return new TransformStream();
+    }
+  };
+
   global.fetch = async (url) => {
     const parsed = new URL(String(url));
     const select = parsed.searchParams.get('$select');
@@ -464,6 +520,8 @@ test('ExportJobDurableObject creates downloadable parts end to end', async () =>
     assert.equal(statusData.parts.length, 1);
     assert.equal(statusData.processedRows, 2);
     assert.match(statusData.parts[0].fileName, /^precipitacion_\d{8}\.zip$/);
+    assert.equal(fixedLengths.length, 1);
+    assert.equal(fixedLengths[0], statusData.parts[0].sizeBytes);
 
     const partResponse = await durableObject.fetch(new Request('https://export-job/parts/1'));
     assert.equal(partResponse.status, 200);
@@ -485,6 +543,11 @@ test('ExportJobDurableObject creates downloadable parts end to end', async () =>
     assert.equal(secondPartResponse.status, 410);
   } finally {
     global.fetch = originalFetch;
+    if (originalFixedLengthStream === undefined) {
+      delete globalThis.FixedLengthStream;
+    } else {
+      globalThis.FixedLengthStream = originalFixedLengthStream;
+    }
   }
 });
 

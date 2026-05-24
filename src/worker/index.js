@@ -11,6 +11,7 @@ const EXPORT_RATE_WINDOW_MS = 60 * 60 * 1000;
 const EXPORT_OBJECT_TTL_SECONDS = 60 * 60;
 const SOCRATA_MAX_ATTEMPTS = 4;
 const SOCRATA_RETRY_BASE_MS = 350;
+const SOCRATA_TIMEOUT_MS = 30000;
 
 const DEFAULT_CONFIG = {
   socrataDomain: "https://www.datos.gov.co",
@@ -116,6 +117,8 @@ function getConfig(env) {
     exportPageSize: positiveNumber(env?.EXPORT_PAGE_SIZE, DEFAULT_CONFIG.exportPageSize),
     maxExportRows: positiveNumber(env?.MAX_EXPORT_ROWS, DEFAULT_CONFIG.maxExportRows),
     maxCatalogStations: env?.MAX_CATALOG_STATIONS ? positiveNumber(env.MAX_CATALOG_STATIONS, DEFAULT_CONFIG.maxCatalogStations) : DEFAULT_CONFIG.maxCatalogStations,
+    socrataAppToken: env?.SOCRATA_APP_TOKEN || env?.SODA_APP_TOKEN || "",
+    socrataTimeoutMs: positiveNumber(env?.SOCRATA_TIMEOUT_MS, SOCRATA_TIMEOUT_MS),
   };
 }
 
@@ -349,9 +352,16 @@ async function socrataGet(config, datasetId, params) {
 
   let lastError = null;
   for (let attempt = 1; attempt <= SOCRATA_MAX_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(`Socrata timeout after ${config.socrataTimeoutMs}ms`), config.socrataTimeoutMs);
     try {
+      const headers = { accept: "application/json" };
+      if (config.socrataAppToken) {
+        headers["X-App-Token"] = config.socrataAppToken;
+      }
       const response = await fetch(url.toString(), {
-        headers: { accept: "application/json" },
+        headers,
+        signal: controller.signal,
       });
       if (response.ok) {
         return response.json();
@@ -368,6 +378,8 @@ async function socrataGet(config, datasetId, params) {
       if (attempt === SOCRATA_MAX_ATTEMPTS) {
         break;
       }
+    } finally {
+      clearTimeout(timeout);
     }
 
     await new Promise((resolve) => setTimeout(resolve, SOCRATA_RETRY_BASE_MS * attempt));
@@ -1369,6 +1381,16 @@ function createZipReadableStream(env, assembly, modifiedAt = new Date()) {
   });
 }
 
+function createFixedLengthZipReadableStream(env, assembly, modifiedAt = new Date()) {
+  if (typeof FixedLengthStream !== "function") {
+    return createZipReadableStream(env, assembly, modifiedAt);
+  }
+
+  const { readable, writable } = new FixedLengthStream(assembly.sizeBytes);
+  createZipReadableStream(env, assembly, modifiedAt).pipeTo(writable).catch(() => null);
+  return readable;
+}
+
 async function createFinalJobArchive(env, job, dataset, summary) {
   const fileName = buildJobZipFileName(dataset, job.finishedAt ? new Date(job.finishedAt) : new Date());
   const key = `exports/${job.id}/${fileName}`;
@@ -1394,7 +1416,7 @@ async function createFinalJobArchive(env, job, dataset, summary) {
   const archiveEntries = [manifestEntry].concat(job.archiveEntries || []);
   const modifiedAt = new Date();
   const assembly = buildZipAssembly(archiveEntries, modifiedAt);
-  await env.EXPORTS_BUCKET.put(key, createZipReadableStream(env, assembly, modifiedAt), {
+  await env.EXPORTS_BUCKET.put(key, createFixedLengthZipReadableStream(env, assembly, modifiedAt), {
     httpMetadata: {
       contentType: "application/zip",
       cacheControl: "no-store",

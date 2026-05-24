@@ -15,7 +15,8 @@
     "SOCRATA_DOMAIN": "https://www.datos.gov.co",
     "CATALOG_DATASET_ID": "hp9r-jxuu",
     "PAGE_LIMIT": "50000",
-    "PREVIEW_LIMIT": "200"
+    "PREVIEW_LIMIT": "200",
+    "SOCRATA_TIMEOUT_MS": "30000"
   },
   "durable_objects": {
     "bindings": [
