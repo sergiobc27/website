@@ -72,7 +72,7 @@ npx wrangler secret put SOCRATA_APP_TOKEN
 - No se permiten descargas globales: cada preview/exportacion debe incluir al menos un departamento valido.
 - `/api/jobs` aplica rate limiting estricto: 30 exportaciones por hora por IP, con respuesta `429` y `Retry-After`.
 - Los ZIP se comprimen antes de subirse a R2 y se guardan bajo `exports/<jobId>/`.
-- Despues de que la interfaz descarga cada parte, llama `DELETE /api/jobs/:id/parts/:partIndex` para borrar el objeto de R2.
+- Cada ZIP queda disponible para descargas repetidas durante la ventana temporal de 1 hora.
 - El bucket tiene lifecycle de respaldo para borrar cualquier objeto `exports/` con mas de 1 hora.
 - La ruta sincronica `/api/export` queda deshabilitada; el flujo soportado es asincrono por `/api/jobs`.
 

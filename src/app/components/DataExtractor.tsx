@@ -23,6 +23,7 @@ import { EmptyState } from './EmptyState';
 const HISTORY_KEY = 'ideam-history';
 const PRODUCTION_API_ORIGIN = 'https://ideam.sergiobc.com';
 const MAX_OPERATION_LOGS = 80;
+const EXPORT_AVAILABILITY_MS = 60 * 60 * 1000;
 
 type StepId = 'consent' | 'variable' | 'territory' | 'advanced' | 'time' | 'execute';
 type OutputFormat = 'csv' | 'json' | 'parquet';
@@ -109,6 +110,7 @@ interface ExportJobPart {
   sizeBytes: number;
   formats: string[];
   downloadPath: string;
+  expiresAt?: string;
 }
 
 interface ExportJobStatusResponse {
@@ -204,6 +206,9 @@ interface HistoryEntry extends DownloadMetrics {
   format: string;
   departments: string[];
   catalogFilters: Record<string, string[]>;
+  jobId?: string;
+  downloadPath?: string;
+  availableUntil?: string;
 }
 
 function readHistory(): HistoryEntry[] {
@@ -235,8 +240,7 @@ function formatBytes(value: number) {
 
 function formatDuration(value: number) {
   if (!Number.isFinite(value) || value <= 0) return '0 s';
-  if (value < 1000) return `${Math.round(value)} ms`;
-  if (value < 60000) return `${(value / 1000).toFixed(1)} s`;
+  if (value < 60000) return `${(value / 1000).toFixed(value < 10000 ? 1 : 0)} s`;
 
   const totalSeconds = Math.round(value / 1000);
   const minutes = Math.floor(totalSeconds / 60);
@@ -275,7 +279,7 @@ async function parseJsonResponse<T>(response: Response, fallbackMessage: string)
   if (!contentType.includes('application/json')) {
     const isHtml = bodyText.trimStart().startsWith('<!DOCTYPE') || bodyText.trimStart().startsWith('<html');
     const detail = isHtml
-      ? 'La ruta API devolvio HTML. Revisa que estes usando ideam.sergiobc.com y no una ruta cacheada o dominio incorrecto.'
+      ? 'El servicio respondio con una pagina HTML en vez de datos JSON. Recarga la pagina e intenta de nuevo.'
       : bodyText.slice(0, 240);
     throw new Error(`${fallbackMessage} ${detail}`);
   }
@@ -288,7 +292,14 @@ async function parseJsonResponse<T>(response: Response, fallbackMessage: string)
 }
 
 async function apiJson<T>(path: string, init: RequestInit | undefined, fallbackMessage: string) {
-  const response = await fetch(apiUrl(path), init);
+  const response = await fetch(apiUrl(path), {
+    ...init,
+    cache: 'no-store',
+    headers: {
+      accept: 'application/json',
+      ...(init?.headers || {}),
+    },
+  });
   const data = await parseJsonResponse<T>(response, fallbackMessage);
   if (!response.ok) {
     throw new Error(data.error || fallbackMessage);
@@ -403,9 +414,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   const [operationStartedAt, setOperationStartedAt] = useState<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   const handledJobIdsRef = useRef<Set<string>>(new Set());
-  const cleanupScheduledPartsRef = useRef<Set<string>>(new Set());
   const pollFailuresRef = useRef(0);
-  const [deletedPartKeys, setDeletedPartKeys] = useState<string[]>([]);
 
   const steps = useMemo(
     () => [
@@ -471,33 +480,10 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     link.remove();
   }, []);
 
-  const cleanupDownloadedPart = useCallback(async (part: ExportJobPart, partKey: string) => {
-    try {
-      const cleanupResponse = await fetch(apiUrl(part.downloadPath), { method: 'DELETE' });
-      if (cleanupResponse.ok) {
-        setDeletedPartKeys((current) => (current.includes(partKey) ? current : [...current, partKey]));
-        appendLog('SUCCESS', `Archivo temporal eliminado de R2: ${part.fileName}.`);
-      } else {
-        appendLog('INFO', `El archivo temporal ${part.fileName} quedara cubierto por la limpieza automatica de 1 hora.`);
-      }
-    } catch {
-      appendLog('INFO', `No se pudo confirmar limpieza inmediata de ${part.fileName}; lifecycle lo eliminara automaticamente.`);
-    }
-  }, [appendLog]);
-
   const downloadJobPart = useCallback((job: ExportJobStatusResponse, part: ExportJobPart) => {
-    const partKey = `${job.jobId}:${part.index}`;
     triggerBrowserDownload(apiUrl(part.downloadPath), part.fileName);
-    appendLog('SUCCESS', `Descarga iniciada: ${part.fileName}.`);
-
-    if (!cleanupScheduledPartsRef.current.has(partKey)) {
-      cleanupScheduledPartsRef.current.add(partKey);
-      appendLog('INFO', `La limpieza de R2 para ${part.fileName} se ejecutara en unos segundos.`);
-      window.setTimeout(() => {
-        void cleanupDownloadedPart(part, partKey);
-      }, 45000);
-    }
-  }, [appendLog, cleanupDownloadedPart, triggerBrowserDownload]);
+    appendLog('SUCCESS', `Descarga iniciada: ${part.fileName}. El enlace seguira disponible durante 1 hora.`);
+  }, [appendLog, triggerBrowserDownload]);
 
   const finalizeCompletedJob = useCallback(async (job: ExportJobStatusResponse) => {
     if (handledJobIdsRef.current.has(job.jobId)) return;
@@ -506,6 +492,9 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     Array.from(new Set(job.warnings)).forEach((warning) => appendLog('INFO', warning));
 
     if (job.metrics) {
+      const firstPart = job.parts[0];
+      const finishedAtMs = job.finishedAt ? new Date(job.finishedAt).valueOf() : Date.now();
+      const availableUntil = firstPart?.expiresAt || new Date(finishedAtMs + EXPORT_AVAILABILITY_MS).toISOString();
       setDownloadMetrics(job.metrics);
       saveHistory({
         timestamp: new Date().toLocaleString('es-CO'),
@@ -513,6 +502,9 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         format: `JOB (${job.effectiveFormats.join(', ').toUpperCase()})`,
         departments: selectedDepartments,
         catalogFilters,
+        jobId: job.jobId,
+        downloadPath: firstPart?.downloadPath,
+        availableUntil,
         ...job.metrics,
       });
     }
@@ -521,7 +513,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       job.processedRows > 0 ? 'SUCCESS' : 'INFO',
       job.processedRows > 0
         ? `Job listo: ZIP unico organizado, ${job.processedRows.toLocaleString('es-CO')} filas y ${formatDuration(job.metrics?.processingMs || 0)}. Usa el boton de descarga para guardarlo.`
-        : 'La consulta no encontro filas con esos filtros. Se genero un ZIP con manifest y archivo vacio para dejar evidencia de la ejecucion.'
+        : 'La consulta no encontro filas con esos filtros. Se genero un ZIP con archivos vacios para dejar evidencia de la ejecucion.'
     );
   }, [appendLog, catalogFilters, datasetId, selectedDataset?.name, selectedDepartments]);
 
@@ -620,6 +612,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       );
 
       const nextOptions: Record<string, OptionItem[]> = {};
+      const failedLabels: string[] = [];
       results.forEach((result, index) => {
         if (result.status === 'fulfilled') {
           nextOptions[result.value.key] = result.value.options;
@@ -627,11 +620,18 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         }
         const definition = definitions[index];
         const message = result.reason instanceof Error ? result.reason.message : `No fue posible cargar ${definition.label}.`;
+        failedLabels.push(definition.label);
         nextOptions[definition.key] = [];
         setCatalogOptionStatus((current) => ({ ...current, [definition.key]: 'error' }));
         setCatalogOptionErrors((current) => ({ ...current, [definition.key]: message }));
-        appendLog('ERROR', message);
       });
+
+      if (failedLabels.length) {
+        appendLog(
+          'INFO',
+          `No se cargaron ${failedLabels.length} grupos de filtros avanzados. Puedes continuar con los filtros disponibles o recargar la pagina.`
+        );
+      }
 
       setCatalogFilters((current) => {
         const pruned: Record<string, string[]> = {};
@@ -852,7 +852,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       setActiveTask('Vista previa completada');
       appendLog(
         'SUCCESS',
-        `Vista previa completada: ${data.rowCount.toLocaleString('es-CO')} filas, ${data.summary.stationCount} estaciones, ${data.processingMs} ms.`
+        `Vista previa completada: ${data.rowCount.toLocaleString('es-CO')} filas, ${data.summary.stationCount} estaciones, ${formatDuration(data.processingMs)}.`
       );
     } catch (error) {
       setProgress(100);
@@ -878,8 +878,6 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       setCurrentJob(null);
       setCurrentJobId(null);
       pollFailuresRef.current = 0;
-      setDeletedPartKeys([]);
-      cleanupScheduledPartsRef.current.clear();
       setProgress(2);
       setActiveTask('Creando job de exportacion...');
 
@@ -1112,7 +1110,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
               <div>
                 <h3 className="text-card-foreground font-bold">ZIP listo para descargar</h3>
                 <p className="text-sm text-muted-foreground">
-                  La descarga se inicia con un clic directo del usuario para evitar bloqueos del navegador.
+                  Puedes descargar el ZIP las veces que necesites mientras siga disponible.
                 </p>
               </div>
               <span className="rounded-full border border-success/30 bg-success/10 px-3 py-1 text-xs font-semibold text-success">
@@ -1122,14 +1120,12 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
               {readyDownloadJob.parts.map((part) => {
                 const partKey = `${readyDownloadJob.jobId}:${part.index}`;
-                const wasDeleted = deletedPartKeys.includes(partKey);
                 return (
                   <button
                     key={partKey}
                     type="button"
                     onClick={() => downloadJobPart(readyDownloadJob, part)}
-                    disabled={wasDeleted}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-4 py-3 text-left transition-all hover:border-accent/40 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-4 py-3 text-left transition-all hover:border-accent/40"
                   >
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-semibold text-card-foreground">{part.fileName}</span>
@@ -1219,7 +1215,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
                   <MetricCard title="Muestra" value={String(preview.rows.length)} icon={Search} />
                   <MetricCard title="Estaciones" value={String(preview.summary.stationCount)} icon={MapPin} />
                   <MetricCard title="Municipios" value={String(preview.summary.municipalityCount)} icon={Layers} />
-                  <MetricCard title="Tiempo" value={`${preview.processingMs} ms`} icon={TimerReset} />
+                  <MetricCard title="Tiempo" value={formatDuration(preview.processingMs)} icon={TimerReset} />
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -1261,7 +1257,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
             ) : (
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard title="Filas" value={downloadMetrics.rowCount.toLocaleString('es-CO')} icon={Database} />
-                <MetricCard title="Tiempo total" value={`${downloadMetrics.processingMs} ms`} icon={Clock3} />
+                <MetricCard title="Tiempo total" value={formatDuration(downloadMetrics.processingMs)} icon={Clock3} />
                 <MetricCard title="Peso ZIP" value={formatBytes(downloadMetrics.sizeBytes)} icon={FileArchive} />
                 <MetricCard title="Estaciones" value={String(downloadMetrics.stationCount)} icon={MapPin} />
                 <MetricCard title="Municipios" value={String(downloadMetrics.municipalityCount)} icon={Layers} />

@@ -16,6 +16,13 @@ interface HistoryEntry {
   fileName: string;
 }
 
+function formatDuration(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return '0 s';
+  if (value < 60000) return `${(value / 1000).toFixed(value < 10000 ? 1 : 0)} s`;
+  const totalSeconds = Math.round(value / 1000);
+  return `${Math.floor(totalSeconds / 60)}m ${String(totalSeconds % 60).padStart(2, '0')}s`;
+}
+
 export function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [datasets, setDatasets] = useState<Array<{ id: string; name: string }>>([]);
@@ -24,7 +31,10 @@ export function Dashboard() {
   useEffect(() => {
     const load = async () => {
       try {
-        const response = await fetch('/api/meta');
+        const response = await fetch('/api/meta', {
+          cache: 'no-store',
+          headers: { accept: 'application/json' },
+        });
         const data = await response.json();
         if (response.ok) {
           setDatasets(data.datasets || []);
@@ -70,7 +80,7 @@ export function Dashboard() {
         <MetricCard icon={Database} title="Datasets disponibles" value={String(datasets.length)} subtitle="Catalogo operativo" />
         <MetricCard icon={Download} title="Filas descargadas" value={totals.rows.toLocaleString('es-CO')} subtitle={`${history.length} ejecuciones`} />
         <MetricCard icon={MapPin} title="Estaciones procesadas" value={totals.stations.toLocaleString('es-CO')} subtitle="Suma del historial local" />
-        <MetricCard icon={Clock3} title="Tiempo medio" value={`${totals.avgTimeMs} ms`} subtitle="Promedio por descarga" />
+        <MetricCard icon={Clock3} title="Tiempo medio" value={formatDuration(totals.avgTimeMs)} subtitle="Promedio por descarga" />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -107,7 +117,7 @@ export function Dashboard() {
           <h3 className="mb-4 font-bold text-card-foreground">Impacto visible</h3>
           <div className="space-y-4 text-sm">
             <SummaryRow label="Ultima ejecucion" value={history[0]?.timestamp || 'Sin registros'} />
-            <SummaryRow label="Tiempo total acumulado" value={`${totals.timeMs.toLocaleString('es-CO')} ms`} />
+            <SummaryRow label="Tiempo total acumulado" value={formatDuration(totals.timeMs)} />
             <SummaryRow
               label="Mayor volumen descargado"
               value={history.length ? `${Math.max(...history.map((item) => Number(item.rowCount || 0))).toLocaleString('es-CO')} filas` : 'Sin datos'}
@@ -142,7 +152,7 @@ export function Dashboard() {
                 </div>
                 <div className="text-xs text-muted-foreground sm:text-right">
                   <p>{item.format.toUpperCase()}</p>
-                  <p>{item.processingMs} ms</p>
+                  <p>{formatDuration(item.processingMs)}</p>
                 </div>
               </div>
             ))}

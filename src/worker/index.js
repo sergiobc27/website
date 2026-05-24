@@ -1181,38 +1181,26 @@ function finalizeAccumulatorState(state, rowCount) {
   };
 }
 
-async function createArchivePart(rows, formats, baseName, metadata) {
+async function createArchivePart(rows, formats, baseName) {
   const zip = new JSZip();
-  const manifest = {
-    ...metadata,
-    generatedFormats: [],
-    warnings: Array.from(new Set(metadata?.warnings || [])),
-  };
 
   if (formats.includes("csv")) {
     zip.file(`${baseName}.csv`, rowsToCsv(rows));
-    manifest.generatedFormats.push("csv");
   }
 
   if (formats.includes("json")) {
     zip.file(`${baseName}.json`, JSON.stringify(rows, null, 2));
-    manifest.generatedFormats.push("json");
   }
 
   if (formats.includes("parquet")) {
     try {
       zip.file(`${baseName}.parquet`, await rowsToParquet(rows));
-      manifest.generatedFormats.push("parquet");
     } catch (error) {
-      manifest.warnings.push(`No fue posible generar Parquet en este lote: ${error?.message || "error desconocido"}.`);
       if (!formats.includes("csv")) {
         zip.file(`${baseName}.csv`, rowsToCsv(rows));
-        manifest.generatedFormats.push("csv");
       }
     }
   }
-
-  zip.file(`${baseName}_manifest.json`, JSON.stringify(manifest, null, 2));
 
   return zip.generateAsync({
     type: "uint8array",
@@ -1239,38 +1227,27 @@ function groupRowsForArchive(rows, payload) {
   return Array.from(groups.values());
 }
 
-async function buildArchiveEntryFiles(rows, formats, basePath, metadata) {
+async function buildArchiveEntryFiles(rows, formats, basePath) {
   const files = [];
-  const manifest = {
-    ...metadata,
-    generatedFormats: [],
-    warnings: Array.from(new Set(metadata?.warnings || [])),
-  };
 
   if (formats.includes("csv")) {
     files.push({ path: `${basePath}.csv`, bytes: encodeUtf8(rowsToCsv(rows)) });
-    manifest.generatedFormats.push("csv");
   }
 
   if (formats.includes("json")) {
     files.push({ path: `${basePath}.json`, bytes: encodeUtf8(JSON.stringify(rows, null, 2)) });
-    manifest.generatedFormats.push("json");
   }
 
   if (formats.includes("parquet")) {
     try {
       files.push({ path: `${basePath}.parquet`, bytes: await rowsToParquet(rows) });
-      manifest.generatedFormats.push("parquet");
     } catch (error) {
-      manifest.warnings.push(`No fue posible generar Parquet en este lote: ${error?.message || "error desconocido"}.`);
       if (!formats.includes("csv")) {
         files.push({ path: `${basePath}.csv`, bytes: encodeUtf8(rowsToCsv(rows)) });
-        manifest.generatedFormats.push("csv");
       }
     }
   }
 
-  files.push({ path: `${basePath}_manifest.json`, bytes: encodeUtf8(JSON.stringify(manifest, null, 2)) });
   return files;
 }
 
@@ -1293,7 +1270,7 @@ async function storeArchiveEntry(env, job, file) {
   };
 }
 
-async function storeJobArchiveEntries(env, job, dataset, rows, partIndex, descriptor) {
+async function storeJobArchiveEntries(env, job, dataset, rows, partIndex) {
   const groups = groupRowsForArchive(rows, job.payload);
   const stored = [];
 
@@ -1304,20 +1281,7 @@ async function storeJobArchiveEntries(env, job, dataset, rows, partIndex, descri
     const suffix = String(partIndex).padStart(4, "0");
     const baseName = `${variable}_${department}_${municipality}_${suffix}`;
     const basePath = `${variable}/${department}/${municipality}/${baseName}`;
-    const files = await buildArchiveEntryFiles(group.rows, job.effectiveFormats, basePath, {
-      jobId: job.id,
-      datasetId: dataset.id,
-      datasetName: dataset.name,
-      partIndex,
-      pageIndex: descriptor.pageIndex + 1,
-      planIndex: descriptor.planIndex + 1,
-      rowCount: group.rows.length,
-      department: group.department,
-      municipality: group.municipality,
-      formats: job.effectiveFormats,
-      requestedFormats: job.selectedFormats,
-      warnings: job.warnings || [],
-    });
+    const files = await buildArchiveEntryFiles(group.rows, job.effectiveFormats, basePath);
 
     for (const file of files) {
       stored.push(await storeArchiveEntry(env, job, file));
@@ -1394,28 +1358,10 @@ function createFixedLengthZipReadableStream(env, assembly, modifiedAt = new Date
 async function createFinalJobArchive(env, job, dataset, summary) {
   const fileName = buildJobZipFileName(dataset, job.finishedAt ? new Date(job.finishedAt) : new Date());
   const key = `exports/${job.id}/${fileName}`;
-  const manifestBytes = encodeUtf8(JSON.stringify({
-    jobId: job.id,
-    datasetId: dataset.id,
-    datasetName: dataset.name,
-    generatedAt: new Date().toISOString(),
-    fileName,
-    rowCount: summary.rowCount,
-    formats: job.effectiveFormats,
-    requestedFormats: job.selectedFormats,
-    warnings: job.warnings || [],
-    hierarchy: "variable/departamento/municipio",
-    entries: (job.archiveEntries || []).map((entry) => ({ path: entry.path, size: entry.size })),
-  }, null, 2));
-  const manifestEntry = {
-    path: "_manifest.json",
-    bytes: manifestBytes,
-    size: manifestBytes.byteLength,
-    crc32: crc32(manifestBytes),
-  };
-  const archiveEntries = [manifestEntry].concat(job.archiveEntries || []);
+  const archiveEntries = job.archiveEntries || [];
   const modifiedAt = new Date();
   const assembly = buildZipAssembly(archiveEntries, modifiedAt);
+  const expiresAt = new Date(Date.now() + EXPORT_OBJECT_TTL_SECONDS * 1000).toISOString();
   await env.EXPORTS_BUCKET.put(key, createFixedLengthZipReadableStream(env, assembly, modifiedAt), {
     httpMetadata: {
       contentType: "application/zip",
@@ -1424,7 +1370,7 @@ async function createFinalJobArchive(env, job, dataset, summary) {
     },
     customMetadata: {
       jobId: job.id,
-      expiresAt: new Date(Date.now() + EXPORT_OBJECT_TTL_SECONDS * 1000).toISOString(),
+      expiresAt,
     },
   });
 
@@ -1438,6 +1384,7 @@ async function createFinalJobArchive(env, job, dataset, summary) {
     sizeBytes: assembly.sizeBytes,
     formats: job.effectiveFormats,
     downloadPath: `/api/jobs/${job.id}/parts/1`,
+    expiresAt,
   }];
 }
 
@@ -1569,16 +1516,7 @@ async function createNoDataJobArchive(env, job, dataset) {
   const summary = finalizeAccumulatorState(job.summaryState, 0);
   const variable = hierarchyPart(dataset.name, "variable");
   const basePath = `${variable}/sin_datos/${variable}_sin_datos`;
-  const files = await buildArchiveEntryFiles([], job.effectiveFormats, basePath, {
-    jobId: job.id,
-    datasetId: dataset.id,
-    datasetName: dataset.name,
-    rowCount: 0,
-    formats: job.effectiveFormats,
-    requestedFormats: job.selectedFormats,
-    warnings: job.warnings || [],
-    message: "La consulta no encontro filas para los filtros seleccionados.",
-  });
+  const files = await buildArchiveEntryFiles([], job.effectiveFormats, basePath);
 
   job.archiveEntries = [];
   for (const file of files) {
@@ -1637,7 +1575,7 @@ async function processExportJobBatch(env, job) {
     }
 
     const partIndex = job.completedPages + 1;
-    await storeJobArchiveEntries(env, job, dataset, normalized, partIndex, descriptor);
+    await storeJobArchiveEntries(env, job, dataset, normalized, partIndex);
 
     job.summaryState = mergeAccumulatorState(job.summaryState, normalized, dataset.dateColumn);
     job.processedRows += normalized.length;
@@ -1809,16 +1747,13 @@ class ExportJobDurableObject {
       }
 
       if (request.method === "DELETE") {
-        if (!part.deletedAt) {
-          await this.env.EXPORTS_BUCKET.delete(part.key);
-          part.deletedAt = new Date().toISOString();
-          await saveJobToStorage(this.state.storage, job);
-        }
-        return jsonResponse({ ok: true, deleted: true, partIndex, deletedAt: part.deletedAt });
-      }
-
-      if (part.deletedAt) {
-        return jsonResponse({ error: "Archivo ya eliminado despues de la descarga." }, 410);
+        return jsonResponse({
+          ok: true,
+          deleted: false,
+          partIndex,
+          expiresAt: part.expiresAt || null,
+          message: "El archivo permanece disponible hasta que expire la ventana temporal de R2.",
+        });
       }
 
       const object = await this.env.EXPORTS_BUCKET.get(part.key);

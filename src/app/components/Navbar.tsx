@@ -10,8 +10,7 @@ interface NavbarProps {
 
 function formatDuration(value: number) {
   if (!Number.isFinite(value) || value <= 0) return '0 s';
-  if (value < 1000) return `${Math.round(value)} ms`;
-  if (value < 60000) return `${(value / 1000).toFixed(1)} s`;
+  if (value < 60000) return `${(value / 1000).toFixed(value < 10000 ? 1 : 0)} s`;
   const totalSeconds = Math.round(value / 1000);
   return `${Math.floor(totalSeconds / 60)}m ${String(totalSeconds % 60).padStart(2, '0')}s`;
 }

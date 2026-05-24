@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Calendar, Clock3, Database, Download, MapPin, Trash2 } from 'lucide-react';
 
 const HISTORY_KEY = 'ideam-history';
+const PRODUCTION_API_ORIGIN = 'https://ideam.sergiobc.com';
 
 interface HistoryEntry {
   timestamp: string;
@@ -14,6 +15,8 @@ interface HistoryEntry {
   processingMs: number;
   sizeBytes: number;
   fileName: string;
+  downloadPath?: string;
+  availableUntil?: string;
 }
 
 function readHistory(): HistoryEntry[] {
@@ -29,6 +32,25 @@ function formatBytes(value: number) {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function formatDuration(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return '0 s';
+  if (value < 60000) return `${(value / 1000).toFixed(value < 10000 ? 1 : 0)} s`;
+  const totalSeconds = Math.round(value / 1000);
+  return `${Math.floor(totalSeconds / 60)}m ${String(totalSeconds % 60).padStart(2, '0')}s`;
+}
+
+function apiUrl(path: string) {
+  if (path.startsWith('http')) return path;
+  if (typeof window === 'undefined') return path;
+  return window.location.hostname === 'ideam.sergiobc.com' ? path : `${PRODUCTION_API_ORIGIN}${path}`;
+}
+
+function canDownloadAgain(item: HistoryEntry) {
+  if (!item.downloadPath || !item.availableUntil) return false;
+  const expiresAt = new Date(item.availableUntil).valueOf();
+  return Number.isFinite(expiresAt) && expiresAt > Date.now();
 }
 
 export function DownloadHistory() {
@@ -56,6 +78,17 @@ export function DownloadHistory() {
     setHistory([]);
   };
 
+  const downloadHistoryItem = (item: HistoryEntry) => {
+    if (!item.downloadPath) return;
+    const link = document.createElement('a');
+    link.href = apiUrl(item.downloadPath);
+    link.download = item.fileName;
+    link.rel = 'noopener';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -76,13 +109,15 @@ export function DownloadHistory() {
         <StatCard title="Descargas" value={String(stats.downloads)} icon={Download} />
         <StatCard title="Filas" value={stats.rows.toLocaleString('es-CO')} icon={Database} />
         <StatCard title="Estaciones" value={stats.stations.toLocaleString('es-CO')} icon={MapPin} />
-        <StatCard title="Tiempo medio" value={`${stats.avgTime} ms`} icon={Clock3} />
+        <StatCard title="Tiempo medio" value={formatDuration(stats.avgTime)} icon={Clock3} />
         <StatCard title="Ultima ejecucion" value={stats.latest} icon={Calendar} compact />
       </div>
 
       {history.length > 0 && (
         <div className="space-y-3 md:hidden">
-          {history.map((item, index) => (
+          {history.map((item, index) => {
+            const isAvailable = canDownloadAgain(item);
+            return (
             <div key={`${item.fileName}-${index}`} className="rounded-xl border border-border bg-card p-4 shadow-[0_0_20px] shadow-accent/5">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -96,12 +131,27 @@ export function DownloadHistory() {
                 <MiniStat label="Estaciones" value={Number(item.stationCount || 0).toLocaleString('es-CO')} />
                 <MiniStat label="Municipios" value={Number(item.municipalityCount || 0).toLocaleString('es-CO')} />
                 <MiniStat label="Zonas" value={Number(item.zoneCount || 0).toLocaleString('es-CO')} />
-                <MiniStat label="Tiempo" value={`${item.processingMs} ms`} />
+                <MiniStat label="Tiempo" value={formatDuration(item.processingMs)} />
                 <MiniStat label="Peso" value={formatBytes(item.sizeBytes || 0)} />
               </div>
-              <p className="mt-4 text-xs text-muted-foreground">{item.timestamp}</p>
+              <div className="mt-4 flex flex-col gap-3">
+                <p className="text-xs text-muted-foreground">{item.timestamp}</p>
+                {isAvailable ? (
+                  <button
+                    type="button"
+                    onClick={() => downloadHistoryItem(item)}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-sm font-semibold text-accent hover:bg-accent/15"
+                  >
+                    <Download className="h-4 w-4" />
+                    Descargar ZIP
+                  </button>
+                ) : (
+                  <p className="text-xs text-muted-foreground">ZIP temporal expirado</p>
+                )}
+              </div>
             </div>
-          ))}
+          );
+          })}
         </div>
       )}
 
@@ -129,25 +179,39 @@ export function DownloadHistory() {
                   </td>
                 </tr>
               ) : (
-                history.map((item, index) => (
-                  <tr
-                    key={`${item.fileName}-${index}`}
-                    className={`border-b border-border transition-all hover:bg-muted/50 ${index % 2 === 0 ? 'bg-card' : 'bg-background'}`}
-                  >
-                    <td className="p-4 font-semibold text-card-foreground">{item.variable}</td>
-                    <td className="p-4 font-mono text-sm font-bold text-card-foreground">{Number(item.rowCount || 0).toLocaleString('es-CO')}</td>
-                    <td className="p-4 text-sm text-muted-foreground">{Number(item.stationCount || 0).toLocaleString('es-CO')}</td>
-                    <td className="p-4 text-sm text-muted-foreground">{Number(item.municipalityCount || 0).toLocaleString('es-CO')}</td>
-                    <td className="p-4 text-sm text-muted-foreground">{Number(item.zoneCount || 0).toLocaleString('es-CO')}</td>
-                    <td className="p-4 font-mono text-sm text-card-foreground">{item.processingMs} ms</td>
-                    <td className="p-4 text-sm text-muted-foreground">{formatBytes(item.sizeBytes || 0)}</td>
-                    <td className="p-4 font-mono text-sm text-muted-foreground">{item.fileName}</td>
-                    <td className="p-4 font-mono text-xs text-muted-foreground">
-                      <div>{item.format.toUpperCase()}</div>
-                      <div>{item.timestamp}</div>
-                    </td>
-                  </tr>
-                ))
+                history.map((item, index) => {
+                  const isAvailable = canDownloadAgain(item);
+                  return (
+                    <tr
+                      key={`${item.fileName}-${index}`}
+                      className={`border-b border-border transition-all hover:bg-muted/50 ${index % 2 === 0 ? 'bg-card' : 'bg-background'}`}
+                    >
+                      <td className="p-4 font-semibold text-card-foreground">{item.variable}</td>
+                      <td className="p-4 font-mono text-sm font-bold text-card-foreground">{Number(item.rowCount || 0).toLocaleString('es-CO')}</td>
+                      <td className="p-4 text-sm text-muted-foreground">{Number(item.stationCount || 0).toLocaleString('es-CO')}</td>
+                      <td className="p-4 text-sm text-muted-foreground">{Number(item.municipalityCount || 0).toLocaleString('es-CO')}</td>
+                      <td className="p-4 text-sm text-muted-foreground">{Number(item.zoneCount || 0).toLocaleString('es-CO')}</td>
+                      <td className="p-4 font-mono text-sm text-card-foreground">{formatDuration(item.processingMs)}</td>
+                      <td className="p-4 text-sm text-muted-foreground">{formatBytes(item.sizeBytes || 0)}</td>
+                      <td className="p-4 font-mono text-sm text-muted-foreground">{item.fileName}</td>
+                      <td className="p-4 text-xs text-muted-foreground">
+                        <div className="mb-2 font-mono">{item.format.toUpperCase()}</div>
+                        {isAvailable ? (
+                          <button
+                            type="button"
+                            onClick={() => downloadHistoryItem(item)}
+                            className="inline-flex items-center gap-2 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 font-semibold text-accent hover:bg-accent/15"
+                          >
+                            <Download className="h-4 w-4" />
+                            Descargar
+                          </button>
+                        ) : (
+                          <div>Expirado</div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

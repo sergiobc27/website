@@ -529,18 +529,20 @@ test('ExportJobDurableObject creates downloadable parts end to end', async () =>
     assert.equal(partResponse.headers.get('x-robots-tag'), 'noindex, nofollow, noarchive');
     const zip = await JSZip.loadAsync(await partResponse.arrayBuffer());
     const names = Object.keys(zip.files).sort();
-    assert.ok(names.includes('_manifest.json'));
+    assert.equal(names.some((name) => name.includes('manifest')), false);
     assert.ok(names.some((name) => name.startsWith('precipitacion/atlantico/barranquilla/')));
     assert.ok(names.some((name) => name.startsWith('precipitacion/atl_ntico/soledad/')));
     assert.ok(names.some((name) => name.endsWith('.csv')));
     assert.ok(names.some((name) => name.endsWith('.json')));
 
     const deleteResponse = await durableObject.fetch(new Request('https://export-job/parts/1', { method: 'DELETE' }));
+    const deleteData = await deleteResponse.json();
     assert.equal(deleteResponse.status, 200);
-    assert.equal(objects.size, 0);
+    assert.equal(deleteData.deleted, false);
+    assert.equal(objects.size, 1);
 
     const secondPartResponse = await durableObject.fetch(new Request('https://export-job/parts/1'));
-    assert.equal(secondPartResponse.status, 410);
+    assert.equal(secondPartResponse.status, 200);
   } finally {
     global.fetch = originalFetch;
     if (originalFixedLengthStream === undefined) {
@@ -644,7 +646,7 @@ test('ExportJobDurableObject creates a no-data zip when filters return zero rows
     assert.equal(partResponse.headers.get('content-type'), 'application/zip');
     const zip = await JSZip.loadAsync(await partResponse.arrayBuffer());
     const names = Object.keys(zip.files).sort();
-    assert.ok(names.includes('_manifest.json'));
+    assert.equal(names.some((name) => name.includes('manifest')), false);
     assert.ok(names.some((name) => name.startsWith('precipitacion/sin_datos/')));
   } finally {
     global.fetch = originalFetch;
