@@ -29,7 +29,7 @@ type StepId = 'consent' | 'variable' | 'territory' | 'advanced' | 'time' | 'exec
 type OutputFormat = 'csv' | 'json' | 'parquet';
 type LogLevel = 'INFO' | 'SUCCESS' | 'ERROR';
 type TimeMode = 'full' | 'custom';
-type CatalogOptionStatus = 'idle' | 'loading' | 'ready' | 'error';
+type CatalogOptionStatus = 'idle' | 'loading' | 'ready' | 'warming' | 'error';
 
 interface DatasetMeta {
   id: string;
@@ -571,7 +571,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     setDownloadMetrics(null);
   }, [datasetId, selectedDepartments.join('|')]);
 
-  const loadCatalogOptions = useCallback(async (definition: CatalogFilterDefinition, force = false) => {
+  const loadCatalogOptions = useCallback(async (definition: CatalogFilterDefinition, force = false, cacheOnly = false) => {
     if (!datasetId || !selectedDepartments.length) {
       setCatalogOptionErrors((current) => ({
         ...current,
@@ -582,7 +582,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     }
 
     const currentStatus = catalogOptionStatus[definition.key] || 'idle';
-    if (!force && (currentStatus === 'loading' || currentStatus === 'ready')) return;
+    if (!force && (currentStatus === 'loading' || currentStatus === 'ready' || currentStatus === 'warming')) return;
 
     setCatalogOptionErrors((current) => {
       const next = { ...current };
@@ -592,7 +592,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     setCatalogOptionStatus((current) => ({ ...current, [definition.key]: 'loading' }));
 
     try {
-      const data = await apiJson<{ options?: OptionItem[] }>('/api/catalog-options', {
+      const data = await apiJson<{ options?: OptionItem[]; cachePending?: boolean }>('/api/catalog-options', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -600,11 +600,12 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           departments: selectedDepartments,
           catalogFilters,
           attributeKey: definition.key,
+          cacheOnly,
         }),
       }, `No fue posible cargar ${definition.label}.`);
 
       setCatalogOptions((current) => ({ ...current, [definition.key]: data.options || [] }));
-      setCatalogOptionStatus((current) => ({ ...current, [definition.key]: 'ready' }));
+      setCatalogOptionStatus((current) => ({ ...current, [definition.key]: data.cachePending ? 'warming' : 'ready' }));
     } catch {
       setCatalogOptions((current) => ({ ...current, [definition.key]: [] }));
       setCatalogOptionStatus((current) => ({ ...current, [definition.key]: 'error' }));
@@ -618,7 +619,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   useEffect(() => {
     if (!acceptedTerms || !datasetId || !selectedDepartments.length || !meta?.catalogFilters?.length) return;
     meta.catalogFilters.forEach((definition) => {
-      void loadCatalogOptions(definition);
+      void loadCatalogOptions(definition, false, true);
     });
   }, [acceptedTerms, datasetId, loadCatalogOptions, meta?.catalogFilters, selectedDepartments.length]);
 
@@ -1299,7 +1300,7 @@ function StepPanel({
   catalogOptionStatus: Record<string, CatalogOptionStatus>;
   catalogOptionErrors: Record<string, string>;
   onToggleCatalogValue: (filterKey: string, value: string) => void;
-  onLoadCatalogOptions: (definition: CatalogFilterDefinition, force?: boolean) => void;
+  onLoadCatalogOptions: (definition: CatalogFilterDefinition, force?: boolean, cacheOnly?: boolean) => void;
   canLoadCatalogOptions: boolean;
   stationCodesText: string;
   onStationCodesTextChange: (value: string) => void;
@@ -1411,7 +1412,7 @@ function StepPanel({
           const options = (catalogOptions[definition.key] || []).filter((option) =>
             normalizeText(`${option.label || option.value} ${option.total}`).includes(search)
           );
-          const actionLabel = status === 'ready' ? 'Actualizar' : status === 'error' ? 'Reintentar' : 'Cargar';
+          const actionLabel = status === 'ready' ? 'Actualizar' : status === 'error' || status === 'warming' ? 'Cargar' : 'Cargar';
 
           return (
             <div key={definition.key} className="space-y-2">
@@ -1423,7 +1424,7 @@ function StepPanel({
                   </span>
                   <button
                     type="button"
-                    onClick={() => onLoadCatalogOptions(definition, status === 'ready')}
+                    onClick={() => onLoadCatalogOptions(definition, status === 'ready' || status === 'warming')}
                     disabled={!canLoadCatalogOptions || status === 'loading'}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-[11px] font-semibold text-card-foreground hover:border-accent/40 disabled:opacity-50"
                   >
@@ -1439,7 +1440,7 @@ function StepPanel({
                 }}
                 onChange={(event) => setFilterSearch((current) => ({ ...current, [definition.key]: event.target.value }))}
                 placeholder={`Buscar ${definition.label.toLowerCase()}`}
-                disabled={status === 'idle' || status === 'loading'}
+                disabled={status === 'idle' || status === 'loading' || status === 'warming'}
                 className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-card-foreground focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 disabled:opacity-60"
               />
               <div className="max-h-48 overflow-y-auto rounded-lg border border-border bg-background p-3">
@@ -1459,6 +1460,17 @@ function StepPanel({
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <LoaderCircle className="h-4 w-4 animate-spin text-accent" />
                     Cargando opciones disponibles...
+                  </div>
+                ) : status === 'warming' ? (
+                  <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                    <span>El catalogo se esta preparando en segundo plano. Puedes continuar o cargarlo ahora.</span>
+                    <button
+                      type="button"
+                      onClick={() => onLoadCatalogOptions(definition, true)}
+                      className="inline-flex items-center justify-center rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-card-foreground hover:border-accent/40"
+                    >
+                      Cargar ahora
+                    </button>
                   </div>
                 ) : status === 'error' ? (
                   <div className="flex flex-col gap-3 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between">

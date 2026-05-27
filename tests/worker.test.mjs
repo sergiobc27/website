@@ -179,6 +179,50 @@ test('catalog options are written to R2 and reused without hitting Socrata again
   }
 });
 
+test('catalog cache-only requests return quickly and warm R2 in the background', async () => {
+  const originalFetch = global.fetch;
+  const bucket = createMemoryBucket();
+  let fetchCalls = 0;
+
+  global.fetch = async () => {
+    fetchCalls += 1;
+    return new Response(JSON.stringify([{ municipio: 'BARRANQUILLA', total: '12' }]), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  try {
+    const env = {
+      EXPORTS_BUCKET: bucket,
+      ASSETS: { fetch: async () => new Response('asset') },
+    };
+    const ctx = createWaitUntilContext();
+    const response = await worker.fetch(new Request('https://ideam.test/api/catalog-options', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        datasetId: 's54a-sgyg',
+        departments: ['ATLANTICO'],
+        catalogFilters: {},
+        attributeKey: 'municipalities',
+        cacheOnly: true,
+      }),
+    }), env, ctx);
+    const data = await response.json();
+
+    assert.equal(response.status, 202);
+    assert.equal(response.headers.get('x-ideam-cache'), 'PENDING');
+    assert.equal(data.cachePending, true);
+
+    await Promise.all(ctx.promises);
+    assert.equal(fetchCalls, 1);
+    assert.ok(Array.from(bucket.objects.keys()).some((key) => key.startsWith('catalog-cache/options/')));
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('warmCatalogCache rotates catalog payloads and stores progress in R2', async () => {
   const originalFetch = global.fetch;
   const bucket = createMemoryBucket();

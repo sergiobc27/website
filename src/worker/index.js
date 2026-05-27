@@ -286,6 +286,17 @@ async function storeCatalogObjectCache(env, payload, data, ttlSeconds, ctx) {
   }
 }
 
+async function refreshCatalogObjectCache(env, payload, dataset, definition, config, ctx) {
+  const refresh = buildCatalogOptionsData(config, payload, dataset, definition)
+    .then((data) => storeCatalogObjectCache(env, payload, data, config.catalogCacheTtlSeconds))
+    .catch(() => null);
+  if (ctx?.waitUntil) {
+    ctx.waitUntil(refresh);
+  } else {
+    await refresh;
+  }
+}
+
 function normalizeLabel(value) {
   return (value || "")
     .toString()
@@ -1023,6 +1034,7 @@ async function handleCatalogOptions(request, env, ctx) {
   if (!definition) {
     return jsonResponse({ error: "Filtro de catalogo no soportado." }, 400);
   }
+  const cacheOnly = payload.cacheOnly === true;
 
   const cached = await fromCatalogCache(payload);
   if (cached) return cached;
@@ -1031,6 +1043,20 @@ async function handleCatalogOptions(request, env, ctx) {
   if (objectCached) {
     await storeCatalogCache(payload, objectCached, config.catalogCacheTtlSeconds, ctx);
     return objectCached;
+  }
+
+  if (cacheOnly) {
+    await refreshCatalogObjectCache(env, payload, dataset, definition, config, ctx);
+    return jsonResponse({
+      attributeKey: definition.key,
+      options: [],
+      cachePending: true,
+      cachedAt: null,
+      cacheTtlSeconds: config.catalogCacheTtlSeconds,
+    }, 202, {
+      "cache-control": "no-store",
+      "x-ideam-cache": "PENDING",
+    });
   }
 
   const data = await buildCatalogOptionsData(config, payload, dataset, definition);
