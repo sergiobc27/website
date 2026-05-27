@@ -179,6 +179,84 @@ test('catalog options are written to R2 and reused without hitting Socrata again
   }
 });
 
+test('catalog bundle caches all advanced dimensions for instant dependent filtering', async () => {
+  const originalFetch = global.fetch;
+  const bucket = createMemoryBucket();
+  let fetchCalls = 0;
+
+  global.fetch = async () => {
+    fetchCalls += 1;
+    return new Response(JSON.stringify([
+      {
+        municipio: 'BARRANQUILLA',
+        zonahidrografica: 'CARIBE',
+        codigoestacion: '29045180',
+        nombreestacion: 'AEROPUERTO',
+        codigosensor: '0240',
+        descripcionsensor: 'PRECIPITACION',
+        unidadmedida: 'mm',
+        total: '12',
+      },
+      {
+        municipio: 'SOLEDAD',
+        zonahidrografica: 'CARIBE',
+        codigoestacion: '29045190',
+        nombreestacion: 'SOLEDAD',
+        codigosensor: '0240',
+        descripcionsensor: 'PRECIPITACION',
+        unidadmedida: 'mm',
+        total: '8',
+      },
+    ]), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  try {
+    const env = {
+      EXPORTS_BUCKET: bucket,
+      ASSETS: { fetch: async () => new Response('asset') },
+    };
+    const firstCtx = createWaitUntilContext();
+    const first = await worker.fetch(new Request('https://ideam.test/api/catalog-bundle', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        datasetId: 's54a-sgyg',
+        departments: ['ATLANTICO'],
+      }),
+    }), env, firstCtx);
+    await Promise.all(firstCtx.promises);
+
+    assert.equal(first.status, 200);
+    assert.equal(first.headers.get('x-ideam-cache'), 'MISS');
+    assert.equal(fetchCalls, 1);
+
+    global.fetch = async () => {
+      throw new Error('Socrata should not be called when bundle cache is warm');
+    };
+
+    const second = await worker.fetch(new Request('https://ideam.test/api/catalog-bundle', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        datasetId: 's54a-sgyg',
+        departments: ['ATLANTICO'],
+      }),
+    }), env, createWaitUntilContext());
+    const data = await second.json();
+
+    assert.equal(second.status, 200);
+    assert.equal(second.headers.get('x-ideam-cache'), 'R2-HIT');
+    assert.equal(data.rows.length, 2);
+    assert.ok(data.columns.includes('municipio'));
+    assert.ok(data.columns.includes('codigoestacion'));
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('catalog cache-only requests return quickly and warm R2 in the background', async () => {
   const originalFetch = global.fetch;
   const bucket = createMemoryBucket();
@@ -247,7 +325,7 @@ test('warmCatalogCache rotates catalog payloads and stores progress in R2', asyn
     assert.equal(summary.failed, 0);
     assert.equal(fetchCalls, 3);
     assert.ok(bucket.objects.has('catalog-cache/_warm-state.json'));
-    assert.ok(Array.from(bucket.objects.keys()).some((key) => key.startsWith('catalog-cache/options/')));
+    assert.ok(Array.from(bucket.objects.keys()).some((key) => key.startsWith('catalog-cache/bundles/')));
   } finally {
     global.fetch = originalFetch;
   }

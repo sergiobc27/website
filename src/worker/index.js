@@ -13,9 +13,10 @@ const SOCRATA_MAX_ATTEMPTS = 4;
 const SOCRATA_RETRY_BASE_MS = 350;
 const SOCRATA_TIMEOUT_MS = 30000;
 const CATALOG_CACHE_TTL_SECONDS = 24 * 60 * 60;
-const CATALOG_WARM_LIMIT = 45;
+const CATALOG_WARM_LIMIT = 500;
 const CATALOG_CACHE_VERSION = "v1";
 const CATALOG_CACHE_PREFIX = "catalog-cache/options";
+const CATALOG_BUNDLE_PREFIX = "catalog-cache/bundles";
 const CATALOG_WARM_STATE_KEY = "catalog-cache/_warm-state.json";
 
 const DEFAULT_CONFIG = {
@@ -208,8 +209,20 @@ function normalizedCatalogCachePayload(payload) {
   };
 }
 
+function normalizedCatalogBundlePayload(payload) {
+  return {
+    version: CATALOG_CACHE_VERSION,
+    datasetId: payload.datasetId || "",
+    departments: uniqueSorted(asArray(payload.departments ?? payload.department).map((value) => String(value))),
+  };
+}
+
 async function catalogCacheHash(payload) {
   return sha256Hex(canonicalJson(normalizedCatalogCachePayload(payload)));
+}
+
+async function catalogBundleHash(payload) {
+  return sha256Hex(canonicalJson(normalizedCatalogBundlePayload(payload)));
 }
 
 async function catalogCacheRequest(payload) {
@@ -225,6 +238,13 @@ async function catalogCacheObjectKey(payload) {
   return `${CATALOG_CACHE_PREFIX}/${datasetPart}/${attributePart}/${key}.json`;
 }
 
+async function catalogBundleObjectKey(payload) {
+  const normalized = normalizedCatalogBundlePayload(payload);
+  const key = await catalogBundleHash(normalized);
+  const datasetPart = fileSafePart(normalized.datasetId, "dataset");
+  return `${CATALOG_BUNDLE_PREFIX}/${datasetPart}/${key}.json`;
+}
+
 async function fromCatalogCache(payload) {
   if (typeof caches === "undefined" || !caches.default) return null;
   const cacheRequest = await catalogCacheRequest(payload);
@@ -238,6 +258,21 @@ async function fromCatalogCache(payload) {
 async function fromCatalogObjectCache(env, payload, ttlSeconds) {
   if (!env?.EXPORTS_BUCKET || ttlSeconds <= 0) return null;
   const objectKey = await catalogCacheObjectKey(payload);
+  const object = await env.EXPORTS_BUCKET.get(objectKey);
+  if (!object) return null;
+  const expiresAt = object.customMetadata?.expiresAt;
+  if (expiresAt && Date.parse(expiresAt) <= Date.now()) return null;
+
+  const data = await object.json();
+  return jsonResponse({ ...data, cacheTtlSeconds: ttlSeconds }, 200, {
+    "cache-control": `public, max-age=${ttlSeconds}`,
+    "x-ideam-cache": "R2-HIT",
+  });
+}
+
+async function fromCatalogBundleCache(env, payload, ttlSeconds) {
+  if (!env?.EXPORTS_BUCKET || ttlSeconds <= 0) return null;
+  const objectKey = await catalogBundleObjectKey(payload);
   const object = await env.EXPORTS_BUCKET.get(objectKey);
   if (!object) return null;
   const expiresAt = object.customMetadata?.expiresAt;
@@ -275,6 +310,30 @@ async function storeCatalogObjectCache(env, payload, data, ttlSeconds, ctx) {
       cacheVersion: CATALOG_CACHE_VERSION,
       datasetId: String(payload.datasetId || ""),
       attributeKey: String(payload.attributeKey || ""),
+      expiresAt,
+    },
+  }).catch(() => null);
+
+  if (ctx?.waitUntil) {
+    ctx.waitUntil(write);
+  } else {
+    await write;
+  }
+}
+
+async function storeCatalogBundleCache(env, payload, data, ttlSeconds, ctx) {
+  if (!env?.EXPORTS_BUCKET || ttlSeconds <= 0) return;
+  const objectKey = await catalogBundleObjectKey(payload);
+  const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+  const body = JSON.stringify({ ...data, cacheTtlSeconds: ttlSeconds });
+  const write = env.EXPORTS_BUCKET.put(objectKey, body, {
+    httpMetadata: {
+      contentType: "application/json; charset=utf-8",
+      cacheControl: `public, max-age=${ttlSeconds}`,
+    },
+    customMetadata: {
+      cacheVersion: CATALOG_CACHE_VERSION,
+      datasetId: String(payload.datasetId || ""),
       expiresAt,
     },
   }).catch(() => null);
@@ -951,16 +1010,59 @@ async function buildCatalogOptionsData(config, payload, dataset, definition) {
   };
 }
 
+function catalogBundleColumns() {
+  const columns = [];
+  CATALOG_FILTERS.forEach((definition) => {
+    columns.push(definition.column);
+    if (definition.labelColumn) columns.push(definition.labelColumn);
+  });
+  return Array.from(new Set(columns));
+}
+
+async function buildCatalogBundleData(config, payload, dataset) {
+  const departments = asArray(payload.departments ?? payload.department);
+  const where = buildDepartmentFilter(departments, "departamento").filter;
+  const columns = catalogBundleColumns();
+  const limit = Math.min(config.pageLimit, 50000);
+  const rows = [];
+  let offset = 0;
+
+  while (true) {
+    const page = await socrataGet(config, dataset.id, {
+      "$select": `${columns.join(", ")}, count(*) as total`,
+      "$where": where,
+      "$group": columns.join(", "),
+      "$order": columns.join(", "),
+      "$limit": limit,
+      "$offset": offset,
+    });
+    rows.push(...page);
+    if (page.length < limit) break;
+    offset += limit;
+  }
+
+  return {
+    datasetId: dataset.id,
+    departments: uniqueSorted(departments.map((department) => canonicalDepartment(department) || department)),
+    columns,
+    rows: rows.map((row) => {
+      const next = { total: Number(row.total || 0) };
+      columns.forEach((column) => {
+        next[column] = row[column] || "";
+      });
+      return next;
+    }),
+    cachedAt: new Date().toISOString(),
+    cacheTtlSeconds: config.catalogCacheTtlSeconds,
+  };
+}
+
 function buildCatalogWarmPayloads() {
   return DATASETS.flatMap((dataset) =>
-    Object.keys(DEPARTMENT_MAP).sort().flatMap((department) =>
-      CATALOG_FILTERS.map((definition) => ({
-        datasetId: dataset.id,
-        departments: [department],
-        catalogFilters: {},
-        attributeKey: definition.key,
-      }))
-    )
+    Object.keys(DEPARTMENT_MAP).sort().map((department) => ({
+      datasetId: dataset.id,
+      departments: [department],
+    }))
   );
 }
 
@@ -1002,11 +1104,12 @@ async function warmCatalogCache(env) {
   for (let index = 0; index < limit; index += 1) {
     const payload = payloads[(start + index) % payloads.length];
     const dataset = resolveDataset(payload.datasetId);
-    const definition = resolveCatalogFilter(payload.attributeKey);
-    if (!dataset || !definition) continue;
+    if (!dataset) continue;
     try {
-      const data = await buildCatalogOptionsData(config, payload, dataset, definition);
-      await storeCatalogObjectCache(env, payload, data, config.catalogCacheTtlSeconds);
+      const cached = await fromCatalogBundleCache(env, payload, config.catalogCacheTtlSeconds);
+      if (cached) continue;
+      const data = await buildCatalogBundleData(config, payload, dataset);
+      await storeCatalogBundleCache(env, payload, data, config.catalogCacheTtlSeconds);
       warmed += 1;
     } catch {
       failed += 1;
@@ -1021,6 +1124,31 @@ async function warmCatalogCache(env) {
     totalPayloads: payloads.length,
   });
   return { warmed, failed, nextCursor, totalPayloads: payloads.length };
+}
+
+async function handleCatalogBundle(request, env, ctx) {
+  const config = getConfig(env);
+  const payload = await request.json();
+  const dataset = resolveDataset(payload.datasetId);
+  if (!dataset) {
+    return jsonResponse({ error: "Dataset no soportado para catalogo." }, 400);
+  }
+  const departmentState = validateRequiredDepartments(payload);
+  if (!departmentState.ok) {
+    return jsonResponse({ error: departmentState.error }, 400);
+  }
+  payload.departments = departmentState.departments;
+
+  const cached = await fromCatalogBundleCache(env, payload, config.catalogCacheTtlSeconds);
+  if (cached) return cached;
+
+  const data = await buildCatalogBundleData(config, payload, dataset);
+  const response = jsonResponse(data, 200, {
+    "cache-control": `public, max-age=${config.catalogCacheTtlSeconds}`,
+    "x-ideam-cache": "MISS",
+  });
+  await storeCatalogBundleCache(env, payload, data, config.catalogCacheTtlSeconds, ctx);
+  return response;
 }
 
 async function handleCatalogOptions(request, env, ctx) {
@@ -2135,6 +2263,9 @@ async function handleApi(request, env, ctx) {
     }
     if (url.pathname === "/api/catalog-options" && request.method === "POST") {
       return handleCatalogOptions(request, env, ctx);
+    }
+    if (url.pathname === "/api/catalog-bundle" && request.method === "POST") {
+      return handleCatalogBundle(request, env, ctx);
     }
     if (url.pathname === "/api/stations-helper" && request.method === "POST") {
       return handleStationHelper(request, env);

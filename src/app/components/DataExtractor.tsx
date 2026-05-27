@@ -42,6 +42,7 @@ interface CatalogFilterDefinition {
   key: string;
   label: string;
   column: string;
+  labelColumn?: string;
 }
 
 interface MetaResponse {
@@ -66,6 +67,8 @@ interface OptionItem {
   label?: string;
   total: number;
 }
+
+type CatalogBundleRow = Record<string, string | number>;
 
 interface StationHelperRow {
   code: string;
@@ -266,6 +269,41 @@ function normalizeText(value: string) {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+function buildOptionsFromCatalogBundle(
+  rows: CatalogBundleRow[],
+  definitions: CatalogFilterDefinition[],
+  selectedFilters: Record<string, string[]>
+) {
+  const byKey: Record<string, OptionItem[]> = {};
+
+  definitions.forEach((definition) => {
+    const totals = new Map<string, { label: string; total: number }>();
+    rows.forEach((row) => {
+      const matches = definitions.every((candidate) => {
+        if (candidate.key === definition.key) return true;
+        const selected = selectedFilters[candidate.key] || [];
+        if (!selected.length) return true;
+        return selected.includes(String(row[candidate.column] || ''));
+      });
+      if (!matches) return;
+
+      const value = String(row[definition.column] || '').trim();
+      if (!value) return;
+      const labelValue = definition.labelColumn ? String(row[definition.labelColumn] || '').trim() : '';
+      const label = labelValue ? `${value} - ${labelValue}` : value;
+      const current = totals.get(value) || { label, total: 0 };
+      current.total += Number(row.total || 0);
+      totals.set(value, current);
+    });
+
+    byKey[definition.key] = Array.from(totals.entries())
+      .map(([value, item]) => ({ value, label: item.label, total: item.total }))
+      .sort((left, right) => String(left.label || left.value).localeCompare(String(right.label || right.value), 'es'));
+  });
+
+  return byKey;
+}
+
 function apiUrl(path: string) {
   if (path.startsWith('http')) return path;
   if (typeof window === 'undefined') return path;
@@ -392,6 +430,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   const [catalogOptions, setCatalogOptions] = useState<Record<string, OptionItem[]>>({});
   const [catalogOptionStatus, setCatalogOptionStatus] = useState<Record<string, CatalogOptionStatus>>({});
   const [catalogOptionErrors, setCatalogOptionErrors] = useState<Record<string, string>>({});
+  const [catalogBundleRows, setCatalogBundleRows] = useState<CatalogBundleRow[]>([]);
   const [stationCodesText, setStationCodesText] = useState('');
   const [stationHelperRows, setStationHelperRows] = useState<StationHelperRow[]>([]);
   const [stationHelperLoading, setStationHelperLoading] = useState(false);
@@ -565,6 +604,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     setCatalogOptions({});
     setCatalogOptionStatus({});
     setCatalogOptionErrors({});
+    setCatalogBundleRows([]);
     setStationCodesText('');
     setStationHelperRows([]);
     setPreview(null);
@@ -618,10 +658,47 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
 
   useEffect(() => {
     if (!acceptedTerms || !datasetId || !selectedDepartments.length || !meta?.catalogFilters?.length) return;
-    meta.catalogFilters.forEach((definition) => {
-      void loadCatalogOptions(definition, false, true);
-    });
-  }, [acceptedTerms, datasetId, loadCatalogOptions, meta?.catalogFilters, selectedDepartments.length]);
+    let cancelled = false;
+    const definitions = meta.catalogFilters;
+
+    setCatalogOptionErrors({});
+    setCatalogOptionStatus(Object.fromEntries(definitions.map((definition) => [definition.key, 'loading' as CatalogOptionStatus])));
+
+    const loadCatalogBundle = async () => {
+      try {
+        const data = await apiJson<{ rows?: CatalogBundleRow[] }>('/api/catalog-bundle', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            datasetId,
+            departments: selectedDepartments,
+          }),
+        }, 'No fue posible cargar el catalogo de filtros.');
+
+        if (cancelled) return;
+        setCatalogBundleRows(data.rows || []);
+        setCatalogOptionStatus(Object.fromEntries(definitions.map((definition) => [definition.key, 'ready' as CatalogOptionStatus])));
+      } catch {
+        if (cancelled) return;
+        setCatalogBundleRows([]);
+        setCatalogOptionStatus(Object.fromEntries(definitions.map((definition) => [definition.key, 'error' as CatalogOptionStatus])));
+      }
+    };
+
+    void loadCatalogBundle();
+    return () => {
+      cancelled = true;
+    };
+  }, [acceptedTerms, datasetId, meta?.catalogFilters, selectedDepartments.join('|')]);
+
+  useEffect(() => {
+    const definitions = meta?.catalogFilters || [];
+    if (!definitions.length || !catalogBundleRows.length) {
+      setCatalogOptions({});
+      return;
+    }
+    setCatalogOptions(buildOptionsFromCatalogBundle(catalogBundleRows, definitions, catalogFilters));
+  }, [catalogBundleRows, catalogFilters, meta?.catalogFilters]);
 
   useEffect(() => {
     if (!isBusy || operationStartedAt === null) return undefined;
@@ -1412,77 +1489,38 @@ function StepPanel({
           const options = (catalogOptions[definition.key] || []).filter((option) =>
             normalizeText(`${option.label || option.value} ${option.total}`).includes(search)
           );
-          const actionLabel = status === 'ready' ? 'Actualizar' : status === 'error' || status === 'warming' ? 'Cargar' : 'Cargar';
 
           return (
             <div key={definition.key} className="space-y-2">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <label className="text-sm font-semibold text-card-foreground">{definition.label}</label>
-                <div className="flex items-center gap-2">
-                  <span className="rounded-full border border-border bg-card px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                    {selectedCount} seleccionados
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => onLoadCatalogOptions(definition, status === 'ready' || status === 'warming')}
-                    disabled={!canLoadCatalogOptions || status === 'loading'}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-[11px] font-semibold text-card-foreground hover:border-accent/40 disabled:opacity-50"
-                  >
-                    {status === 'loading' && <LoaderCircle className="h-3.5 w-3.5 animate-spin text-accent" />}
-                    {actionLabel}
-                  </button>
-                </div>
+                <span className="rounded-full border border-border bg-card px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                  {selectedCount} seleccionados
+                </span>
               </div>
               <input
                 value={filterSearch[definition.key] || ''}
-                onFocus={() => {
-                  if (status === 'idle' && canLoadCatalogOptions) onLoadCatalogOptions(definition);
-                }}
                 onChange={(event) => setFilterSearch((current) => ({ ...current, [definition.key]: event.target.value }))}
                 placeholder={`Buscar ${definition.label.toLowerCase()}`}
-                disabled={status === 'idle' || status === 'loading' || status === 'warming'}
+                disabled={status !== 'ready'}
                 className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-card-foreground focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 disabled:opacity-60"
               />
               <div className="max-h-48 overflow-y-auto rounded-lg border border-border bg-background p-3">
                 {status === 'idle' ? (
-                  <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-                    <span>{canLoadCatalogOptions ? 'Este catalogo se prepara automaticamente.' : 'Completa variable y departamento.'}</span>
-                    <button
-                      type="button"
-                      onClick={() => onLoadCatalogOptions(definition)}
-                      disabled={!canLoadCatalogOptions}
-                      className="inline-flex items-center justify-center rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-card-foreground hover:border-accent/40 disabled:opacity-50"
-                    >
-                      Cargar opciones
-                    </button>
-                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {canLoadCatalogOptions ? 'Catalogo preparado automaticamente.' : 'Completa variable y departamento.'}
+                  </p>
                 ) : status === 'loading' && !options.length ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <LoaderCircle className="h-4 w-4 animate-spin text-accent" />
-                    Cargando opciones disponibles...
+                    Sincronizando catalogo local...
                   </div>
                 ) : status === 'warming' ? (
-                  <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-                    <span>El catalogo se esta preparando en segundo plano. Puedes continuar o cargarlo ahora.</span>
-                    <button
-                      type="button"
-                      onClick={() => onLoadCatalogOptions(definition, true)}
-                      className="inline-flex items-center justify-center rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-card-foreground hover:border-accent/40"
-                    >
-                      Cargar ahora
-                    </button>
-                  </div>
+                  <p className="text-sm text-muted-foreground">Catalogo preparado automaticamente.</p>
                 ) : status === 'error' ? (
-                  <div className="flex flex-col gap-3 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between">
-                    <span>{catalogOptionErrors[definition.key] || 'No fue posible cargar este filtro.'}</span>
-                    <button
-                      type="button"
-                      onClick={() => onLoadCatalogOptions(definition, true)}
-                      className="inline-flex items-center justify-center rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-card-foreground hover:border-accent/40"
-                    >
-                      Reintentar
-                    </button>
-                  </div>
+                  <p className="text-sm text-destructive">
+                    {catalogOptionErrors[definition.key] || 'No fue posible sincronizar este catalogo.'}
+                  </p>
                 ) : !options.length ? (
                   <p className="text-sm text-muted-foreground">Sin opciones para los filtros actuales.</p>
                 ) : (

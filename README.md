@@ -41,11 +41,12 @@ npm run deploy
 
 ## Cache de catalogos
 
-- `/api/catalog-options` usa cache canonicamente por dataset, departamento, filtro y filtros relacionados.
-- El primer nivel usa Cache API de Cloudflare; el segundo nivel persiste en R2 bajo `catalog-cache/options/`.
+- `/api/catalog-bundle` entrega un catalogo integral por dataset/departamento con municipio, zona, estacion, sensor y unidad.
+- La UI calcula las opciones dependientes en memoria desde ese bundle, sin pedir cada filtro por separado.
+- El catalogo persistente vive en R2 bajo `catalog-cache/bundles/`; `/api/catalog-options` queda como ruta compatible.
 - `CATALOG_CACHE_TTL_SECONDS` controla el TTL de cada catalogo.
-- El cron de Wrangler se ejecuta cada 20 minutos y refresca lotes de `CATALOG_WARM_LIMIT` catalogos base.
-- Con los valores actuales, el sistema recorre progresivamente todas las listas base que la pagina muestra como opciones, sin lanzar una consulta masiva unica contra Socrata.
+- El cron de Wrangler se ejecuta cada 20 minutos y refresca hasta `CATALOG_WARM_LIMIT` bundles vencidos.
+- Con los valores actuales, el cron puede cubrir todos los bundles base soportados en una pasada y reutilizarlos hasta que venza el TTL.
 - Las exportaciones siguen aplicando fechas, estaciones, municipios y demas filtros reales en el momento de generar el ZIP.
 
 ## Deploy
@@ -93,6 +94,7 @@ npx wrangler secret put SOCRATA_APP_TOKEN
   - `/api/meta`
   - `/api/date-range`
   - `/api/municipalities`
+  - `/api/catalog-bundle`
   - `/api/catalog-options`
   - `/api/stations-helper`
   - `/api/coverage`
