@@ -188,6 +188,7 @@ test('catalog bundle caches all advanced dimensions for instant dependent filter
     fetchCalls += 1;
     return new Response(JSON.stringify([
       {
+        departamento: 'ATLANTICO',
         municipio: 'BARRANQUILLA',
         zonahidrografica: 'CARIBE',
         codigoestacion: '29045180',
@@ -198,6 +199,7 @@ test('catalog bundle caches all advanced dimensions for instant dependent filter
         total: '12',
       },
       {
+        departamento: 'ATLANTICO',
         municipio: 'SOLEDAD',
         zonahidrografica: 'CARIBE',
         codigoestacion: '29045190',
@@ -250,8 +252,82 @@ test('catalog bundle caches all advanced dimensions for instant dependent filter
     assert.equal(second.status, 200);
     assert.equal(second.headers.get('x-ideam-cache'), 'R2-HIT');
     assert.equal(data.rows.length, 2);
+    assert.ok(data.columns.includes('departamento'));
     assert.ok(data.columns.includes('municipio'));
     assert.ok(data.columns.includes('codigoestacion'));
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('catalog bundle can answer department requests from a cached dataset-wide bundle', async () => {
+  const originalFetch = global.fetch;
+  const bucket = createMemoryBucket();
+  let fetchCalls = 0;
+
+  global.fetch = async () => {
+    fetchCalls += 1;
+    return new Response(JSON.stringify([
+      {
+        departamento: 'ATLANTICO',
+        municipio: 'BARRANQUILLA',
+        zonahidrografica: 'CARIBE',
+        codigoestacion: '29045180',
+        nombreestacion: 'AEROPUERTO',
+        codigosensor: '0240',
+        descripcionsensor: 'PRECIPITACION',
+        unidadmedida: 'mm',
+        total: '12',
+      },
+      {
+        departamento: 'BOLIVAR',
+        municipio: 'CARTAGENA',
+        zonahidrografica: 'CARIBE',
+        codigoestacion: '29045200',
+        nombreestacion: 'CARTAGENA',
+        codigosensor: '0240',
+        descripcionsensor: 'PRECIPITACION',
+        unidadmedida: 'mm',
+        total: '7',
+      },
+    ]), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  try {
+    const env = {
+      EXPORTS_BUCKET: bucket,
+      ASSETS: { fetch: async () => new Response('asset') },
+    };
+
+    const warmSummary = await warmCatalogCache({
+      ...env,
+      CATALOG_WARM_LIMIT: '1',
+      CATALOG_CACHE_TTL_SECONDS: '86400',
+    });
+    assert.equal(warmSummary.warmed, 1);
+    assert.equal(fetchCalls, 1);
+
+    global.fetch = async () => {
+      throw new Error('Socrata should not be called when dataset-wide bundle is warm');
+    };
+
+    const response = await worker.fetch(new Request('https://ideam.test/api/catalog-bundle', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        datasetId: 's54a-sgyg',
+        departments: ['ATLANTICO'],
+      }),
+    }), env, createWaitUntilContext());
+    const data = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('x-ideam-cache'), 'R2-HIT-SUPERSET');
+    assert.deepEqual(data.rows.map((row) => row.municipio), ['BARRANQUILLA']);
+    assert.deepEqual(data.departments, ['ATLANTICO']);
   } finally {
     global.fetch = originalFetch;
   }

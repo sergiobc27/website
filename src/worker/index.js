@@ -271,6 +271,15 @@ async function fromCatalogObjectCache(env, payload, ttlSeconds) {
 }
 
 async function fromCatalogBundleCache(env, payload, ttlSeconds) {
+  const data = await readCatalogBundleCacheData(env, payload, ttlSeconds);
+  if (!data) return null;
+  return jsonResponse({ ...data, cacheTtlSeconds: ttlSeconds }, 200, {
+    "cache-control": `public, max-age=${ttlSeconds}`,
+    "x-ideam-cache": "R2-HIT",
+  });
+}
+
+async function readCatalogBundleCacheData(env, payload, ttlSeconds) {
   if (!env?.EXPORTS_BUCKET || ttlSeconds <= 0) return null;
   const objectKey = await catalogBundleObjectKey(payload);
   const object = await env.EXPORTS_BUCKET.get(objectKey);
@@ -278,11 +287,7 @@ async function fromCatalogBundleCache(env, payload, ttlSeconds) {
   const expiresAt = object.customMetadata?.expiresAt;
   if (expiresAt && Date.parse(expiresAt) <= Date.now()) return null;
 
-  const data = await object.json();
-  return jsonResponse({ ...data, cacheTtlSeconds: ttlSeconds }, 200, {
-    "cache-control": `public, max-age=${ttlSeconds}`,
-    "x-ideam-cache": "R2-HIT",
-  });
+  return object.json();
 }
 
 async function storeCatalogCache(payload, response, ttlSeconds, ctx) {
@@ -1011,12 +1016,38 @@ async function buildCatalogOptionsData(config, payload, dataset, definition) {
 }
 
 function catalogBundleColumns() {
-  const columns = [];
+  const columns = ["departamento"];
   CATALOG_FILTERS.forEach((definition) => {
     columns.push(definition.column);
     if (definition.labelColumn) columns.push(definition.labelColumn);
   });
   return Array.from(new Set(columns));
+}
+
+function catalogBundleAllDepartmentsPayload(datasetId) {
+  return {
+    datasetId,
+    departments: Object.keys(DEPARTMENT_MAP).sort(),
+  };
+}
+
+function filterCatalogBundleDataByDepartments(data, departments, ttlSeconds) {
+  const selected = new Set(
+    asArray(departments)
+      .map((department) => canonicalDepartment(department) || String(department).trim().toUpperCase())
+      .filter(Boolean)
+  );
+  if (!selected.size) return { ...data, cacheTtlSeconds: ttlSeconds };
+
+  return {
+    ...data,
+    departments: Array.from(selected).sort(),
+    rows: asArray(data.rows).filter((row) => {
+      const rowDepartment = canonicalDepartment(row.departamento) || String(row.departamento || "").trim().toUpperCase();
+      return selected.has(rowDepartment);
+    }),
+    cacheTtlSeconds: ttlSeconds,
+  };
 }
 
 async function buildCatalogBundleData(config, payload, dataset) {
@@ -1058,12 +1089,7 @@ async function buildCatalogBundleData(config, payload, dataset) {
 }
 
 function buildCatalogWarmPayloads() {
-  return DATASETS.flatMap((dataset) =>
-    Object.keys(DEPARTMENT_MAP).sort().map((department) => ({
-      datasetId: dataset.id,
-      departments: [department],
-    }))
-  );
+  return DATASETS.map((dataset) => catalogBundleAllDepartmentsPayload(dataset.id));
 }
 
 async function readCatalogWarmState(env) {
@@ -1141,6 +1167,15 @@ async function handleCatalogBundle(request, env, ctx) {
 
   const cached = await fromCatalogBundleCache(env, payload, config.catalogCacheTtlSeconds);
   if (cached) return cached;
+
+  const globalPayload = catalogBundleAllDepartmentsPayload(payload.datasetId);
+  const globalData = await readCatalogBundleCacheData(env, globalPayload, config.catalogCacheTtlSeconds);
+  if (globalData) {
+    return jsonResponse(filterCatalogBundleDataByDepartments(globalData, payload.departments, config.catalogCacheTtlSeconds), 200, {
+      "cache-control": `public, max-age=${config.catalogCacheTtlSeconds}`,
+      "x-ideam-cache": "R2-HIT-SUPERSET",
+    });
+  }
 
   const data = await buildCatalogBundleData(config, payload, dataset);
   const response = jsonResponse(data, 200, {

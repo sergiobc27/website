@@ -47,19 +47,19 @@ console.log(`Warming IDEAM catalog bundles from ${BASE_URL} with concurrency=${C
 const { data: meta } = await apiJson('/api/meta', undefined, 'No fue posible cargar metadata');
 const datasets = meta.datasets || [];
 const departments = meta.departments || [];
-const tasks = datasets.flatMap((dataset) => departments.map((department) => ({ datasetId: dataset.id, department })));
+const tasks = datasets.map((dataset) => ({ datasetId: dataset.id }));
 
 let warmed = 0;
 let cacheHits = 0;
-const failures = await worker(tasks, async ({ datasetId, department }) => {
+const failures = await worker(tasks, async ({ datasetId }) => {
   const { data, cache } = await apiJson('/api/catalog-bundle', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ datasetId, departments: [department] }),
-  }, `No fue posible calentar ${datasetId}/${department}`);
+    body: JSON.stringify({ datasetId, departments }),
+  }, `No fue posible calentar ${datasetId}`);
   warmed += 1;
   if (cache.includes('HIT')) cacheHits += 1;
-  console.log(`[${warmed}/${tasks.length}] ${datasetId}/${department}: ${data.rows?.length || 0} filas de catalogo (${cache})`);
+  console.log(`[${warmed}/${tasks.length}] ${datasetId}: ${data.rows?.length || 0} filas de catalogo (${cache})`);
 });
 
 const elapsedSeconds = Math.round((Date.now() - startedAt) / 1000);
@@ -67,7 +67,7 @@ console.log(`Catalog warm finished: warmed=${warmed}, cacheHits=${cacheHits}, fa
 
 if (failures.length) {
   failures.slice(0, 20).forEach((failure) => {
-    console.error(`FAILED ${failure.item.datasetId}/${failure.item.department}: ${failure.message}`);
+    console.error(`FAILED ${failure.item.datasetId}: ${failure.message}`);
   });
   process.exit(1);
 }
