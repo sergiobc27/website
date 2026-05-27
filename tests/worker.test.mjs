@@ -4,6 +4,7 @@ import JSZip from 'jszip';
 
 import worker, {
   buildDepartmentFilter,
+  catalogBundleAllDepartmentsPayload,
   buildJobPartBaseName,
   buildQueryPlans,
   classifyCoverageRows,
@@ -301,13 +302,16 @@ test('catalog bundle can answer department requests from a cached dataset-wide b
       EXPORTS_BUCKET: bucket,
       ASSETS: { fetch: async () => new Response('asset') },
     };
+    const globalPayload = catalogBundleAllDepartmentsPayload('s54a-sgyg');
 
-    const warmSummary = await warmCatalogCache({
-      ...env,
-      CATALOG_WARM_LIMIT: '1',
-      CATALOG_CACHE_TTL_SECONDS: '86400',
-    });
-    assert.equal(warmSummary.warmed, 1);
+    const warmCtx = createWaitUntilContext();
+    const warmResponse = await worker.fetch(new Request('https://ideam.test/api/catalog-bundle', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(globalPayload),
+    }), env, warmCtx);
+    await Promise.all(warmCtx.promises);
+    assert.equal(warmResponse.status, 200);
     assert.equal(fetchCalls, 1);
 
     global.fetch = async () => {

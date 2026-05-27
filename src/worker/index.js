@@ -1089,7 +1089,12 @@ async function buildCatalogBundleData(config, payload, dataset) {
 }
 
 function buildCatalogWarmPayloads() {
-  return DATASETS.map((dataset) => catalogBundleAllDepartmentsPayload(dataset.id));
+  return DATASETS.flatMap((dataset) =>
+    Object.keys(DEPARTMENT_MAP).sort().map((department) => ({
+      datasetId: dataset.id,
+      departments: [department],
+    }))
+  );
 }
 
 async function readCatalogWarmState(env) {
@@ -2336,6 +2341,7 @@ async function handleApi(request, env, ctx) {
 
 export {
   buildDepartmentFilter,
+  catalogBundleAllDepartmentsPayload,
   buildQueryPlans,
   classifyCoverageRows,
   departmentVariants,

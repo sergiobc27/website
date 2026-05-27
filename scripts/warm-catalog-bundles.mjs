@@ -1,15 +1,19 @@
 const DEFAULT_BASE_URL = 'https://ideam.sergiobc.com';
 const BASE_URL = (process.env.IDEAM_BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, '');
 const CONCURRENCY = Math.max(1, Number(process.env.CATALOG_WARM_CONCURRENCY || 2));
+const REQUEST_TIMEOUT_MS = Math.max(1000, Number(process.env.CATALOG_WARM_TIMEOUT_MS || 90000));
 
 async function apiJson(path, init, fallbackMessage) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   const response = await fetch(`${BASE_URL}${path}`, {
     ...init,
+    signal: controller.signal,
     headers: {
       accept: 'application/json',
       ...(init?.headers || {}),
     },
-  });
+  }).finally(() => clearTimeout(timeout));
   const text = await response.text();
   let data;
   try {
@@ -69,5 +73,5 @@ if (failures.length) {
   failures.slice(0, 20).forEach((failure) => {
     console.error(`FAILED ${failure.item.datasetId}: ${failure.message}`);
   });
-  process.exit(1);
+  console.error('Catalog warm finished with failures. Deploy remains valid; missing bundles will be built on demand.');
 }
