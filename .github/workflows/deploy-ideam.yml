@@ -96,3 +96,10 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Warm IDEAM catalog bundles
+        if: steps.cloudflare_secrets.outputs.ready == 'true'
+        env:
+          IDEAM_BASE_URL: https://ideam.sergiobc.com
+          CATALOG_WARM_CONCURRENCY: "2"
+        run: npm run warm:catalogs
