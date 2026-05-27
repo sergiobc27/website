@@ -571,83 +571,56 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     setDownloadMetrics(null);
   }, [datasetId, selectedDepartments.join('|')]);
 
-  useEffect(() => {
-    const loadCatalogOptionGroups = async () => {
-      if (!datasetId || !selectedDepartments.length || !startDate || !endDate || !meta?.catalogFilters?.length) {
-        setCatalogOptions({});
-        setCatalogOptionStatus({});
-        setCatalogOptionErrors({});
-        return;
-      }
-
-      const definitions = meta.catalogFilters;
-      setCatalogOptionErrors({});
-      setCatalogOptionStatus(
-        Object.fromEntries(definitions.map((definition) => [definition.key, 'loading' as CatalogOptionStatus]))
-      );
-      setCatalogOptions((current) =>
-        Object.fromEntries(definitions.map((definition) => [definition.key, current[definition.key] || []]))
-      );
-
-      const results = await Promise.allSettled(
-        definitions.map(async (definition) => {
-          const data = await apiJson<{ options?: OptionItem[] }>('/api/catalog-options', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              datasetId,
-              departments: selectedDepartments,
-              startDate,
-              endDate,
-              catalogFilters,
-              attributeKey: definition.key,
-            }),
-          }, `No fue posible cargar ${definition.label}.`);
-
-          const options = data.options || [];
-          setCatalogOptions((current) => ({ ...current, [definition.key]: options }));
-          setCatalogOptionStatus((current) => ({ ...current, [definition.key]: 'ready' }));
-          return { key: definition.key, options };
-        })
-      );
-
-      const nextOptions: Record<string, OptionItem[]> = {};
-      const failedLabels: string[] = [];
-      results.forEach((result, index) => {
-        if (result.status === 'fulfilled') {
-          nextOptions[result.value.key] = result.value.options;
-          return;
-        }
-        const definition = definitions[index];
-        const message = result.reason instanceof Error ? result.reason.message : `No fue posible cargar ${definition.label}.`;
-        failedLabels.push(definition.label);
-        nextOptions[definition.key] = [];
-        setCatalogOptionStatus((current) => ({ ...current, [definition.key]: 'error' }));
-        setCatalogOptionErrors((current) => ({ ...current, [definition.key]: message }));
-      });
-
-      if (failedLabels.length) {
-        appendLog(
-          'INFO',
-          `No se cargaron ${failedLabels.length} grupos de filtros avanzados. Puedes continuar con los filtros disponibles o recargar la pagina.`
-        );
-      }
-
-      setCatalogFilters((current) => {
-        const pruned: Record<string, string[]> = {};
-        for (const [key, values] of Object.entries(current)) {
-          const allowed = new Set((nextOptions[key] || []).map((option) => option.value));
-          const kept = values.filter((value) => allowed.has(value));
-          if (kept.length) pruned[key] = kept;
-        }
-        return JSON.stringify(pruned) === JSON.stringify(current) ? current : pruned;
-      });
-    };
-
-    if (acceptedTerms) {
-      void loadCatalogOptionGroups();
+  const loadCatalogOptions = useCallback(async (definition: CatalogFilterDefinition, force = false) => {
+    if (!datasetId || !selectedDepartments.length) {
+      setCatalogOptionErrors((current) => ({
+        ...current,
+        [definition.key]: 'Selecciona variable y departamento para cargar este filtro.',
+      }));
+      setCatalogOptionStatus((current) => ({ ...current, [definition.key]: 'error' }));
+      return;
     }
-  }, [acceptedTerms, appendLog, catalogFilters, datasetId, endDate, meta?.catalogFilters, selectedDepartments, startDate]);
+
+    const currentStatus = catalogOptionStatus[definition.key] || 'idle';
+    if (!force && (currentStatus === 'loading' || currentStatus === 'ready')) return;
+
+    setCatalogOptionErrors((current) => {
+      const next = { ...current };
+      delete next[definition.key];
+      return next;
+    });
+    setCatalogOptionStatus((current) => ({ ...current, [definition.key]: 'loading' }));
+
+    try {
+      const data = await apiJson<{ options?: OptionItem[] }>('/api/catalog-options', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          datasetId,
+          departments: selectedDepartments,
+          catalogFilters,
+          attributeKey: definition.key,
+        }),
+      }, `No fue posible cargar ${definition.label}.`);
+
+      setCatalogOptions((current) => ({ ...current, [definition.key]: data.options || [] }));
+      setCatalogOptionStatus((current) => ({ ...current, [definition.key]: 'ready' }));
+    } catch {
+      setCatalogOptions((current) => ({ ...current, [definition.key]: [] }));
+      setCatalogOptionStatus((current) => ({ ...current, [definition.key]: 'error' }));
+      setCatalogOptionErrors((current) => ({
+        ...current,
+        [definition.key]: `No fue posible cargar ${definition.label}. Intenta de nuevo.`,
+      }));
+    }
+  }, [catalogFilters, catalogOptionStatus, datasetId, selectedDepartments]);
+
+  useEffect(() => {
+    if (!acceptedTerms || !datasetId || !selectedDepartments.length || !meta?.catalogFilters?.length) return;
+    meta.catalogFilters.forEach((definition) => {
+      void loadCatalogOptions(definition);
+    });
+  }, [acceptedTerms, datasetId, loadCatalogOptions, meta?.catalogFilters, selectedDepartments.length]);
 
   useEffect(() => {
     if (!isBusy || operationStartedAt === null) return undefined;
@@ -992,6 +965,8 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
             catalogOptionStatus={catalogOptionStatus}
             catalogOptionErrors={catalogOptionErrors}
             onToggleCatalogValue={toggleCatalogValue}
+            onLoadCatalogOptions={loadCatalogOptions}
+            canLoadCatalogOptions={Boolean(datasetId && selectedDepartments.length)}
             stationCodesText={stationCodesText}
             onStationCodesTextChange={setStationCodesText}
             onLoadStationHelper={loadStationHelper}
@@ -1287,6 +1262,8 @@ function StepPanel({
   catalogOptionStatus,
   catalogOptionErrors,
   onToggleCatalogValue,
+  onLoadCatalogOptions,
+  canLoadCatalogOptions,
   stationCodesText,
   onStationCodesTextChange,
   onLoadStationHelper,
@@ -1322,6 +1299,8 @@ function StepPanel({
   catalogOptionStatus: Record<string, CatalogOptionStatus>;
   catalogOptionErrors: Record<string, string>;
   onToggleCatalogValue: (filterKey: string, value: string) => void;
+  onLoadCatalogOptions: (definition: CatalogFilterDefinition, force?: boolean) => void;
+  canLoadCatalogOptions: boolean;
   stationCodesText: string;
   onStationCodesTextChange: (value: string) => void;
   onLoadStationHelper: () => void;
@@ -1422,56 +1401,79 @@ function StepPanel({
     return (
       <Section title="Personalizacion avanzada" icon={Filter}>
         <div className="rounded-lg border border-border bg-background p-4 text-sm text-muted-foreground">
-          Estos filtros se calculan contra el dataset seleccionado y el departamento elegido. Solo aparecen opciones
-          que tienen filas reales para la consulta actual.
+          Estos catalogos se precargan por dataset y departamento para que la seleccion sea mas rapida. La descarga
+          final sigue aplicando fechas, municipios, estaciones y demas filtros exactamente como los selecciones.
         </div>
-        {(meta?.catalogFilters || []).map((definition) => (
-          <div key={definition.key} className="space-y-2">
-            <label className="flex items-center justify-between gap-3 text-sm font-semibold text-card-foreground">
-              <span>{definition.label}</span>
-              <span className="rounded-full border border-border bg-card px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                {(catalogFilters[definition.key] || []).length} seleccionados
-              </span>
-            </label>
-            <input
-              value={filterSearch[definition.key] || ''}
-              onChange={(event) => setFilterSearch((current) => ({ ...current, [definition.key]: event.target.value }))}
-              placeholder={`Buscar ${definition.label.toLowerCase()}`}
-              className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-card-foreground focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
-            />
-            <div className="max-h-48 overflow-y-auto rounded-lg border border-border bg-background p-3">
-              {(() => {
-                const status = catalogOptionStatus[definition.key] || 'idle';
-                const error = catalogOptionErrors[definition.key];
-                const search = normalizeText(filterSearch[definition.key] || '');
-                const options = (catalogOptions[definition.key] || []).filter((option) =>
-                  normalizeText(`${option.label || option.value} ${option.total}`).includes(search)
-                );
-                if (status === 'loading' && !options.length) {
-                  return (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <LoaderCircle className="h-4 w-4 animate-spin text-accent" />
-                      Cargando opciones disponibles...
-                    </div>
-                  );
-                }
-                if (status === 'error') {
-                  return (
-                    <p className="text-sm text-destructive">
-                      {error || 'No fue posible cargar este filtro. Puedes continuar sin seleccionarlo.'}
-                    </p>
-                  );
-                }
-                if (!options.length) {
-                  return (
-                    <p className="text-sm text-muted-foreground">
-                      {status === 'idle'
-                        ? 'Selecciona variable, departamento y rango temporal para calcular opciones.'
-                        : 'Sin opciones para los filtros actuales.'}
-                    </p>
-                  );
-                }
-                return (
+        {(meta?.catalogFilters || []).map((definition) => {
+          const status = catalogOptionStatus[definition.key] || 'idle';
+          const selectedCount = (catalogFilters[definition.key] || []).length;
+          const search = normalizeText(filterSearch[definition.key] || '');
+          const options = (catalogOptions[definition.key] || []).filter((option) =>
+            normalizeText(`${option.label || option.value} ${option.total}`).includes(search)
+          );
+          const actionLabel = status === 'ready' ? 'Actualizar' : status === 'error' ? 'Reintentar' : 'Cargar';
+
+          return (
+            <div key={definition.key} className="space-y-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <label className="text-sm font-semibold text-card-foreground">{definition.label}</label>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full border border-border bg-card px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                    {selectedCount} seleccionados
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onLoadCatalogOptions(definition, status === 'ready')}
+                    disabled={!canLoadCatalogOptions || status === 'loading'}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-[11px] font-semibold text-card-foreground hover:border-accent/40 disabled:opacity-50"
+                  >
+                    {status === 'loading' && <LoaderCircle className="h-3.5 w-3.5 animate-spin text-accent" />}
+                    {actionLabel}
+                  </button>
+                </div>
+              </div>
+              <input
+                value={filterSearch[definition.key] || ''}
+                onFocus={() => {
+                  if (status === 'idle' && canLoadCatalogOptions) onLoadCatalogOptions(definition);
+                }}
+                onChange={(event) => setFilterSearch((current) => ({ ...current, [definition.key]: event.target.value }))}
+                placeholder={`Buscar ${definition.label.toLowerCase()}`}
+                disabled={status === 'idle' || status === 'loading'}
+                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-card-foreground focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 disabled:opacity-60"
+              />
+              <div className="max-h-48 overflow-y-auto rounded-lg border border-border bg-background p-3">
+                {status === 'idle' ? (
+                  <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                    <span>{canLoadCatalogOptions ? 'Este catalogo se prepara automaticamente.' : 'Completa variable y departamento.'}</span>
+                    <button
+                      type="button"
+                      onClick={() => onLoadCatalogOptions(definition)}
+                      disabled={!canLoadCatalogOptions}
+                      className="inline-flex items-center justify-center rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-card-foreground hover:border-accent/40 disabled:opacity-50"
+                    >
+                      Cargar opciones
+                    </button>
+                  </div>
+                ) : status === 'loading' && !options.length ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <LoaderCircle className="h-4 w-4 animate-spin text-accent" />
+                    Cargando opciones disponibles...
+                  </div>
+                ) : status === 'error' ? (
+                  <div className="flex flex-col gap-3 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between">
+                    <span>{catalogOptionErrors[definition.key] || 'No fue posible cargar este filtro.'}</span>
+                    <button
+                      type="button"
+                      onClick={() => onLoadCatalogOptions(definition, true)}
+                      className="inline-flex items-center justify-center rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-card-foreground hover:border-accent/40"
+                    >
+                      Reintentar
+                    </button>
+                  </div>
+                ) : !options.length ? (
+                  <p className="text-sm text-muted-foreground">Sin opciones para los filtros actuales.</p>
+                ) : (
                   <div className="space-y-2">
                     {status === 'loading' && (
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -1496,11 +1498,11 @@ function StepPanel({
                       ))}
                     </div>
                   </div>
-                );
-              })()}
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         <div className="space-y-2">
           <label className="text-sm font-semibold text-card-foreground">Codigos de estacion manuales</label>
           <textarea

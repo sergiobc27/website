@@ -36,7 +36,17 @@ npm run deploy
 2. Cloudflare sirve el build est?tico del frontend desde `dist`.
 3. Las rutas `/api/*` se ejecutan en `src/worker/index.js`.
 4. El Worker consulta los datasets p?blicos de IDEAM en Socrata.
-5. La descarga se resuelve completamente online, sin scripts locales del usuario.
+5. Los catalogos de personalizacion avanzada se sirven desde cache R2/edge cuando estan disponibles.
+6. La descarga se resuelve completamente online, sin scripts locales del usuario.
+
+## Cache de catalogos
+
+- `/api/catalog-options` usa cache canonicamente por dataset, departamento, filtro y filtros relacionados.
+- El primer nivel usa Cache API de Cloudflare; el segundo nivel persiste en R2 bajo `catalog-cache/options/`.
+- `CATALOG_CACHE_TTL_SECONDS` controla el TTL de cada catalogo.
+- El cron de Wrangler se ejecuta cada 20 minutos y refresca lotes de `CATALOG_WARM_LIMIT` catalogos base.
+- Con los valores actuales, el sistema recorre progresivamente todas las listas base que la pagina muestra como opciones, sin lanzar una consulta masiva unica contra Socrata.
+- Las exportaciones siguen aplicando fechas, estaciones, municipios y demas filtros reales en el momento de generar el ZIP.
 
 ## Deploy
 
@@ -74,6 +84,7 @@ npx wrangler secret put SOCRATA_APP_TOKEN
 - Los ZIP se comprimen antes de subirse a R2 y se guardan bajo `exports/<jobId>/`.
 - Cada ZIP queda disponible para descargas repetidas durante la ventana temporal de 1 hora.
 - El bucket tiene lifecycle de respaldo para borrar cualquier objeto `exports/` con mas de 1 hora.
+- Los catalogos persistentes usan el prefijo `catalog-cache/`; no deben incluirse en la regla de borrado horario de `exports/`.
 - La ruta sincronica `/api/export` queda deshabilitada; el flujo soportado es asincrono por `/api/jobs`.
 
 ## Estado actual

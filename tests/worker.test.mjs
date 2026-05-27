@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import JSZip from 'jszip';
 
-import {
+import worker, {
   buildDepartmentFilter,
   buildJobPartBaseName,
   buildQueryPlans,
@@ -17,8 +17,46 @@ import {
   normalizeLabel,
   rowsToCsv,
   sanitizeRequestedFormats,
+  warmCatalogCache,
   validateRequiredDepartments,
 } from '../src/worker/index.js';
+
+function createMemoryBucket() {
+  const objects = new Map();
+  return {
+    objects,
+    async get(key) {
+      const record = objects.get(key);
+      if (!record) return null;
+      return {
+        customMetadata: record.customMetadata || {},
+        async json() {
+          return JSON.parse(record.body);
+        },
+        async text() {
+          return record.body;
+        },
+      };
+    },
+    async put(key, value, options = {}) {
+      objects.set(key, {
+        body: typeof value === 'string' ? value : await new Response(value).text(),
+        customMetadata: options.customMetadata || {},
+        httpMetadata: options.httpMetadata || {},
+      });
+    },
+  };
+}
+
+function createWaitUntilContext() {
+  const promises = [];
+  return {
+    promises,
+    waitUntil(promise) {
+      promises.push(Promise.resolve(promise));
+    },
+  };
+}
 
 test('normalizeLabel removes accents and normalizes case', () => {
   assert.equal(normalizeLabel('Atl\u00e1ntico'), 'ATLANTICO');
@@ -77,6 +115,98 @@ test('getConfig keeps MAX_EXPORT_ROWS available but nullable by default', () => 
   assert.equal(customConfig.socrataAppToken, 'token-123');
   assert.equal(customConfig.socrataTimeoutMs, 12000);
   assert.equal(getConfig({ SODA_APP_TOKEN: 'legacy-token' }).socrataAppToken, 'legacy-token');
+});
+
+test('catalog options are written to R2 and reused without hitting Socrata again', async () => {
+  const originalFetch = global.fetch;
+  const bucket = createMemoryBucket();
+  let fetchCalls = 0;
+
+  global.fetch = async () => {
+    fetchCalls += 1;
+    return new Response(JSON.stringify([
+      { municipio: 'BARRANQUILLA', total: '12' },
+      { municipio: 'SOLEDAD', total: '8' },
+    ]), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  try {
+    const env = {
+      EXPORTS_BUCKET: bucket,
+      ASSETS: { fetch: async () => new Response('asset') },
+    };
+    const firstCtx = createWaitUntilContext();
+    const first = await worker.fetch(new Request('https://ideam.test/api/catalog-options', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        datasetId: 's54a-sgyg',
+        departments: ['ATLANTICO'],
+        catalogFilters: {},
+        attributeKey: 'municipalities',
+      }),
+    }), env, firstCtx);
+    await Promise.all(firstCtx.promises);
+
+    assert.equal(first.status, 200);
+    assert.equal(first.headers.get('x-ideam-cache'), 'MISS');
+    assert.equal(fetchCalls, 1);
+
+    global.fetch = async () => {
+      throw new Error('Socrata should not be called when R2 cache is warm');
+    };
+
+    const second = await worker.fetch(new Request('https://ideam.test/api/catalog-options', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        datasetId: 's54a-sgyg',
+        departments: ['ATLANTICO'],
+        catalogFilters: {},
+        attributeKey: 'municipalities',
+      }),
+    }), env, createWaitUntilContext());
+    const data = await second.json();
+
+    assert.equal(second.status, 200);
+    assert.equal(second.headers.get('x-ideam-cache'), 'R2-HIT');
+    assert.deepEqual(data.options.map((option) => option.value), ['BARRANQUILLA', 'SOLEDAD']);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('warmCatalogCache rotates catalog payloads and stores progress in R2', async () => {
+  const originalFetch = global.fetch;
+  const bucket = createMemoryBucket();
+  let fetchCalls = 0;
+
+  global.fetch = async () => {
+    fetchCalls += 1;
+    return new Response(JSON.stringify([{ municipio: 'BARRANQUILLA', total: '1' }]), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  try {
+    const summary = await warmCatalogCache({
+      EXPORTS_BUCKET: bucket,
+      CATALOG_WARM_LIMIT: '3',
+      CATALOG_CACHE_TTL_SECONDS: '86400',
+    });
+
+    assert.equal(summary.warmed, 3);
+    assert.equal(summary.failed, 0);
+    assert.equal(fetchCalls, 3);
+    assert.ok(bucket.objects.has('catalog-cache/_warm-state.json'));
+    assert.ok(Array.from(bucket.objects.keys()).some((key) => key.startsWith('catalog-cache/options/')));
+  } finally {
+    global.fetch = originalFetch;
+  }
 });
 
 test('classifyCoverageRows separates configured and discovered variants', () => {

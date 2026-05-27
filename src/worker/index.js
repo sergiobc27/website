@@ -12,6 +12,11 @@ const EXPORT_OBJECT_TTL_SECONDS = 60 * 60;
 const SOCRATA_MAX_ATTEMPTS = 4;
 const SOCRATA_RETRY_BASE_MS = 350;
 const SOCRATA_TIMEOUT_MS = 30000;
+const CATALOG_CACHE_TTL_SECONDS = 24 * 60 * 60;
+const CATALOG_WARM_LIMIT = 45;
+const CATALOG_CACHE_VERSION = "v1";
+const CATALOG_CACHE_PREFIX = "catalog-cache/options";
+const CATALOG_WARM_STATE_KEY = "catalog-cache/_warm-state.json";
 
 const DEFAULT_CONFIG = {
   socrataDomain: "https://www.datos.gov.co",
@@ -21,6 +26,8 @@ const DEFAULT_CONFIG = {
   exportPageSize: 50000,
   maxExportRows: null,
   maxCatalogStations: null,
+  catalogCacheTtlSeconds: CATALOG_CACHE_TTL_SECONDS,
+  catalogWarmLimit: CATALOG_WARM_LIMIT,
 };
 
 class ApiError extends Error {
@@ -119,6 +126,8 @@ function getConfig(env) {
     maxCatalogStations: env?.MAX_CATALOG_STATIONS ? positiveNumber(env.MAX_CATALOG_STATIONS, DEFAULT_CONFIG.maxCatalogStations) : DEFAULT_CONFIG.maxCatalogStations,
     socrataAppToken: env?.SOCRATA_APP_TOKEN || env?.SODA_APP_TOKEN || "",
     socrataTimeoutMs: positiveNumber(env?.SOCRATA_TIMEOUT_MS, SOCRATA_TIMEOUT_MS),
+    catalogCacheTtlSeconds: positiveNumber(env?.CATALOG_CACHE_TTL_SECONDS, DEFAULT_CONFIG.catalogCacheTtlSeconds),
+    catalogWarmLimit: positiveNumber(env?.CATALOG_WARM_LIMIT, DEFAULT_CONFIG.catalogWarmLimit),
   };
 }
 
@@ -155,6 +164,126 @@ function chunkArray(values, size) {
     chunks.push(values.slice(index, index + size));
   }
   return chunks;
+}
+
+function canonicalize(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => canonicalize(item)).sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [key, canonicalize(value[key])])
+    );
+  }
+  return value;
+}
+
+function canonicalJson(value) {
+  return JSON.stringify(canonicalize(value));
+}
+
+async function sha256Hex(value) {
+  const digest = await crypto.subtle.digest("SHA-256", encodeUtf8(value));
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function normalizedCatalogCachePayload(payload) {
+  const catalogFilters = {};
+  Object.entries(payload.catalogFilters || {}).forEach(([key, values]) => {
+    if (key === payload.attributeKey) return;
+    const normalized = uniqueSorted(asArray(values).map((value) => String(value)));
+    if (normalized.length) catalogFilters[key] = normalized;
+  });
+
+  return {
+    version: CATALOG_CACHE_VERSION,
+    datasetId: payload.datasetId || "",
+    attributeKey: payload.attributeKey || "",
+    departments: uniqueSorted(asArray(payload.departments ?? payload.department).map((value) => String(value))),
+    startDate: payload.startDate || "",
+    endDate: payload.endDate || "",
+    catalogFilters,
+  };
+}
+
+async function catalogCacheHash(payload) {
+  return sha256Hex(canonicalJson(normalizedCatalogCachePayload(payload)));
+}
+
+async function catalogCacheRequest(payload) {
+  const key = await catalogCacheHash(payload);
+  return new Request(`https://ideam.local/cache/catalog-options/${key}`, { method: "GET" });
+}
+
+async function catalogCacheObjectKey(payload) {
+  const normalized = normalizedCatalogCachePayload(payload);
+  const key = await catalogCacheHash(normalized);
+  const datasetPart = fileSafePart(normalized.datasetId, "dataset");
+  const attributePart = fileSafePart(normalized.attributeKey, "filter");
+  return `${CATALOG_CACHE_PREFIX}/${datasetPart}/${attributePart}/${key}.json`;
+}
+
+async function fromCatalogCache(payload) {
+  if (typeof caches === "undefined" || !caches.default) return null;
+  const cacheRequest = await catalogCacheRequest(payload);
+  const cached = await caches.default.match(cacheRequest);
+  if (!cached) return null;
+  const headers = new Headers(cached.headers);
+  headers.set("x-ideam-cache", "HIT");
+  return new Response(cached.body, { status: cached.status, headers });
+}
+
+async function fromCatalogObjectCache(env, payload, ttlSeconds) {
+  if (!env?.EXPORTS_BUCKET || ttlSeconds <= 0) return null;
+  const objectKey = await catalogCacheObjectKey(payload);
+  const object = await env.EXPORTS_BUCKET.get(objectKey);
+  if (!object) return null;
+  const expiresAt = object.customMetadata?.expiresAt;
+  if (expiresAt && Date.parse(expiresAt) <= Date.now()) return null;
+
+  const data = await object.json();
+  return jsonResponse({ ...data, cacheTtlSeconds: ttlSeconds }, 200, {
+    "cache-control": `public, max-age=${ttlSeconds}`,
+    "x-ideam-cache": "R2-HIT",
+  });
+}
+
+async function storeCatalogCache(payload, response, ttlSeconds, ctx) {
+  if (typeof caches === "undefined" || !caches.default || !response.ok || ttlSeconds <= 0) return;
+  const cacheRequest = await catalogCacheRequest(payload);
+  const write = caches.default.put(cacheRequest, response.clone()).catch(() => null);
+  if (ctx?.waitUntil) {
+    ctx.waitUntil(write);
+  } else {
+    await write;
+  }
+}
+
+async function storeCatalogObjectCache(env, payload, data, ttlSeconds, ctx) {
+  if (!env?.EXPORTS_BUCKET || ttlSeconds <= 0) return;
+  const objectKey = await catalogCacheObjectKey(payload);
+  const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+  const body = JSON.stringify({ ...data, cacheTtlSeconds: ttlSeconds });
+  const write = env.EXPORTS_BUCKET.put(objectKey, body, {
+    httpMetadata: {
+      contentType: "application/json; charset=utf-8",
+      cacheControl: `public, max-age=${ttlSeconds}`,
+    },
+    customMetadata: {
+      cacheVersion: CATALOG_CACHE_VERSION,
+      datasetId: String(payload.datasetId || ""),
+      attributeKey: String(payload.attributeKey || ""),
+      expiresAt,
+    },
+  }).catch(() => null);
+
+  if (ctx?.waitUntil) {
+    ctx.waitUntil(write);
+  } else {
+    await write;
+  }
 }
 
 function normalizeLabel(value) {
@@ -779,18 +908,7 @@ async function handleMunicipalities(request, env) {
   return jsonResponse({ municipalities: uniqueSorted(rows.map((row) => row.municipio)) });
 }
 
-async function handleCatalogOptions(request, env) {
-  const config = getConfig(env);
-  const payload = await request.json();
-  const dataset = resolveDataset(payload.datasetId);
-  if (!dataset) {
-    return jsonResponse({ error: "Dataset no soportado para filtros." }, 400);
-  }
-  const definition = resolveCatalogFilter(payload.attributeKey);
-  if (!definition) {
-    return jsonResponse({ error: "Filtro de catalogo no soportado." }, 400);
-  }
-
+async function buildCatalogOptionsData(config, payload, dataset, definition) {
   const where = buildCatalogWhere(payload, dataset, definition.key);
   const selectColumns = definition.labelColumn
     ? `${definition.column}, ${definition.labelColumn}, count(*) as total`
@@ -806,7 +924,7 @@ async function handleCatalogOptions(request, env) {
     "$limit": 5000,
   });
 
-  return jsonResponse({
+  return {
     attributeKey: definition.key,
     options: rows
       .map((row) => ({
@@ -817,7 +935,112 @@ async function handleCatalogOptions(request, env) {
         total: Number(row.total || 0),
       }))
       .filter((row) => row.value),
+    cachedAt: new Date().toISOString(),
+    cacheTtlSeconds: config.catalogCacheTtlSeconds,
+  };
+}
+
+function buildCatalogWarmPayloads() {
+  return DATASETS.flatMap((dataset) =>
+    Object.keys(DEPARTMENT_MAP).sort().flatMap((department) =>
+      CATALOG_FILTERS.map((definition) => ({
+        datasetId: dataset.id,
+        departments: [department],
+        catalogFilters: {},
+        attributeKey: definition.key,
+      }))
+    )
+  );
+}
+
+async function readCatalogWarmState(env) {
+  if (!env?.EXPORTS_BUCKET) return { cursor: 0 };
+  const object = await env.EXPORTS_BUCKET.get(CATALOG_WARM_STATE_KEY);
+  if (!object) return { cursor: 0 };
+  try {
+    const state = await object.json();
+    return { cursor: Number.isFinite(Number(state.cursor)) ? Number(state.cursor) : 0 };
+  } catch {
+    return { cursor: 0 };
+  }
+}
+
+async function writeCatalogWarmState(env, state) {
+  if (!env?.EXPORTS_BUCKET) return;
+  await env.EXPORTS_BUCKET.put(CATALOG_WARM_STATE_KEY, JSON.stringify({
+    ...state,
+    updatedAt: new Date().toISOString(),
+  }), {
+    httpMetadata: { contentType: "application/json; charset=utf-8" },
   });
+}
+
+async function warmCatalogCache(env) {
+  const config = getConfig(env);
+  if (!env?.EXPORTS_BUCKET || config.catalogWarmLimit <= 0 || config.catalogCacheTtlSeconds <= 0) {
+    return { warmed: 0, failed: 0, skipped: true };
+  }
+
+  const payloads = buildCatalogWarmPayloads();
+  const state = await readCatalogWarmState(env);
+  const start = Math.max(0, Math.min(state.cursor, Math.max(payloads.length - 1, 0)));
+  const limit = Math.min(config.catalogWarmLimit, payloads.length);
+  let warmed = 0;
+  let failed = 0;
+
+  for (let index = 0; index < limit; index += 1) {
+    const payload = payloads[(start + index) % payloads.length];
+    const dataset = resolveDataset(payload.datasetId);
+    const definition = resolveCatalogFilter(payload.attributeKey);
+    if (!dataset || !definition) continue;
+    try {
+      const data = await buildCatalogOptionsData(config, payload, dataset, definition);
+      await storeCatalogObjectCache(env, payload, data, config.catalogCacheTtlSeconds);
+      warmed += 1;
+    } catch {
+      failed += 1;
+    }
+  }
+
+  const nextCursor = payloads.length ? (start + limit) % payloads.length : 0;
+  await writeCatalogWarmState(env, {
+    cursor: nextCursor,
+    warmed,
+    failed,
+    totalPayloads: payloads.length,
+  });
+  return { warmed, failed, nextCursor, totalPayloads: payloads.length };
+}
+
+async function handleCatalogOptions(request, env, ctx) {
+  const config = getConfig(env);
+  const payload = await request.json();
+  const dataset = resolveDataset(payload.datasetId);
+  if (!dataset) {
+    return jsonResponse({ error: "Dataset no soportado para filtros." }, 400);
+  }
+  const definition = resolveCatalogFilter(payload.attributeKey);
+  if (!definition) {
+    return jsonResponse({ error: "Filtro de catalogo no soportado." }, 400);
+  }
+
+  const cached = await fromCatalogCache(payload);
+  if (cached) return cached;
+
+  const objectCached = await fromCatalogObjectCache(env, payload, config.catalogCacheTtlSeconds);
+  if (objectCached) {
+    await storeCatalogCache(payload, objectCached, config.catalogCacheTtlSeconds, ctx);
+    return objectCached;
+  }
+
+  const data = await buildCatalogOptionsData(config, payload, dataset, definition);
+  const response = jsonResponse(data, 200, {
+    "cache-control": `public, max-age=${config.catalogCacheTtlSeconds}`,
+    "x-ideam-cache": "MISS",
+  });
+  await storeCatalogObjectCache(env, payload, data, config.catalogCacheTtlSeconds, ctx);
+  await storeCatalogCache(payload, response, config.catalogCacheTtlSeconds, ctx);
+  return response;
 }
 
 async function handleStationHelper(request, env) {
@@ -1885,7 +2108,7 @@ async function handleApi(request, env, ctx) {
       return handleMunicipalities(request, env);
     }
     if (url.pathname === "/api/catalog-options" && request.method === "POST") {
-      return handleCatalogOptions(request, env);
+      return handleCatalogOptions(request, env, ctx);
     }
     if (url.pathname === "/api/stations-helper" && request.method === "POST") {
       return handleStationHelper(request, env);
@@ -1930,6 +2153,7 @@ export {
   normalizeLabel,
   rowsToCsv,
   sanitizeRequestedFormats,
+  warmCatalogCache,
   buildJobPartBaseName,
   createArchivePart,
   ExportJobDurableObject,
@@ -1944,5 +2168,8 @@ export default {
       return handleApi(request, env, ctx);
     }
     return env.ASSETS.fetch(request);
+  },
+  async scheduled(_event, env, ctx) {
+    ctx.waitUntil(warmCatalogCache(env).catch(() => null));
   },
 };
