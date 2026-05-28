@@ -41,7 +41,7 @@ import type {
 const HISTORY_KEY = 'ideam-history';
 const MAX_OPERATION_LOGS = 80;
 const EXPORT_AVAILABILITY_MS = 60 * 60 * 1000;
-const EXPORT_PLAN_FAST_TIMEOUT_MS = 8000;
+const EXPORT_PLAN_FAST_TIMEOUT_MS = 2500;
 
 type StepId = 'consent' | 'variable' | 'territory' | 'advanced' | 'time' | 'execute';
 type LogLevel = 'INFO' | 'SUCCESS' | 'ERROR';

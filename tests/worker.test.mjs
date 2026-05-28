@@ -105,6 +105,7 @@ test('getConfig keeps MAX_EXPORT_ROWS available but nullable by default', () => 
   const customConfig = getConfig({
     MAX_EXPORT_ROWS: '2500',
     EXPORT_PAGE_SIZE: '800',
+    EXPORT_PAGE_CONCURRENCY: '4',
     SOCRATA_APP_TOKEN: 'token-123',
     SOCRATA_TIMEOUT_MS: '12000',
   });
@@ -113,8 +114,10 @@ test('getConfig keeps MAX_EXPORT_ROWS available but nullable by default', () => 
   assert.equal(defaultConfig.socrataTimeoutMs, 30000);
   assert.equal(customConfig.maxExportRows, 2500);
   assert.equal(customConfig.exportPageSize, 800);
+  assert.equal(customConfig.exportPageConcurrency, 4);
   assert.equal(customConfig.socrataAppToken, 'token-123');
   assert.equal(customConfig.socrataTimeoutMs, 12000);
+  assert.equal(getConfig({ EXPORT_PAGE_CONCURRENCY: '99' }).exportPageConcurrency, 5);
   assert.equal(getConfig({ SODA_APP_TOKEN: 'legacy-token' }).socrataAppToken, 'legacy-token');
 });
 
@@ -821,6 +824,9 @@ test('ExportJobDurableObject creates downloadable parts end to end', async () =>
         { status: 200, headers: { 'content-type': 'application/json' } }
       );
     }
+    if (parsed.searchParams.get('$limit') === '50000') {
+      return new Response(JSON.stringify([]), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
     throw new Error(`Unexpected fetch call: ${parsed.toString()}`);
   };
 
@@ -887,6 +893,112 @@ test('ExportJobDurableObject creates downloadable parts end to end', async () =>
     } else {
       globalThis.FixedLengthStream = originalFixedLengthStream;
     }
+  }
+});
+
+test('ExportJobDurableObject processes multiple Socrata pages in one batch', async () => {
+  const storageMap = new Map();
+  const state = {
+    storage: {
+      async get(key) {
+        return storageMap.get(key);
+      },
+      async put(key, value) {
+        storageMap.set(key, value);
+      },
+      async setAlarm(value) {
+        storageMap.set('__alarm__', value);
+      },
+    },
+  };
+  const objects = new Map();
+  const env = {
+    EXPORTS_BUCKET: {
+      async put(key, value, options = {}) {
+        const storedValue = value?.getReader ? new Uint8Array(await new Response(value).arrayBuffer()) : value;
+        objects.set(key, { value: storedValue, options });
+      },
+      async get(key) {
+        const item = objects.get(key);
+        if (!item) return null;
+        return {
+          body: new Blob([item.value]).stream(),
+          httpMetadata: item.options.httpMetadata || {},
+        };
+      },
+      async delete(key) {
+        objects.delete(key);
+      },
+    },
+    EXPORT_PAGE_SIZE: '2',
+  };
+
+  const originalFetch = global.fetch;
+  const fetchedOffsets = [];
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+    const select = parsed.searchParams.get('$select');
+    if (parsed.pathname.includes('/hp9r-jxuu.json') && select === 'codigo') {
+      return new Response(JSON.stringify([]), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    if (select === 'count(*) as total') {
+      return new Response(JSON.stringify([{ total: '5' }]), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    if (parsed.searchParams.get('$limit') === '2') {
+      const offset = Number(parsed.searchParams.get('$offset') || '0');
+      fetchedOffsets.push(offset);
+      const rowsByOffset = {
+        0: [
+          { codigoestacion: '29045180', municipio: 'BARRANQUILLA', departamento: 'ATLANTICO', valorobservado: '12.5', fechaobservacion: '2024-01-01T00:00:00.000' },
+          { codigoestacion: '29045181', municipio: 'BARRANQUILLA', departamento: 'ATLANTICO', valorobservado: '10.1', fechaobservacion: '2024-01-02T00:00:00.000' },
+        ],
+        2: [
+          { codigoestacion: '29045182', municipio: 'SOLEDAD', departamento: 'ATLANTICO', valorobservado: '8.0', fechaobservacion: '2024-01-03T00:00:00.000' },
+          { codigoestacion: '29045183', municipio: 'SOLEDAD', departamento: 'ATLANTICO', valorobservado: '6.2', fechaobservacion: '2024-01-04T00:00:00.000' },
+        ],
+        4: [
+          { codigoestacion: '29045184', municipio: 'MALAMBO', departamento: 'ATLANTICO', valorobservado: '5.4', fechaobservacion: '2024-01-05T00:00:00.000' },
+        ],
+      };
+      return new Response(JSON.stringify(rowsByOffset[offset] || []), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    throw new Error(`Unexpected fetch call: ${parsed.toString()}`);
+  };
+
+  try {
+    const durableObject = new ExportJobDurableObject(state, env);
+    const createResponse = await durableObject.fetch(
+      new Request('https://export-job/create', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          jobId: 'job-parallel-pages',
+          payload: {
+            datasetId: 's54a-sgyg',
+            departments: ['ATLANTICO'],
+            startDate: '2024-01-01',
+            endDate: '2024-01-05',
+          },
+          formats: ['csv'],
+        }),
+      })
+    );
+    assert.equal(createResponse.status, 202);
+
+    await durableObject.alarm();
+
+    const statusResponse = await durableObject.fetch(new Request('https://export-job/status'));
+    const statusData = await statusResponse.json();
+    assert.equal(statusData.status, 'completed');
+    assert.deepEqual(fetchedOffsets, [0, 2, 4]);
+    assert.equal(statusData.completedPages, 3);
+    assert.equal(statusData.processedRows, 5);
+    assert.equal(statusData.parts.length, 1);
+  } finally {
+    global.fetch = originalFetch;
   }
 });
 
@@ -1006,6 +1118,9 @@ test('ExportJobDurableObject retries transient archive failures before failing t
         { status: 200, headers: { 'content-type': 'application/json' } }
       );
     }
+    if (parsed.searchParams.get('$limit') === '50000') {
+      return new Response(JSON.stringify([]), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
     throw new Error(`Unexpected fetch call: ${parsed.toString()}`);
   };
 
@@ -1100,6 +1215,9 @@ test('ExportJobDurableObject creates a no-data zip when filters return zero rows
       return new Response(JSON.stringify([{ total: '0' }]), { status: 200, headers: { 'content-type': 'application/json' } });
     }
     if (parsed.searchParams.get('$limit') === '50000' && parsed.searchParams.get('$offset') === '0') {
+      return new Response(JSON.stringify([]), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    if (parsed.searchParams.get('$limit') === '50000') {
       return new Response(JSON.stringify([]), { status: 200, headers: { 'content-type': 'application/json' } });
     }
     throw new Error(`Unexpected fetch call: ${parsed.toString()}`);

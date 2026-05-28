@@ -6,7 +6,7 @@ import { CATALOG_FILTERS, CLEAN_DEPARTMENT_MAP, DATASETS, DEPARTMENT_MAP } from 
 const { ParquetWriter } = writerModule;
 const { ParquetSchema } = schemaModule;
 
-const ASYNC_EXPORT_PAGE_BATCH = 1;
+const ASYNC_EXPORT_PAGE_BATCH = 3;
 const EXPORT_RATE_LIMIT = 30;
 const EXPORT_RATE_WINDOW_MS = 60 * 60 * 1000;
 const EXPORT_OBJECT_TTL_SECONDS = 60 * 60;
@@ -28,6 +28,7 @@ const DEFAULT_CONFIG = {
   pageLimit: 50000,
   previewLimit: 200,
   exportPageSize: 10000,
+  exportPageConcurrency: ASYNC_EXPORT_PAGE_BATCH,
   maxExportRows: null,
   maxCatalogStations: null,
   catalogCacheTtlSeconds: CATALOG_CACHE_TTL_SECONDS,
@@ -49,6 +50,7 @@ function getConfig(env) {
     pageLimit: positiveNumber(env?.PAGE_LIMIT, DEFAULT_CONFIG.pageLimit),
     previewLimit: positiveNumber(env?.PREVIEW_LIMIT, DEFAULT_CONFIG.previewLimit),
     exportPageSize: positiveNumber(env?.EXPORT_PAGE_SIZE, DEFAULT_CONFIG.exportPageSize),
+    exportPageConcurrency: Math.min(5, positiveNumber(env?.EXPORT_PAGE_CONCURRENCY, DEFAULT_CONFIG.exportPageConcurrency)),
     maxExportRows: positiveNumber(env?.MAX_EXPORT_ROWS, DEFAULT_CONFIG.maxExportRows),
     maxCatalogStations: env?.MAX_CATALOG_STATIONS ? positiveNumber(env.MAX_CATALOG_STATIONS, DEFAULT_CONFIG.maxCatalogStations) : DEFAULT_CONFIG.maxCatalogStations,
     socrataAppToken: env?.SOCRATA_APP_TOKEN || env?.SODA_APP_TOKEN || "",
@@ -1863,49 +1865,50 @@ async function saveJobToStorage(storage, job) {
   await storage.put("job", job);
 }
 
-function getNextPageDescriptor(job) {
+function getNextPageDescriptor(job, cursor = job.planCursor || { planIndex: 0, pageIndex: 0 }) {
   const planPages = job.plan?.planPages || [];
-  const planCursor = job.planCursor || { planIndex: 0, pageIndex: 0 };
 
-  while (planCursor.planIndex < planPages.length) {
-    const planPage = planPages[planCursor.planIndex];
+  while (cursor.planIndex < planPages.length) {
+    const planPage = planPages[cursor.planIndex];
     const pageCount = Number.isFinite(planPage.pageCount) ? planPage.pageCount : Infinity;
-    if (planCursor.pageIndex < pageCount) {
+    if (cursor.pageIndex < pageCount) {
       return {
-        planIndex: planCursor.planIndex,
-        pageIndex: planCursor.pageIndex,
-        offset: planCursor.pageIndex * job.plan.pageSize,
+        planIndex: cursor.planIndex,
+        pageIndex: cursor.pageIndex,
+        offset: cursor.pageIndex * job.plan.pageSize,
         where: planPage.where,
         rowCount: planPage.rowCount,
       };
     }
-    planCursor.planIndex += 1;
-    planCursor.pageIndex = 0;
+    cursor.planIndex += 1;
+    cursor.pageIndex = 0;
   }
 
   return null;
 }
 
-function advanceJobCursor(job, planFinished = false) {
+function advanceJobCursor(job, planFinished = false, cursor = job.planCursor) {
   const planPages = job.plan?.planPages || [];
-  job.planCursor = job.planCursor || { planIndex: 0, pageIndex: 0 };
+  const target = cursor || { planIndex: 0, pageIndex: 0 };
 
-  const currentPlan = planPages[job.planCursor.planIndex];
+  const currentPlan = planPages[target.planIndex];
   if (planFinished || !currentPlan) {
-    job.planCursor.planIndex += 1;
-    job.planCursor.pageIndex = 0;
+    target.planIndex += 1;
+    target.pageIndex = 0;
+    if (!cursor) job.planCursor = target;
     return;
   }
 
-  job.planCursor.pageIndex += 1;
+  target.pageIndex += 1;
   while (
-    job.planCursor.planIndex < planPages.length &&
-    Number.isFinite(planPages[job.planCursor.planIndex].pageCount) &&
-    job.planCursor.pageIndex >= planPages[job.planCursor.planIndex].pageCount
+    target.planIndex < planPages.length &&
+    Number.isFinite(planPages[target.planIndex].pageCount) &&
+    target.pageIndex >= planPages[target.planIndex].pageCount
   ) {
-    job.planCursor.planIndex += 1;
-    job.planCursor.pageIndex = 0;
+    target.planIndex += 1;
+    target.pageIndex = 0;
   }
+  if (!cursor) job.planCursor = target;
 }
 
 async function planExportJob(env, job) {
@@ -1991,10 +1994,16 @@ async function processExportJobBatch(env, job) {
 
   let processedAnyPage = false;
 
-  for (let batchIndex = 0; batchIndex < ASYNC_EXPORT_PAGE_BATCH; batchIndex += 1) {
-    const descriptor = getNextPageDescriptor(job);
+  const plannedCursor = { ...(job.planCursor || { planIndex: 0, pageIndex: 0 }) };
+  const descriptors = [];
+  for (let batchIndex = 0; batchIndex < config.exportPageConcurrency; batchIndex += 1) {
+    const descriptor = getNextPageDescriptor(job, plannedCursor);
     if (!descriptor) break;
+    descriptors.push(descriptor);
+    advanceJobCursor(job, false, plannedCursor);
+  }
 
+  const pageResults = await Promise.all(descriptors.map(async (descriptor) => {
     const rows = await fetchPlanPage(
       config,
       dataset.id,
@@ -2003,12 +2012,20 @@ async function processExportJobBatch(env, job) {
       descriptor.offset,
       job.plan.pageSize
     );
-    const normalized = normalizeRows(rows, dataset.id, job.plan.replacements || {}, dataset.dateColumn);
-    const planFinished = rows.length < job.plan.pageSize;
+    return {
+      descriptor,
+      rows,
+      normalized: normalizeRows(rows, dataset.id, job.plan.replacements || {}, dataset.dateColumn),
+      planFinished: rows.length < job.plan.pageSize,
+    };
+  }));
+
+  for (const { descriptor, normalized, planFinished } of pageResults) {
+    job.planCursor = { planIndex: descriptor.planIndex, pageIndex: descriptor.pageIndex };
     if (!normalized.length) {
       advanceJobCursor(job, true);
       processedAnyPage = true;
-      continue;
+      break;
     }
 
     const partIndex = job.completedPages + 1;
@@ -2020,6 +2037,7 @@ async function processExportJobBatch(env, job) {
 
     advanceJobCursor(job, planFinished);
     processedAnyPage = true;
+    if (planFinished) break;
   }
 
   if (!processedAnyPage || !getNextPageDescriptor(job)) {
