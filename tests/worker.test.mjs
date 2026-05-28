@@ -890,6 +890,60 @@ test('ExportJobDurableObject creates downloadable parts end to end', async () =>
   }
 });
 
+test('ExportJobDurableObject exposes client export plan telemetry before processing', async () => {
+  const storageMap = new Map();
+  const state = {
+    storage: {
+      async get(key) {
+        return storageMap.get(key);
+      },
+      async put(key, value) {
+        storageMap.set(key, value);
+      },
+      async setAlarm(value) {
+        storageMap.set('__alarm__', value);
+      },
+    },
+  };
+
+  const durableObject = new ExportJobDurableObject(state, { EXPORTS_BUCKET: { async put() {} } });
+  const createResponse = await durableObject.fetch(
+    new Request('https://export-job/create', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        jobId: 'job-telemetry',
+        payload: {
+          datasetId: 's54a-sgyg',
+          departments: ['ATLANTICO'],
+          startDate: '2024-01-01',
+          endDate: '2024-01-02',
+        },
+        formats: ['csv'],
+        exportPlan: {
+          datasetId: 's54a-sgyg',
+          rowCount: 125000,
+          totalPages: 3,
+          pageSize: 50000,
+          queryPlans: 1,
+          stationPoolSize: 8,
+          planPages: [{ planIndex: 0, rowCount: 125000, pageCount: 3 }],
+        },
+      }),
+    })
+  );
+  const data = await createResponse.json();
+
+  assert.equal(createResponse.status, 202);
+  assert.equal(data.rowCount, 125000);
+  assert.equal(data.totalPages, 3);
+  assert.equal(data.pageSize, 50000);
+  assert.equal(data.queryPlans, 1);
+  assert.equal(data.stationPoolSize, 8);
+  assert.equal(data.currentStage, 'En cola');
+  assert.equal(data.progressPercent, 2);
+});
+
 test('ExportJobDurableObject retries transient archive failures before failing the job', async () => {
   const storageMap = new Map();
   const state = {

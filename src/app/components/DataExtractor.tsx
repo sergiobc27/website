@@ -113,6 +113,15 @@ function formatDuration(value: number) {
   return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
 }
 
+function formatRowsPerSecond(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return 'Calculando';
+  return `${Math.round(value).toLocaleString('es-CO')} filas/s`;
+}
+
+function progressLabel(value: number) {
+  return `${Math.max(0, Math.min(100, Math.round(value)))}%`;
+}
+
 function parseStationCodes(value: string) {
   return Array.from(
     new Set(
@@ -273,6 +282,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   const [activeTask, setActiveTask] = useState('Esperando configuracion');
   const [operationStartedAt, setOperationStartedAt] = useState<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [animatedRows, setAnimatedRows] = useState(0);
   const handledJobIdsRef = useRef<Set<string>>(new Set());
   const pollFailuresRef = useRef(0);
 
@@ -553,24 +563,22 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           completedPages: data.completedPages,
           totalRows: data.rowCount,
           downloadedRows: data.processedRows,
-          totalParts: Math.max(data.totalPages, 1),
+          totalParts: 1,
           completedParts: data.parts.length,
         });
 
         if (data.status === 'queued') {
-          setProgress(4);
-          setActiveTask('Job en cola...');
+          setProgress(data.progressPercent);
+          setActiveTask(data.currentStage);
         } else if (data.status === 'planning') {
-          setProgress(8);
-          setActiveTask('Planificando exportacion...');
+          setProgress(data.progressPercent);
+          setActiveTask(data.currentStage);
         } else if (data.status === 'retrying') {
-          const ratio = data.totalPages ? data.completedPages / data.totalPages : 0;
-          setProgress(10 + Math.round(ratio * 80));
-          setActiveTask(`Reintentando consulta (${data.retryCount}/${data.retryLimit})...`);
+          setProgress(data.progressPercent);
+          setActiveTask(`${data.currentStage} (${data.retryCount}/${data.retryLimit})`);
         } else if (data.status === 'processing') {
-          const ratio = data.totalPages ? data.completedPages / data.totalPages : 0;
-          setProgress(10 + Math.round(ratio * 80));
-          setActiveTask(`Procesando ${data.completedPages}/${Math.max(data.totalPages, 1)} paginas...`);
+          setProgress(data.progressPercent);
+          setActiveTask(`${data.currentStage}: pagina ${data.currentPage}/${Math.max(data.totalPages, 1)}`);
         } else if (data.status === 'completed') {
           setProgress(100);
           setActiveTask('ZIP listo para descargar');
@@ -605,6 +613,26 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       window.clearInterval(timer);
     };
   }, [currentJobId, finalizeCompletedJob]);
+
+  const projectedRows = useMemo(() => {
+    const baseRows = currentJob?.processedRows ?? transferProgress?.downloadedRows ?? downloadMetrics?.rowCount ?? preview?.rowCount ?? 0;
+    const totalRows = currentJob?.rowCount ?? transferProgress?.totalRows ?? downloadMetrics?.rowCount ?? preview?.rowCount ?? baseRows;
+    if (!currentJob || !isBusy || !['processing', 'retrying'].includes(currentJob.status)) {
+      return baseRows;
+    }
+    const updatedAt = Date.parse(currentJob.updatedAt);
+    const secondsSinceUpdate = Number.isFinite(updatedAt) ? Math.max(0, (Date.now() - updatedAt) / 1000) : 0;
+    const projected = baseRows + Math.max(0, currentJob.rowsPerSecond || 0) * secondsSinceUpdate;
+    return Math.min(Math.max(baseRows, projected), Math.max(totalRows, baseRows));
+  }, [currentJob, downloadMetrics?.rowCount, elapsedMs, isBusy, preview?.rowCount, transferProgress]);
+
+  useEffect(() => {
+    setAnimatedRows((current) => {
+      if (!Number.isFinite(projectedRows)) return current;
+      if (Math.abs(projectedRows - current) < 10) return Math.round(projectedRows);
+      return Math.round(current + (projectedRows - current) * 0.35);
+    });
+  }, [projectedRows, elapsedMs]);
 
   const validateCurrentConfiguration = () => {
     if (!acceptedTerms) {
@@ -714,6 +742,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       setIsBusy(true);
       setOperationStartedAt(performance.now());
       setElapsedMs(0);
+      setAnimatedRows(0);
       setTransferProgress(null);
       setProgress(20);
       setActiveTask('Generando vista previa...');
@@ -749,15 +778,38 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       setIsBusy(true);
       setOperationStartedAt(performance.now());
       setElapsedMs(0);
+      setAnimatedRows(0);
       setDownloadMetrics(null);
       setTransferProgress(null);
       setCurrentJob(null);
       setCurrentJobId(null);
       pollFailuresRef.current = 0;
       setProgress(2);
-      setActiveTask('Creando job de exportacion...');
+      setActiveTask('Estimando volumen de descarga...');
 
       const downloadPayload = executionPayload;
+      appendLog('INFO', 'Estimando filas, paginas y planes de consulta...');
+
+      const exportPlan = await apiJson<ExportPlanResponse>('/api/export-plan', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(downloadPayload),
+      }, 'No fue posible estimar el volumen de descarga.');
+
+      setTransferProgress({
+        totalPages: Math.max(exportPlan.totalPages, 1),
+        completedPages: 0,
+        totalRows: exportPlan.rowCount,
+        downloadedRows: 0,
+        totalParts: 1,
+        completedParts: 0,
+      });
+      setProgress(7);
+      setActiveTask(`Volumen estimado: ${exportPlan.rowCount.toLocaleString('es-CO')} filas en ${Math.max(exportPlan.totalPages, 1)} pagina(s)`);
+      appendLog(
+        'SUCCESS',
+        `Plan listo: ${exportPlan.rowCount.toLocaleString('es-CO')} filas, ${Math.max(exportPlan.totalPages, 1)} pagina(s), ${exportPlan.queryPlans} plan(es).`
+      );
       appendLog('INFO', 'Creando job asincrono de exportacion...');
 
       const data = await apiJson<ExportJobStatusResponse>('/api/jobs', {
@@ -766,6 +818,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         body: JSON.stringify({
           ...downloadPayload,
           formats: selectedFormats,
+          exportPlan,
         }),
       }, 'No fue posible crear el job de exportacion.');
 
@@ -777,7 +830,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         completedPages: data.completedPages,
         totalRows: data.rowCount,
         downloadedRows: data.processedRows,
-        totalParts: Math.max(data.totalPages, 1),
+        totalParts: 1,
         completedParts: data.parts.length,
       });
       setProgress(5);
@@ -815,7 +868,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     setStep(steps[Math.max(selectedStepIndex - 1, 0)].id);
   };
 
-  const runtimeRows = transferProgress?.downloadedRows ?? downloadMetrics?.rowCount ?? preview?.rowCount ?? 0;
+  const runtimeRows = Math.max(animatedRows, transferProgress?.downloadedRows ?? downloadMetrics?.rowCount ?? preview?.rowCount ?? 0);
   const runtimeTotalRows = transferProgress?.totalRows ?? preview?.rowCount ?? downloadMetrics?.rowCount ?? 0;
   const runtimeElapsedMs = isBusy ? elapsedMs : downloadMetrics?.processingMs ?? preview?.processingMs ?? 0;
   const runtimePages = transferProgress
@@ -828,6 +881,15 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     : downloadMetrics
       ? `${downloadMetrics.archivePartCount}/${downloadMetrics.archivePartCount}`
       : '0/0';
+  const runtimeEta = currentJob?.estimatedRemainingSeconds !== null && currentJob?.estimatedRemainingSeconds !== undefined
+    ? formatDuration(currentJob.estimatedRemainingSeconds * 1000)
+    : currentJob?.status === 'planning'
+      ? 'Calculando'
+      : 'Sin dato';
+  const runtimeRate = formatRowsPerSecond(currentJob?.rowsPerSecond || 0);
+  const runtimeCurrentPage = currentJob
+    ? `${currentJob.currentPage}/${Math.max(currentJob.totalPages, 1)}`
+    : runtimePages;
   const readyDownloadJob = currentJob?.status === 'completed' && currentJob.parts.length ? currentJob : null;
 
   useEffect(() => {
@@ -957,7 +1019,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         <div className="bg-card border border-border rounded-xl p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-card-foreground font-bold">Estado de ejecucion</h3>
-            <span className="text-sm font-mono text-accent">{progress}%</span>
+            <span className="text-sm font-mono text-accent">{progressLabel(progress)}</span>
           </div>
           <div className="relative overflow-hidden rounded-full bg-muted h-4 mb-5">
             <div
@@ -966,17 +1028,41 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
             />
           </div>
 
+          <div className="mb-5 rounded-lg border border-border bg-background p-4">
+            <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Filas procesadas</p>
+                <p className="font-mono text-2xl font-bold text-card-foreground">
+                  {runtimeRows.toLocaleString('es-CO')}
+                  <span className="text-sm font-semibold text-muted-foreground">
+                    {' '}de {runtimeTotalRows ? runtimeTotalRows.toLocaleString('es-CO') : 'total pendiente'}
+                  </span>
+                </p>
+              </div>
+              <div className="text-sm text-muted-foreground sm:text-right">
+                <p>{currentJob?.currentStage || activeTask}</p>
+                <p className="font-mono text-accent">{runtimeRate}</p>
+              </div>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-accent transition-all duration-500"
+                style={{ width: `${runtimeTotalRows ? Math.min(100, (runtimeRows / runtimeTotalRows) * 100) : progress}%` }}
+              />
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             <MetricCard title="Variable" value={selectedDataset?.name || 'Sin seleccion'} icon={Database} />
             <MetricCard
-              title="Filas"
+              title="Filas estimadas"
               value={`${runtimeRows.toLocaleString('es-CO')} / ${runtimeTotalRows.toLocaleString('es-CO')}`}
               icon={FileSearch}
             />
-            <MetricCard title="Paginas" value={runtimePages} icon={Layers} />
+            <MetricCard title="Pagina actual" value={runtimeCurrentPage} icon={Layers} />
             <MetricCard title="ZIP" value={readyDownloadJob ? '1 archivo' : runtimeParts} icon={FileArchive} />
-            <MetricCard title="Estaciones" value={String(downloadMetrics?.stationCount || preview?.summary.stationCount || 0)} icon={MapPin} />
-            <MetricCard title="Tiempo" value={formatDuration(runtimeElapsedMs)} icon={Clock3} />
+            <MetricCard title="ETA" value={runtimeEta} icon={TimerReset} />
+            <MetricCard title="Tiempo transcurrido" value={formatDuration(runtimeElapsedMs)} icon={Clock3} />
             <MetricCard title="Peso" value={formatBytes(downloadMetrics?.sizeBytes || 0)} icon={Download} />
             <MetricCard title="Proceso" value={activeTask} icon={LoaderCircle} />
           </div>

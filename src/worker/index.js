@@ -89,6 +89,33 @@ function exportJobRetryDelayMs(failureCount) {
   return Math.min(30000, EXPORT_JOB_RETRY_BASE_MS * (2 ** Math.max(0, failureCount - 1)));
 }
 
+function finiteNumber(value, fallback = null) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function sanitizeClientExportPlan(value, datasetId) {
+  if (!value || value.datasetId !== datasetId) return null;
+  const rowCount = finiteNumber(value.rowCount);
+  const totalPages = finiteNumber(value.totalPages);
+  const pageSize = finiteNumber(value.pageSize);
+  if (rowCount === null || totalPages === null || pageSize === null) return null;
+  return {
+    rowCount,
+    totalPages,
+    pageSize,
+    queryPlans: finiteNumber(value.queryPlans, 0),
+    stationPoolSize: finiteNumber(value.stationPoolSize, 0),
+    planPages: Array.isArray(value.planPages)
+      ? value.planPages.map((page) => ({
+          planIndex: finiteNumber(page.planIndex, 0),
+          rowCount: finiteNumber(page.rowCount),
+          pageCount: finiteNumber(page.pageCount),
+        }))
+      : [],
+  };
+}
+
 function chunkArray(values, size) {
   const chunks = [];
   for (let index = 0; index < values.length; index += size) {
@@ -1729,7 +1756,66 @@ async function createFinalJobArchive(env, job, dataset, summary) {
   }];
 }
 
+function buildJobProgress(job) {
+  const rowCount = Number.isFinite(job.plan?.rowCount)
+    ? job.plan.rowCount
+    : Number.isFinite(job.clientPlan?.rowCount)
+      ? job.clientPlan.rowCount
+      : (job.metrics?.rowCount ?? job.processedRows ?? 0);
+  const totalPages = Number.isFinite(job.plan?.totalPages)
+    ? job.plan.totalPages
+    : Number.isFinite(job.clientPlan?.totalPages)
+      ? job.clientPlan.totalPages
+      : job.status === "completed"
+        ? (job.completedPages || 0)
+        : Math.max((job.completedPages || 0) + 1, 1);
+  const startedAt = job.startedAt ? new Date(job.startedAt).valueOf() : null;
+  const finishedAt = job.finishedAt ? new Date(job.finishedAt).valueOf() : null;
+  const elapsedMs = startedAt ? Math.max(0, (finishedAt || Date.now()) - startedAt) : 0;
+  const elapsedSeconds = Math.round(elapsedMs / 1000);
+  const rowsPerSecond = elapsedSeconds > 0 && job.processedRows > 0 ? job.processedRows / elapsedSeconds : 0;
+  const remainingRows = Math.max(0, rowCount - (job.processedRows || 0));
+  const estimatedRemainingSeconds = rowsPerSecond > 0 && remainingRows > 0 ? Math.ceil(remainingRows / rowsPerSecond) : null;
+  const pageRatio = totalPages > 0 ? Math.min(1, (job.completedPages || 0) / totalPages) : 0;
+  const rowRatio = rowCount > 0 ? Math.min(1, (job.processedRows || 0) / rowCount) : pageRatio;
+  const ratio = Math.max(pageRatio, rowRatio);
+  const progressPercent = job.status === "completed"
+    ? 100
+    : job.status === "failed"
+      ? 100
+      : job.status === "queued"
+        ? 2
+        : job.status === "planning"
+          ? 6
+          : Math.min(96, Math.max(10, Math.round(10 + ratio * 84)));
+  const currentPage = job.status === "completed" ? totalPages : Math.min(totalPages || 1, (job.completedPages || 0) + 1);
+  const currentStage = job.status === "queued"
+    ? "En cola"
+    : job.status === "planning"
+      ? "Estimando volumen y preparando filtros"
+      : job.status === "retrying"
+        ? "Reintentando operacion transitoria"
+        : job.status === "processing"
+          ? "Consultando Socrata y armando ZIP"
+          : job.status === "completed"
+            ? "ZIP listo"
+            : "Error";
+
+  return {
+    rowCount,
+    totalPages,
+    elapsedSeconds,
+    rowsPerSecond,
+    estimatedRemainingSeconds,
+    progressPercent,
+    currentPage,
+    currentStage,
+    pageSize: job.plan?.pageSize || job.clientPlan?.pageSize || null,
+  };
+}
+
 function buildJobResponse(job) {
+  const progress = buildJobProgress(job);
   return {
     jobId: job.id,
     status: job.status,
@@ -1747,16 +1833,19 @@ function buildJobResponse(job) {
     lastErrorAt: job.lastErrorAt || null,
     selectedFormats: job.selectedFormats || [],
     effectiveFormats: job.effectiveFormats || [],
-    rowCount: Number.isFinite(job.plan?.rowCount) ? job.plan.rowCount : (job.metrics?.rowCount ?? job.processedRows ?? 0),
-    totalPages: Number.isFinite(job.plan?.totalPages)
-      ? job.plan.totalPages
-      : job.status === "completed"
-        ? (job.completedPages || 0)
-        : Math.max((job.completedPages || 0) + 1, 1),
+    rowCount: progress.rowCount,
+    totalPages: progress.totalPages,
     completedPages: job.completedPages || 0,
     processedRows: job.processedRows || 0,
-    queryPlans: job.plan?.queryPlans || 0,
-    stationPoolSize: job.plan?.stationPoolSize || 0,
+    currentPage: progress.currentPage,
+    pageSize: progress.pageSize,
+    currentStage: progress.currentStage,
+    progressPercent: progress.progressPercent,
+    elapsedSeconds: progress.elapsedSeconds,
+    rowsPerSecond: progress.rowsPerSecond,
+    estimatedRemainingSeconds: progress.estimatedRemainingSeconds,
+    queryPlans: job.plan?.queryPlans || job.clientPlan?.queryPlans || 0,
+    stationPoolSize: job.plan?.stationPoolSize || job.clientPlan?.stationPoolSize || 0,
     parts: job.parts || [],
     metrics: job.metrics || null,
   };
@@ -1824,20 +1913,21 @@ async function planExportJob(env, job) {
   }
 
   const built = await buildQueryPlans(config, job.payload, dataset);
+  const clientPlanPages = Array.isArray(job.clientPlan?.planPages) ? job.clientPlan.planPages : [];
   const plan = {
     dataset,
     replacements: built.replacements,
-    stationPoolSize: built.stationPoolSize,
-    queryPlans: built.plans.length,
-    rowCount: null,
+    stationPoolSize: Number.isFinite(job.clientPlan?.stationPoolSize) ? job.clientPlan.stationPoolSize : built.stationPoolSize,
+    queryPlans: Number.isFinite(job.clientPlan?.queryPlans) ? job.clientPlan.queryPlans : built.plans.length,
+    rowCount: Number.isFinite(job.clientPlan?.rowCount) ? job.clientPlan.rowCount : null,
     pageSize: config.exportPageSize,
-    totalPages: null,
+    totalPages: Number.isFinite(job.clientPlan?.totalPages) ? job.clientPlan.totalPages : null,
     fileStem: buildFileStem(job.payload, dataset),
     planPages: built.plans.map((planPage, index) => ({
       planIndex: index,
       where: planPage.where,
-      rowCount: null,
-      pageCount: null,
+      rowCount: Number.isFinite(clientPlanPages[index]?.rowCount) ? clientPlanPages[index].rowCount : null,
+      pageCount: Number.isFinite(clientPlanPages[index]?.pageCount) ? clientPlanPages[index].pageCount : null,
     })),
   };
   job.status = "processing";
@@ -2032,6 +2122,7 @@ class ExportJobDurableObject {
         return jsonResponse({ error: departmentState.error }, 400);
       }
       payload.departments = departmentState.departments;
+      const clientPlan = sanitizeClientExportPlan(body.exportPlan, dataset.id);
 
       const formatState = sanitizeRequestedFormats(body.formats || payload.formats || []);
       const now = new Date().toISOString();
@@ -2051,6 +2142,7 @@ class ExportJobDurableObject {
         error: null,
         failureCount: 0,
         lastErrorAt: null,
+        clientPlan,
         fileStem: null,
         plan: null,
         completedPages: 0,
@@ -2193,7 +2285,7 @@ async function handleCreateJob(request, env) {
     new Request("https://export-job/create", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ jobId, payload: body, formats: body.formats || [] }),
+      body: JSON.stringify({ jobId, payload: body, formats: body.formats || [], exportPlan: body.exportPlan || null }),
     })
   );
 }

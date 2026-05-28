@@ -123,6 +123,13 @@ export interface ExportJobStatusResponse {
   totalPages: number;
   completedPages: number;
   processedRows: number;
+  currentPage: number;
+  pageSize: number | null;
+  currentStage: string;
+  progressPercent: number;
+  elapsedSeconds: number;
+  rowsPerSecond: number;
+  estimatedRemainingSeconds: number | null;
   queryPlans: number;
   stationPoolSize: number;
   parts: ExportJobPart[];
