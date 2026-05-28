@@ -327,6 +327,21 @@ test('catalog bundle can answer department requests from a cached dataset-wide b
   }
 });
 
+test('api routes return JSON errors for malformed request bodies', async () => {
+  const response = await worker.fetch(new Request('https://ideam.test/api/catalog-bundle', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{bad-json',
+  }), {
+    ASSETS: { fetch: async () => new Response('asset') },
+  }, createWaitUntilContext());
+  const data = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.match(response.headers.get('content-type'), /application\/json/);
+  assert.equal(data.error, 'JSON invalido en la solicitud.');
+});
+
 test('catalog cache-only requests return quickly and warm R2 in the background', async () => {
   const originalFetch = global.fetch;
   const bucket = createMemoryBucket();

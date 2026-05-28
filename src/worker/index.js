@@ -2287,46 +2287,49 @@ async function handleApi(request, env, ctx) {
       return handleMeta(env);
     }
     if (url.pathname === "/api/date-range" && request.method === "GET") {
-      return handleDateRange(request, env);
+      return await handleDateRange(request, env);
     }
     if (url.pathname === "/api/municipalities" && request.method === "GET") {
-      return handleMunicipalities(request, env);
+      return await handleMunicipalities(request, env);
     }
     if (url.pathname === "/api/catalog-options" && request.method === "POST") {
-      return handleCatalogOptions(request, env, ctx);
+      return await handleCatalogOptions(request, env, ctx);
     }
     if (url.pathname === "/api/catalog-bundle" && request.method === "POST") {
-      return handleCatalogBundle(request, env, ctx);
+      return await handleCatalogBundle(request, env, ctx);
     }
     if (url.pathname === "/api/stations-helper" && request.method === "POST") {
-      return handleStationHelper(request, env);
+      return await handleStationHelper(request, env);
     }
     if (url.pathname === "/api/coverage" && request.method === "POST") {
-      return handleCoverage(request, env);
+      return await handleCoverage(request, env);
     }
     if (url.pathname === "/api/preview" && request.method === "POST") {
-      return handlePreview(request, env);
+      return await handlePreview(request, env);
     }
     if (url.pathname === "/api/export-plan" && request.method === "POST") {
-      return handleExportPlan(request, env);
+      return await handleExportPlan(request, env);
     }
     if (url.pathname === "/api/export-page" && request.method === "POST") {
-      return handleExportPage(request, env);
+      return await handleExportPage(request, env);
     }
     if (url.pathname === "/api/export" && request.method === "POST") {
-      return handleExport(request, env);
+      return await handleExport(request, env);
     }
     if (url.pathname === "/api/jobs" && request.method === "POST") {
-      return handleCreateJob(request, env, ctx);
+      return await handleCreateJob(request, env, ctx);
     }
     const jobMatch = url.pathname.match(/^\/api\/jobs\/([^/]+)(?:\/(manifest|parts)(?:\/([^/]+))?)?$/);
     if (jobMatch && (request.method === "GET" || request.method === "DELETE")) {
       const [, jobId, action, extra] = jobMatch;
-      return handleJobProxy(request, env, jobId, action || "status", extra);
+      return await handleJobProxy(request, env, jobId, action || "status", extra);
     }
     return jsonResponse({ error: "Ruta API no encontrada." }, 404);
   } catch (error) {
-    return jsonResponse({ error: error.message || "Error interno del Worker." }, error.status || 500);
+    const invalidJson = error instanceof SyntaxError && /JSON|Unexpected token|Unexpected end/i.test(error.message || "");
+    return jsonResponse({
+      error: invalidJson ? "JSON invalido en la solicitud." : error.message || "Error interno del Worker.",
+    }, invalidJson ? 400 : error.status || 500);
   }
 }
 
