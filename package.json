@@ -7,9 +7,13 @@
   "scripts": {
     "build": "vite build",
     "check": "node --check src/worker/index.js",
+    "check:worker": "node --check src/worker/index.js",
+    "typecheck": "tsc --noEmit",
     "dev:web": "vite",
     "dev:worker": "wrangler dev",
     "deploy": "wrangler deploy",
+    "e2e": "playwright test",
+    "e2e:prod": "playwright test tests/e2e/ideam-production.spec.ts",
     "postinstall": "node scripts/patch-parquetjs-lite.mjs",
     "warm:catalogs": "node scripts/warm-catalog-bundles.mjs",
     "tail": "wrangler tail",
@@ -29,10 +33,14 @@
     "tw-animate-css": "1.3.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@tailwindcss/vite": "4.1.12",
+    "@types/react": "^18.3.29",
+    "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "4.7.0",
     "tailwindcss": "4.1.12",
-    "vite": "6.3.5",
-    "wrangler": "^4.14.1"
+    "typescript": "^6.0.3",
+    "vite": "^6.4.2",
+    "wrangler": "^4.95.0"
   }
 }

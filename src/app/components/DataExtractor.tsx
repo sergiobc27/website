@@ -19,171 +19,33 @@ import {
   TimerReset,
 } from 'lucide-react';
 import { EmptyState } from './EmptyState';
+import { apiJson, apiUrl } from '../lib/ideamApi';
+import type {
+  CatalogBundleRow,
+  CatalogFilterDefinition,
+  CoverageReport,
+  DateRangeResponse,
+  DatasetMeta,
+  DownloadMetrics,
+  ExportJobPart,
+  ExportJobStatusResponse,
+  ExportPageResponse,
+  ExportPlanResponse,
+  MetaResponse,
+  OptionItem,
+  OutputFormat,
+  PreviewResponse,
+  StationHelperRow,
+} from '../../shared/ideamContracts';
 
 const HISTORY_KEY = 'ideam-history';
-const PRODUCTION_API_ORIGIN = 'https://ideam.sergiobc.com';
 const MAX_OPERATION_LOGS = 80;
 const EXPORT_AVAILABILITY_MS = 60 * 60 * 1000;
 
 type StepId = 'consent' | 'variable' | 'territory' | 'advanced' | 'time' | 'execute';
-type OutputFormat = 'csv' | 'json' | 'parquet';
 type LogLevel = 'INFO' | 'SUCCESS' | 'ERROR';
 type TimeMode = 'full' | 'custom';
 type CatalogOptionStatus = 'idle' | 'loading' | 'ready' | 'warming' | 'error';
-
-interface DatasetMeta {
-  id: string;
-  name: string;
-  category: string;
-  dateColumn?: string;
-}
-
-interface CatalogFilterDefinition {
-  key: string;
-  label: string;
-  column: string;
-  labelColumn?: string;
-}
-
-interface MetaResponse {
-  datasets: DatasetMeta[];
-  departments: string[];
-  previewLimit: number;
-  exportPageSize: number;
-  maxExportRows: number | null;
-  catalogFilters: CatalogFilterDefinition[];
-}
-
-interface DateRangeResponse {
-  datasetId: string;
-  startDate: string | null;
-  endDate: string | null;
-  startYear: number | null;
-  endYear: number | null;
-}
-
-interface OptionItem {
-  value: string;
-  label?: string;
-  total: number;
-}
-
-type CatalogBundleRow = Record<string, string | number>;
-
-interface StationHelperRow {
-  code: string;
-  name: string;
-  department: string;
-  municipality: string;
-  zone: string;
-  entity: string;
-}
-
-interface CoverageReport {
-  department: string;
-  configured_variants: string[];
-  matched: Array<{ departamento: string; normalized: string; total: number }>;
-  matched_rows: number;
-  unmatched_rows: number;
-  unmatched_discovered: Array<{ departamento: string; normalized: string; total: number }>;
-}
-
-interface PreviewResponse {
-  datasetId: string;
-  rowCount: number;
-  rows: Record<string, unknown>[];
-  summary: {
-    rowCount: number;
-    stationCount: number;
-    municipalityCount: number;
-    departmentCount: number;
-    zoneCount: number;
-    observedStart: string | null;
-    observedEnd: string | null;
-  };
-  stationPoolSize: number;
-  queryPlans: number;
-  processingMs: number;
-}
-
-interface ExportJobPart {
-  index: number;
-  fileName: string;
-  rowCount: number;
-  sizeBytes: number;
-  formats: string[];
-  downloadPath: string;
-  expiresAt?: string;
-}
-
-interface ExportJobStatusResponse {
-  jobId: string;
-  status: 'queued' | 'planning' | 'processing' | 'completed' | 'failed';
-  createdAt: string;
-  startedAt: string | null;
-  finishedAt: string | null;
-  updatedAt: string;
-  datasetId: string;
-  datasetName: string;
-  fileStem: string | null;
-  warnings: string[];
-  error: string | null;
-  selectedFormats: string[];
-  effectiveFormats: string[];
-  rowCount: number;
-  totalPages: number;
-  completedPages: number;
-  processedRows: number;
-  queryPlans: number;
-  stationPoolSize: number;
-  parts: ExportJobPart[];
-  metrics: DownloadMetrics | null;
-}
-
-interface ExportPlanPage {
-  planIndex: number;
-  where: string | null;
-  rowCount: number;
-  pageCount: number;
-}
-
-interface ExportPlanResponse {
-  datasetId: string;
-  fileStem: string;
-  rowCount: number;
-  pageSize: number;
-  totalPages: number;
-  queryPlans: number;
-  stationPoolSize: number;
-  replacements: Record<string, string>;
-  planPages: ExportPlanPage[];
-  processingMs: number;
-}
-
-interface ExportPageResponse {
-  datasetId: string;
-  planIndex: number;
-  offset: number;
-  returnedRows: number;
-  rows: Record<string, unknown>[];
-}
-
-interface DownloadMetrics {
-  fileName: string;
-  rowCount: number;
-  stationCount: number;
-  municipalityCount: number;
-  departmentCount: number;
-  zoneCount: number;
-  processingMs: number;
-  sizeBytes: number;
-  observedStart: string;
-  observedEnd: string;
-  queryPlans: number;
-  stationPoolSize: number;
-  archivePartCount: number;
-  downloadedPages: number;
-}
 
 interface TransferProgress {
   totalPages: number;
@@ -302,47 +164,6 @@ function buildOptionsFromCatalogBundle(
   });
 
   return byKey;
-}
-
-function apiUrl(path: string) {
-  if (path.startsWith('http')) return path;
-  if (typeof window === 'undefined') return path;
-  return window.location.hostname === 'ideam.sergiobc.com' ? path : `${PRODUCTION_API_ORIGIN}${path}`;
-}
-
-async function parseJsonResponse<T>(response: Response, fallbackMessage: string): Promise<T & { error?: string }> {
-  const contentType = response.headers.get('content-type') || '';
-  const bodyText = await response.text();
-
-  if (!contentType.includes('application/json')) {
-    const isHtml = bodyText.trimStart().startsWith('<!DOCTYPE') || bodyText.trimStart().startsWith('<html');
-    const detail = isHtml
-      ? 'El servicio respondio con una pagina HTML en vez de datos JSON. Recarga la pagina e intenta de nuevo.'
-      : bodyText.slice(0, 240);
-    throw new Error(`${fallbackMessage} ${detail}`);
-  }
-
-  try {
-    return JSON.parse(bodyText) as T & { error?: string };
-  } catch {
-    throw new Error(`${fallbackMessage} La respuesta JSON esta corrupta o incompleta.`);
-  }
-}
-
-async function apiJson<T>(path: string, init: RequestInit | undefined, fallbackMessage: string) {
-  const response = await fetch(apiUrl(path), {
-    ...init,
-    cache: 'no-store',
-    headers: {
-      accept: 'application/json',
-      ...(init?.headers || {}),
-    },
-  });
-  const data = await parseJsonResponse<T>(response, fallbackMessage);
-  if (!response.ok) {
-    throw new Error(data.error || fallbackMessage);
-  }
-  return data;
 }
 
 function rowsToCsv(rows: Record<string, unknown>[]) {

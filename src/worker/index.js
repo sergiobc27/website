@@ -1,6 +1,7 @@
 import JSZip from "jszip";
 import writerModule from "parquetjs-lite/lib/writer.js";
 import schemaModule from "parquetjs-lite/lib/schema.js";
+import { CATALOG_FILTERS, CLEAN_DEPARTMENT_MAP, DATASETS, DEPARTMENT_MAP } from "./catalogConfig.js";
 
 const { ParquetWriter } = writerModule;
 const { ParquetSchema } = schemaModule;
@@ -38,80 +39,6 @@ class ApiError extends Error {
     this.status = status;
   }
 }
-
-const DATASETS = [
-  { name: "Precipitacion", id: "s54a-sgyg", dateColumn: "fechaobservacion", category: "Hidrometeorologia" },
-  { name: "Nivel del Mar", id: "ia8x-22em", dateColumn: "fechaobservacion", category: "Oceanografia" },
-  { name: "Direccion del Viento", id: "kiw7-v9ta", dateColumn: "fechaobservacion", category: "Meteorologia" },
-  { name: "Velocidad del Viento", id: "sgfv-3yp8", dateColumn: "fechaobservacion", category: "Meteorologia" },
-  { name: "Presion Atmosferica", id: "62tk-nxj5", dateColumn: "fechaobservacion", category: "Meteorologia" },
-  { name: "Humedad del Aire", id: "uext-mhny", dateColumn: "fechaobservacion", category: "Meteorologia" },
-  { name: "Temperatura Maxima del Aire", id: "ccvq-rp9s", dateColumn: "fechaobservacion", category: "Meteorologia" },
-  { name: "Temperatura Minima del Aire", id: "afdg-3zpb", dateColumn: "fechaobservacion", category: "Meteorologia" },
-  { name: "Nivel Maximo del Rio", id: "vfth-yucv", dateColumn: "fechaobservacion", category: "Hidrologia" },
-  { name: "Nivel Instantaneo del Rio", id: "bdmn-sqnh", dateColumn: "fechaobservacion", category: "Hidrologia" },
-  { name: "Nivel Minimo del Rio", id: "pt9a-aamx", dateColumn: "fechaobservacion", category: "Hidrologia" },
-  { name: "Nivel del Mar Maximo", id: "uxy3-jchf", dateColumn: "fechaobservacion", category: "Oceanografia" },
-  { name: "Nivel del Mar Minimo", id: "7z6g-yx9q", dateColumn: "fechaobservacion", category: "Oceanografia" }
-];
-
-const DEPARTMENT_MAP = {
-  "AMAZONAS": ["AMAZONAS"],
-  "ANTIOQUIA": ["ANTIOQUIA"],
-  "ARAUCA": ["ARAUCA"],
-  "ATLANTICO": ["ATLANTICO", "ATLÃNTICO"],
-  "BOLIVAR": ["BOLIVAR", "BOLÃVAR"],
-  "BOGOTA D.C.": ["BOGOTA", "BOGOTÃ", "BOGOTÃ D.C.", "BOGOTA, D.C"],
-  "BOYACA": ["BOYACA", "BOYACÃ"],
-  "CALDAS": ["CALDAS"],
-  "CAQUETA": ["CAQUETA", "CAQUETÃ"],
-  "CASANARE": ["CASANARE"],
-  "CAUCA": ["CAUCA"],
-  "CESAR": ["CESAR"],
-  "CHOCO": ["CHOCO", "CHOCÃ“"],
-  "CORDOBA": ["CORDOBA", "CÃ“RDOBA"],
-  "CUNDINAMARCA": ["CUNDINAMARCA"],
-  "GUAINIA": ["GUAINIA", "GUAINÃA"],
-  "GUAVIARE": ["GUAVIARE"],
-  "HUILA": ["HUILA"],
-  "LA GUAJIRA": ["LA GUAJIRA", "GUAJIRA"],
-  "MAGDALENA": ["MAGDALENA"],
-  "META": ["META"],
-  "NARINO": ["NARIÃ‘O", "NARINO"],
-  "NORTE DE SANTANDER": ["NORTE DE SANTANDER"],
-  "PUTUMAYO": ["PUTUMAYO"],
-  "QUINDIO": ["QUINDIO", "QUINDÃO"],
-  "RISARALDA": ["RISARALDA"],
-  "SAN ANDRES Y PROVIDENCIA": ["SAN ANDRES", "SAN ANDRÃ‰S Y PROVIDENCIA"],
-  "SANTANDER": ["SANTANDER"],
-  "SUCRE": ["SUCRE"],
-  "TOLIMA": ["TOLIMA"],
-  "VALLE DEL CAUCA": ["VALLE DEL CAUCA", "VALLE"],
-  "VAUPES": ["VAUPES", "VAUPÃ‰S"],
-  "VICHADA": ["VICHADA"]
-};
-
-const CLEAN_DEPARTMENT_MAP = {
-  "ATLANTICO": ["ATLANTICO", "ATL\u00c1NTICO"],
-  "BOLIVAR": ["BOLIVAR", "BOL\u00cdVAR"],
-  "BOGOTA D.C.": ["BOGOTA", "BOGOT\u00c1", "BOGOT\u00c1 D.C.", "BOGOTA, D.C"],
-  "BOYACA": ["BOYACA", "BOYAC\u00c1"],
-  "CAQUETA": ["CAQUETA", "CAQUET\u00c1"],
-  "CHOCO": ["CHOCO", "CHOC\u00d3"],
-  "CORDOBA": ["CORDOBA", "C\u00d3RDOBA"],
-  "GUAINIA": ["GUAINIA", "GUAIN\u00cdA"],
-  "NARINO": ["NARI\u00d1O", "NARINO"],
-  "QUINDIO": ["QUINDIO", "QUIND\u00cdO"],
-  "SAN ANDRES Y PROVIDENCIA": ["SAN ANDRES", "SAN ANDR\u00c9S Y PROVIDENCIA"],
-  "VAUPES": ["VAUPES", "VAUP\u00c9S"],
-};
-
-const CATALOG_FILTERS = [
-  { key: "municipalities", label: "Municipio", column: "municipio" },
-  { key: "hydrologicZones", label: "Zona hidrografica", column: "zonahidrografica" },
-  { key: "stations", label: "Codigo de estacion", column: "codigoestacion", labelColumn: "nombreestacion" },
-  { key: "stationNames", label: "Nombre de estacion", column: "nombreestacion" },
-];
 
 function getConfig(env) {
   return {

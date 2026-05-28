@@ -1,112 +1,94 @@
-# sergiobc.com
+# IDEAM Hydrology Data Web Automator
 
-Repositorio del sitio web de Sergio BC y de la app operativa en `ideam.sergiobc.com`.
+Repositorio privado del sitio `website`, incluyendo la aplicacion operativa de `ideam.sergiobc.com`.
 
 ## Superficies
 
 - `sergiobc.com` y `www.sergiobc.com`: sitio personal base.
-- `ideam.sergiobc.com`: frontend React/Vite del proyecto IDEAM servido por Cloudflare Workers Assets, con API `/api/*` ejecutada en el mismo Worker.
+- `ideam.sergiobc.com`: frontend React/Vite + Cloudflare Worker API para automatizar descargas IDEAM desde Socrata.
 
-## Estructura relevante
+## Arquitectura
 
-- `src/app/*`: frontend React basado en el dise?o de `Ideamwebsite`.
-- `src/worker/index.js`: API Worker para metadata, cobertura, preview y exportaciones asincronas por ZIP.
-- `src/imports/*`: assets del dise?o original.
-- `src/styles/*`: tema y estilos globales.
-- `tests/worker.test.mjs`: pruebas base de helpers y configuraci?n del Worker.
-- `wrangler.jsonc`: configuraci?n productiva del Worker.
-- `cloudflare/r2-lifecycle.json`: regla de lifecycle para eliminar exportaciones temporales despues de 1 hora.
-- `package.json`: scripts de build, test y deploy.
+- Frontend: React, Vite, TypeScript progresivo.
+- API: Cloudflare Workers.
+- Jobs asincronos: Durable Objects.
+- Almacenamiento temporal: R2.
+- Fuente de datos: Socrata SODA API en `www.datos.gov.co`.
+
+Flujo principal:
+
+1. El usuario configura variable, departamento, filtros, fechas y formatos.
+2. La web consulta catalogos avanzados desde cache R2.
+3. El Worker valida que haya departamento obligatorio.
+4. El Worker crea un job asincrono.
+5. El job consulta Socrata por paginas, genera un ZIP y lo guarda en R2.
+6. El usuario descarga un ZIP organizado por `variable/departamento/municipio`.
+
+## Estructura
+
+- `src/app/*`: interfaz React.
+- `src/app/lib/ideamApi.ts`: cliente API del frontend.
+- `src/shared/ideamContracts.ts`: contratos TypeScript compartidos para respuestas API.
+- `src/worker/index.js`: Worker, rutas API, Socrata, exportaciones y Durable Objects.
+- `src/worker/catalogConfig.js`: definiciones de datasets, departamentos y filtros.
+- `tests/worker.test.mjs`: pruebas del Worker.
+- `tests/e2e/ideam-production.spec.ts`: smoke test productivo.
+- `cloudflare/r2-lifecycle.json`: lifecycle R2 para borrar exportaciones despues de 1 hora.
+- `.github/workflows/deploy-ideam.yml`: CI/CD.
+- `docs/ARCHITECTURE.md`: arquitectura tecnica.
+- `docs/OPERATIONS.md`: operacion, despliegue y troubleshooting.
 
 ## Comandos
 
 ```bash
 npm install
 npm run check
+npm run typecheck
 npm test
 npm run build
-npm run dev:web
-npm run dev:worker
-npm run deploy
+npm run e2e:prod
 ```
 
-## Arquitectura
+Validacion Cloudflare sin desplegar:
 
-1. El usuario entra a `ideam.sergiobc.com`.
-2. Cloudflare sirve el build est?tico del frontend desde `dist`.
-3. Las rutas `/api/*` se ejecutan en `src/worker/index.js`.
-4. El Worker consulta los datasets p?blicos de IDEAM en Socrata.
-5. Los catalogos de personalizacion avanzada se sirven desde cache R2/edge cuando estan disponibles.
-6. La descarga se resuelve completamente online, sin scripts locales del usuario.
+```bash
+npx wrangler deploy --dry-run
+```
 
-## Cache de catalogos
+## Variables Y Secrets
 
-- `/api/catalog-bundle` entrega un catalogo integral por dataset/departamento con municipio, zona, estacion, sensor y unidad.
-- La UI calcula las opciones dependientes en memoria desde ese bundle, sin pedir cada filtro por separado.
-- El catalogo persistente vive en R2 bajo `catalog-cache/bundles/`; `/api/catalog-options` queda como ruta compatible.
-- `CATALOG_CACHE_TTL_SECONDS` controla el TTL de cada catalogo.
-- El cron de Wrangler se ejecuta cada 20 minutos y refresca hasta `CATALOG_WARM_LIMIT` bundles vencidos.
-- Con los valores actuales, el cron puede cubrir todos los bundles base soportados en una pasada y reutilizarlos hasta que venza el TTL.
-- Las exportaciones siguen aplicando fechas, estaciones, municipios y demas filtros reales en el momento de generar el ZIP.
-
-## Deploy
-
-El workflow `.github/workflows/deploy-ideam.yml`:
-
-1. instala dependencias,
-2. valida sintaxis del Worker,
-3. ejecuta pruebas base,
-4. construye el frontend,
-5. crea/verifica el bucket R2,
-6. aplica lifecycle de 1 hora para `exports/`,
-7. despliega a Cloudflare con Wrangler.
-
-Secrets requeridos en GitHub:
+GitHub Actions requiere:
 
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
 
-El token debe incluir permisos de Workers y `Workers R2 Storage Write` para poder aplicar lifecycle.
+Worker secret recomendado:
 
-Secret opcional recomendado en Cloudflare Worker:
+- `SOCRATA_APP_TOKEN`
 
-- `SOCRATA_APP_TOKEN`: token SODA/Socrata para enviar como `X-App-Token` en las consultas a `datos.gov.co`.
-
-Configuralo sin subirlo al repositorio:
+Ejemplo local:
 
 ```bash
+cp .env.example .env
 npx wrangler secret put SOCRATA_APP_TOKEN
 ```
 
-## Controles de costo $0.00
+## Controles De Costo
 
-- No se permiten descargas globales: cada preview/exportacion debe incluir al menos un departamento valido.
-- `/api/jobs` aplica rate limiting estricto: 30 exportaciones por hora por IP, con respuesta `429` y `Retry-After`.
-- Los ZIP se comprimen antes de subirse a R2 y se guardan bajo `exports/<jobId>/`.
-- Cada ZIP queda disponible para descargas repetidas durante la ventana temporal de 1 hora.
-- El bucket tiene lifecycle de respaldo para borrar cualquier objeto `exports/` con mas de 1 hora.
-- Los catalogos persistentes usan el prefijo `catalog-cache/`; no deben incluirse en la regla de borrado horario de `exports/`.
-- La ruta sincronica `/api/export` queda deshabilitada; el flujo soportado es asincrono por `/api/jobs`.
+- No se permiten exportaciones globales sin departamento.
+- `/api/jobs` limita a 30 exportaciones por hora por IP.
+- Los ZIP quedan bajo `exports/<jobId>/` en R2.
+- R2 elimina objetos `exports/` de mas de 1 hora.
+- Los catalogos persistentes usan `catalog-cache/` y no se eliminan por la regla horaria.
 
-## Estado actual
+## Estado Actual
 
-- El extractor React ya qued? conectado a:
-  - `/api/meta`
-  - `/api/date-range`
-  - `/api/municipalities`
-  - `/api/catalog-bundle`
-  - `/api/catalog-options`
-  - `/api/stations-helper`
-  - `/api/coverage`
-  - `/api/preview`
-  - `/api/export-plan`
-  - `/api/export-page`
-  - `/api/jobs`
-  - `/api/jobs/:id`
-  - `/api/jobs/:id/parts/:partIndex`
-- El historial usa `localStorage` real.
-- La cobertura territorial previa al ZIP vuelve a consultar resultados reales del dataset dentro del contexto de filtros activos.
-- La exportacion asincrona respeta filtros territoriales, divide por partes ZIP y limpia R2 al finalizar la descarga.
+Verificado:
 
-`src/worker/index.js` es la ?nica fuente activa para producci?n. El Worker inline anterior qued? archivado solo como referencia hist?rica.
-
+- metadata y catalogos responden JSON,
+- filtros avanzados cargan desde R2,
+- Socrata responde para los 13 datasets soportados,
+- exportaciones reales generan ZIP,
+- ZIP incluye CSV, JSON y Parquet,
+- descargas repetidas funcionan durante la ventana de 1 hora,
+- CI ejecuta typecheck, tests, audit, build, deploy, warmup y smoke test productivo.

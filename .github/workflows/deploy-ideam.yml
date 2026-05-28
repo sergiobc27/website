@@ -1,5 +1,8 @@
 name: Deploy IDEAM Worker
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 on:
   workflow_dispatch:
   push:
@@ -38,8 +41,14 @@ jobs:
       - name: Syntax check
         run: npm run check
 
+      - name: Typecheck frontend
+        run: npm run typecheck
+
       - name: Run tests
         run: npm test
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev
 
       - name: Build frontend
         run: npm run build
@@ -106,3 +115,9 @@ jobs:
           CATALOG_WARM_CONCURRENCY: "2"
           CATALOG_WARM_TIMEOUT_MS: "20000"
         run: npm run warm:catalogs
+
+      - name: Production smoke test
+        if: steps.cloudflare_secrets.outputs.ready == 'true'
+        env:
+          IDEAM_BASE_URL: https://ideam.sergiobc.com
+        run: npm run e2e:prod
