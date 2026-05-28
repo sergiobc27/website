@@ -99,8 +99,10 @@ jobs:
 
       - name: Warm IDEAM catalog bundles
         if: steps.cloudflare_secrets.outputs.ready == 'true'
+        timeout-minutes: 3
+        continue-on-error: true
         env:
           IDEAM_BASE_URL: https://ideam.sergiobc.com
           CATALOG_WARM_CONCURRENCY: "2"
-          CATALOG_WARM_TIMEOUT_MS: "90000"
+          CATALOG_WARM_TIMEOUT_MS: "20000"
         run: npm run warm:catalogs
