@@ -80,4 +80,7 @@ test('production IDEAM flow returns catalog, creates a job, and downloads a comp
   expect(names.some((name) => name.endsWith('.parquet'))).toBe(true);
   expect(names.some((name) => name.includes('manifest'))).toBe(false);
   expect(names.every((name) => name.startsWith('precipitacion/atlantico/barranquilla/'))).toBe(true);
+  expect(names.some((name) => name.startsWith('precipitacion/atlantico/barranquilla/csv/') && name.endsWith('.csv'))).toBe(true);
+  expect(names.some((name) => name.startsWith('precipitacion/atlantico/barranquilla/json/') && name.endsWith('.json'))).toBe(true);
+  expect(names.some((name) => name.startsWith('precipitacion/atlantico/barranquilla/parquet/') && name.endsWith('.parquet'))).toBe(true);
 });

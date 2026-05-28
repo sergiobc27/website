@@ -867,10 +867,10 @@ test('ExportJobDurableObject creates downloadable parts end to end', async () =>
     const zip = await JSZip.loadAsync(await partResponse.arrayBuffer());
     const names = Object.keys(zip.files).sort();
     assert.equal(names.some((name) => name.includes('manifest')), false);
-    assert.ok(names.some((name) => name.startsWith('precipitacion/atlantico/barranquilla/')));
-    assert.ok(names.some((name) => name.startsWith('precipitacion/atl_ntico/soledad/')));
-    assert.ok(names.some((name) => name.endsWith('.csv')));
-    assert.ok(names.some((name) => name.endsWith('.json')));
+    assert.ok(names.some((name) => name.startsWith('precipitacion/atlantico/barranquilla/csv/') && name.endsWith('.csv')));
+    assert.ok(names.some((name) => name.startsWith('precipitacion/atlantico/barranquilla/json/') && name.endsWith('.json')));
+    assert.ok(names.some((name) => name.startsWith('precipitacion/atl_ntico/soledad/csv/') && name.endsWith('.csv')));
+    assert.ok(names.some((name) => name.startsWith('precipitacion/atl_ntico/soledad/json/') && name.endsWith('.json')));
 
     const deleteResponse = await durableObject.fetch(new Request('https://export-job/parts/1', { method: 'DELETE' }));
     const deleteData = await deleteResponse.json();
@@ -1145,7 +1145,7 @@ test('ExportJobDurableObject creates a no-data zip when filters return zero rows
     const zip = await JSZip.loadAsync(await partResponse.arrayBuffer());
     const names = Object.keys(zip.files).sort();
     assert.equal(names.some((name) => name.includes('manifest')), false);
-    assert.ok(names.some((name) => name.startsWith('precipitacion/sin_datos/')));
+    assert.ok(names.some((name) => name.startsWith('precipitacion/sin_datos/csv/') && name.endsWith('.csv')));
   } finally {
     global.fetch = originalFetch;
   }

@@ -1597,21 +1597,24 @@ function groupRowsForArchive(rows, payload) {
 
 async function buildArchiveEntryFiles(rows, formats, basePath) {
   const files = [];
+  const pathParts = basePath.split("/");
+  const fileName = pathParts.pop() || "datos";
+  const parentPath = pathParts.join("/");
 
   if (formats.includes("csv")) {
-    files.push({ path: `${basePath}.csv`, bytes: encodeUtf8(rowsToCsv(rows)) });
+    files.push({ path: `${parentPath}/csv/${fileName}.csv`, bytes: encodeUtf8(rowsToCsv(rows)) });
   }
 
   if (formats.includes("json")) {
-    files.push({ path: `${basePath}.json`, bytes: encodeUtf8(JSON.stringify(rows, null, 2)) });
+    files.push({ path: `${parentPath}/json/${fileName}.json`, bytes: encodeUtf8(JSON.stringify(rows, null, 2)) });
   }
 
   if (formats.includes("parquet")) {
     try {
-      files.push({ path: `${basePath}.parquet`, bytes: await rowsToParquet(rows) });
+      files.push({ path: `${parentPath}/parquet/${fileName}.parquet`, bytes: await rowsToParquet(rows) });
     } catch (error) {
       if (!formats.includes("csv")) {
-        files.push({ path: `${basePath}.csv`, bytes: encodeUtf8(rowsToCsv(rows)) });
+        files.push({ path: `${parentPath}/csv/${fileName}.csv`, bytes: encodeUtf8(rowsToCsv(rows)) });
       }
     }
   }
