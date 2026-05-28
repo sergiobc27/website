@@ -41,6 +41,7 @@ import type {
 const HISTORY_KEY = 'ideam-history';
 const MAX_OPERATION_LOGS = 80;
 const EXPORT_AVAILABILITY_MS = 60 * 60 * 1000;
+const EXPORT_PLAN_FAST_TIMEOUT_MS = 8000;
 
 type StepId = 'consent' | 'variable' | 'territory' | 'advanced' | 'time' | 'execute';
 type LogLevel = 'INFO' | 'SUCCESS' | 'ERROR';
@@ -131,6 +132,21 @@ function parseStationCodes(value: string) {
         .filter(Boolean)
     )
   );
+}
+
+async function getFastExportPlan(payload: unknown) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), EXPORT_PLAN_FAST_TIMEOUT_MS);
+  try {
+    return await apiJson<ExportPlanResponse>('/api/export-plan', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    }, 'No fue posible estimar el volumen de descarga.');
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 function normalizeText(value: string) {
@@ -788,28 +804,33 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       setActiveTask('Estimando volumen de descarga...');
 
       const downloadPayload = executionPayload;
-      appendLog('INFO', 'Estimando filas, paginas y planes de consulta...');
+      appendLog('INFO', `Estimando volumen maximo por ${EXPORT_PLAN_FAST_TIMEOUT_MS / 1000} segundos...`);
 
-      const exportPlan = await apiJson<ExportPlanResponse>('/api/export-plan', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(downloadPayload),
-      }, 'No fue posible estimar el volumen de descarga.');
-
-      setTransferProgress({
-        totalPages: Math.max(exportPlan.totalPages, 1),
-        completedPages: 0,
-        totalRows: exportPlan.rowCount,
-        downloadedRows: 0,
-        totalParts: 1,
-        completedParts: 0,
-      });
-      setProgress(7);
-      setActiveTask(`Volumen estimado: ${exportPlan.rowCount.toLocaleString('es-CO')} filas en ${Math.max(exportPlan.totalPages, 1)} pagina(s)`);
-      appendLog(
-        'SUCCESS',
-        `Plan listo: ${exportPlan.rowCount.toLocaleString('es-CO')} filas, ${Math.max(exportPlan.totalPages, 1)} pagina(s), ${exportPlan.queryPlans} plan(es).`
-      );
+      let exportPlan: ExportPlanResponse | null = null;
+      try {
+        exportPlan = await getFastExportPlan(downloadPayload);
+        setTransferProgress({
+          totalPages: Math.max(exportPlan.totalPages, 1),
+          completedPages: 0,
+          totalRows: exportPlan.rowCount,
+          downloadedRows: 0,
+          totalParts: 1,
+          completedParts: 0,
+        });
+        setProgress(7);
+        setActiveTask(`Volumen estimado: ${exportPlan.rowCount.toLocaleString('es-CO')} filas en ${Math.max(exportPlan.totalPages, 1)} pagina(s)`);
+        appendLog(
+          'SUCCESS',
+          `Plan listo: ${exportPlan.rowCount.toLocaleString('es-CO')} filas, ${Math.max(exportPlan.totalPages, 1)} pagina(s), ${exportPlan.queryPlans} plan(es).`
+        );
+      } catch (error) {
+        setProgress(6);
+        setActiveTask('Plan pesado; iniciando descarga sin bloquear...');
+        appendLog(
+          'INFO',
+          'La estimacion exacta esta tardando por el volumen de Socrata. Se inicia el job y el progreso se actualizara con paginas reales procesadas.'
+        );
+      }
       appendLog('INFO', 'Creando job asincrono de exportacion...');
 
       const data = await apiJson<ExportJobStatusResponse>('/api/jobs', {
@@ -818,7 +839,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         body: JSON.stringify({
           ...downloadPayload,
           formats: selectedFormats,
-          exportPlan,
+          exportPlan: exportPlan || undefined,
         }),
       }, 'No fue posible crear el job de exportacion.');
 
