@@ -27,7 +27,7 @@ const DEFAULT_CONFIG = {
   catalogDatasetId: "hp9r-jxuu",
   pageLimit: 50000,
   previewLimit: 200,
-  exportPageSize: 50000,
+  exportPageSize: 10000,
   maxExportRows: null,
   maxCatalogStations: null,
   catalogCacheTtlSeconds: CATALOG_CACHE_TTL_SECONDS,
@@ -2225,8 +2225,14 @@ class ExportJobDurableObject {
       if (!job.plan) {
         job.status = "planning";
         await saveJobToStorage(this.state.storage, job);
+        await planExportJob(this.env, job);
+        await saveJobToStorage(this.state.storage, job);
       }
-      await runJobStep(this.env, job);
+      if (job.status !== "completed" && job.status !== "failed") {
+        job.status = "processing";
+        await saveJobToStorage(this.state.storage, job);
+        await processExportJobBatch(this.env, job);
+      }
       job.failureCount = 0;
       job.lastErrorAt = null;
       if (job.status !== "failed") {
