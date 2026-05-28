@@ -189,25 +189,19 @@ test('catalog bundle caches all advanced dimensions for instant dependent filter
     fetchCalls += 1;
     return new Response(JSON.stringify([
       {
-        departamento: 'ATLANTICO',
+        departamento: 'Atlantico',
         municipio: 'BARRANQUILLA',
-        zonahidrografica: 'CARIBE',
-        codigoestacion: '29045180',
-        nombreestacion: 'AEROPUERTO',
-        codigosensor: '0240',
-        descripcionsensor: 'PRECIPITACION',
-        unidadmedida: 'mm',
+        zona_hidrografica: 'CARIBE',
+        codigo: '0029045180',
+        nombre: 'AEROPUERTO [29045180]',
         total: '12',
       },
       {
-        departamento: 'ATLANTICO',
+        departamento: 'Atlantico',
         municipio: 'SOLEDAD',
-        zonahidrografica: 'CARIBE',
-        codigoestacion: '29045190',
-        nombreestacion: 'SOLEDAD',
-        codigosensor: '0240',
-        descripcionsensor: 'PRECIPITACION',
-        unidadmedida: 'mm',
+        zona_hidrografica: 'CARIBE',
+        codigo: '0029045190',
+        nombre: 'SOLEDAD [29045190]',
         total: '8',
       },
     ]), {
@@ -256,6 +250,8 @@ test('catalog bundle caches all advanced dimensions for instant dependent filter
     assert.ok(data.columns.includes('departamento'));
     assert.ok(data.columns.includes('municipio'));
     assert.ok(data.columns.includes('codigoestacion'));
+    assert.equal(data.rows[0].codigoestacion, '0029045180');
+    assert.equal(data.rows[0].nombreestacion, 'AEROPUERTO [29045180]');
   } finally {
     global.fetch = originalFetch;
   }
@@ -270,25 +266,19 @@ test('catalog bundle can answer department requests from a cached dataset-wide b
     fetchCalls += 1;
     return new Response(JSON.stringify([
       {
-        departamento: 'ATLANTICO',
+        departamento: 'Atlantico',
         municipio: 'BARRANQUILLA',
-        zonahidrografica: 'CARIBE',
-        codigoestacion: '29045180',
-        nombreestacion: 'AEROPUERTO',
-        codigosensor: '0240',
-        descripcionsensor: 'PRECIPITACION',
-        unidadmedida: 'mm',
+        zona_hidrografica: 'CARIBE',
+        codigo: '0029045180',
+        nombre: 'AEROPUERTO [29045180]',
         total: '12',
       },
       {
-        departamento: 'BOLIVAR',
+        departamento: 'Bolivar',
         municipio: 'CARTAGENA',
-        zonahidrografica: 'CARIBE',
-        codigoestacion: '29045200',
-        nombreestacion: 'CARTAGENA',
-        codigosensor: '0240',
-        descripcionsensor: 'PRECIPITACION',
-        unidadmedida: 'mm',
+        zona_hidrografica: 'CARIBE',
+        codigo: '0029045200',
+        nombre: 'CARTAGENA [29045200]',
         total: '7',
       },
     ]), {

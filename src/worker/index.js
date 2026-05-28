@@ -111,9 +111,6 @@ const CATALOG_FILTERS = [
   { key: "hydrologicZones", label: "Zona hidrografica", column: "zonahidrografica" },
   { key: "stations", label: "Codigo de estacion", column: "codigoestacion", labelColumn: "nombreestacion" },
   { key: "stationNames", label: "Nombre de estacion", column: "nombreestacion" },
-  { key: "sensors", label: "Codigo de sensor", column: "codigosensor" },
-  { key: "sensorDescriptions", label: "Descripcion del sensor", column: "descripcionsensor" },
-  { key: "units", label: "Unidad de medida", column: "unidadmedida" },
 ];
 
 function getConfig(env) {
@@ -1054,34 +1051,28 @@ async function buildCatalogBundleData(config, payload, dataset) {
   const departments = asArray(payload.departments ?? payload.department);
   const where = buildDepartmentFilter(departments, "departamento").filter;
   const columns = catalogBundleColumns();
-  const limit = Math.min(config.pageLimit, 50000);
-  const rows = [];
-  let offset = 0;
-
-  while (true) {
-    const page = await socrataGet(config, dataset.id, {
-      "$select": `${columns.join(", ")}, count(*) as total`,
-      "$where": where,
-      "$group": columns.join(", "),
-      "$order": columns.join(", "),
-      "$limit": limit,
-      "$offset": offset,
-    });
-    rows.push(...page);
-    if (page.length < limit) break;
-    offset += limit;
-  }
+  const rows = await socrataGet(config, config.catalogDatasetId, {
+    "$select": "departamento, municipio, zona_hidrografica, codigo, nombre, count(*) as total",
+    "$where": where,
+    "$group": "departamento, municipio, zona_hidrografica, codigo, nombre",
+    "$order": "municipio, codigo",
+    "$limit": 5000,
+  });
 
   return {
     datasetId: dataset.id,
     departments: uniqueSorted(departments.map((department) => canonicalDepartment(department) || department)),
     columns,
     rows: rows.map((row) => {
-      const next = { total: Number(row.total || 0) };
-      columns.forEach((column) => {
-        next[column] = row[column] || "";
-      });
-      return next;
+      const department = canonicalDepartment(row.departamento) || normalizeLabel(row.departamento);
+      return {
+        departamento: department || "",
+        municipio: row.municipio || "",
+        zonahidrografica: row.zona_hidrografica || "",
+        codigoestacion: row.codigo || "",
+        nombreestacion: row.nombre || "",
+        total: Number(row.total || 1),
+      };
     }),
     cachedAt: new Date().toISOString(),
     cacheTtlSeconds: config.catalogCacheTtlSeconds,
