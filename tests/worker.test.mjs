@@ -890,6 +890,113 @@ test('ExportJobDurableObject creates downloadable parts end to end', async () =>
   }
 });
 
+test('ExportJobDurableObject retries transient archive failures before failing the job', async () => {
+  const storageMap = new Map();
+  const state = {
+    storage: {
+      async get(key) {
+        return storageMap.get(key);
+      },
+      async put(key, value) {
+        storageMap.set(key, value);
+      },
+      async setAlarm(value) {
+        storageMap.set('__alarm__', value);
+      },
+    },
+  };
+
+  const objects = new Map();
+  let entryPutAttempts = 0;
+  const env = {
+    EXPORTS_BUCKET: {
+      async put(key, value, options = {}) {
+        if (key.includes('/entries/') && entryPutAttempts === 0) {
+          entryPutAttempts += 1;
+          throw new Error('R2 transient upload failure');
+        }
+        if (key.includes('/entries/')) entryPutAttempts += 1;
+        const storedValue = value?.getReader ? new Uint8Array(await new Response(value).arrayBuffer()) : value;
+        objects.set(key, { value: storedValue, options });
+      },
+      async get(key) {
+        const item = objects.get(key);
+        if (!item) return null;
+        return {
+          body: new Blob([item.value]).stream(),
+          httpMetadata: item.options.httpMetadata || {},
+        };
+      },
+      async delete(key) {
+        objects.delete(key);
+      },
+    },
+    EXPORT_PAGE_SIZE: '50000',
+  };
+
+  const originalFetch = global.fetch;
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+    const select = parsed.searchParams.get('$select');
+    if (parsed.pathname.includes('/hp9r-jxuu.json') && select === 'codigo') {
+      return new Response(JSON.stringify([]), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    if (select === 'count(*) as total') {
+      return new Response(JSON.stringify([{ total: '1' }]), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    if (parsed.searchParams.get('$limit') === '50000' && parsed.searchParams.get('$offset') === '0') {
+      return new Response(
+        JSON.stringify([
+          { codigoestacion: '29045180', municipio: 'BARRANQUILLA', departamento: 'ATLANTICO', valorobservado: '12.5', fechaobservacion: '2024-01-01T00:00:00.000' },
+        ]),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    }
+    throw new Error(`Unexpected fetch call: ${parsed.toString()}`);
+  };
+
+  try {
+    const durableObject = new ExportJobDurableObject(state, env);
+    const createResponse = await durableObject.fetch(
+      new Request('https://export-job/create', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          jobId: 'job-retry',
+          payload: {
+            datasetId: 's54a-sgyg',
+            departments: ['ATLANTICO'],
+            stationCodes: ['STA0001'],
+            startDate: '2024-01-01',
+            endDate: '2024-01-02',
+          },
+          formats: ['csv'],
+        }),
+      })
+    );
+    assert.equal(createResponse.status, 202);
+
+    await durableObject.alarm();
+    let statusResponse = await durableObject.fetch(new Request('https://export-job/status'));
+    let statusData = await statusResponse.json();
+    assert.equal(statusData.status, 'retrying');
+    assert.equal(statusData.retryCount, 1);
+    assert.match(statusData.error, /R2 transient/);
+    assert.equal(statusData.parts.length, 0);
+
+    await durableObject.alarm();
+    statusResponse = await durableObject.fetch(new Request('https://export-job/status'));
+    statusData = await statusResponse.json();
+    assert.equal(statusData.status, 'completed');
+    assert.equal(statusData.retryCount, 0);
+    assert.equal(statusData.error, null);
+    assert.equal(statusData.parts.length, 1);
+    assert.equal(entryPutAttempts, 2);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('ExportJobDurableObject creates a no-data zip when filters return zero rows', async () => {
   const storageMap = new Map();
   const state = {

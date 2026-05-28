@@ -13,6 +13,8 @@ const EXPORT_OBJECT_TTL_SECONDS = 60 * 60;
 const SOCRATA_MAX_ATTEMPTS = 4;
 const SOCRATA_RETRY_BASE_MS = 350;
 const SOCRATA_TIMEOUT_MS = 30000;
+const EXPORT_JOB_MAX_FAILURES = 3;
+const EXPORT_JOB_RETRY_BASE_MS = 1000;
 const CATALOG_CACHE_TTL_SECONDS = 24 * 60 * 60;
 const CATALOG_WARM_LIMIT = 500;
 const CATALOG_CACHE_VERSION = "v2";
@@ -81,6 +83,10 @@ function uniqueSorted(values, locale = "es") {
 function positiveNumber(value, fallback) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function exportJobRetryDelayMs(failureCount) {
+  return Math.min(30000, EXPORT_JOB_RETRY_BASE_MS * (2 ** Math.max(0, failureCount - 1)));
 }
 
 function chunkArray(values, size) {
@@ -1736,6 +1742,9 @@ function buildJobResponse(job) {
     fileStem: job.fileStem,
     warnings: job.warnings || [],
     error: job.error || null,
+    retryCount: job.failureCount || 0,
+    retryLimit: EXPORT_JOB_MAX_FAILURES,
+    lastErrorAt: job.lastErrorAt || null,
     selectedFormats: job.selectedFormats || [],
     effectiveFormats: job.effectiveFormats || [],
     rowCount: Number.isFinite(job.plan?.rowCount) ? job.plan.rowCount : (job.metrics?.rowCount ?? job.processedRows ?? 0),
@@ -2040,6 +2049,8 @@ class ExportJobDurableObject {
         effectiveFormats: formatState.effective,
         warnings: formatState.warnings,
         error: null,
+        failureCount: 0,
+        lastErrorAt: null,
         fileStem: null,
         plan: null,
         completedPages: 0,
@@ -2114,22 +2125,35 @@ class ExportJobDurableObject {
       return;
     }
 
+    let nextAlarmDelayMs = 250;
     try {
       if (!job.plan) {
         job.status = "planning";
         await saveJobToStorage(this.state.storage, job);
       }
       await runJobStep(this.env, job);
+      job.failureCount = 0;
+      job.lastErrorAt = null;
+      if (job.status !== "failed") {
+        job.error = null;
+      }
     } catch (error) {
-      job.status = "failed";
+      job.failureCount = (job.failureCount || 0) + 1;
+      job.lastErrorAt = new Date().toISOString();
       job.error = error?.message || "Fallo interno procesando el job de exportacion.";
-      job.finishedAt = new Date().toISOString();
+      if (job.failureCount >= EXPORT_JOB_MAX_FAILURES) {
+        job.status = "failed";
+        job.finishedAt = new Date().toISOString();
+      } else {
+        job.status = "retrying";
+        nextAlarmDelayMs = exportJobRetryDelayMs(job.failureCount);
+      }
     }
 
     await saveJobToStorage(this.state.storage, job);
 
     if (job.status !== "completed" && job.status !== "failed") {
-      await this.state.storage.setAlarm(Date.now() + 250);
+      await this.state.storage.setAlarm(Date.now() + nextAlarmDelayMs);
     }
   }
 }

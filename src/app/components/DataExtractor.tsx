@@ -563,6 +563,10 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         } else if (data.status === 'planning') {
           setProgress(8);
           setActiveTask('Planificando exportacion...');
+        } else if (data.status === 'retrying') {
+          const ratio = data.totalPages ? data.completedPages / data.totalPages : 0;
+          setProgress(10 + Math.round(ratio * 80));
+          setActiveTask(`Reintentando consulta (${data.retryCount}/${data.retryLimit})...`);
         } else if (data.status === 'processing') {
           const ratio = data.totalPages ? data.completedPages / data.totalPages : 0;
           setProgress(10 + Math.round(ratio * 80));

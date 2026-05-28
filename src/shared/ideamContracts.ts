@@ -104,7 +104,7 @@ export interface DownloadMetrics {
 
 export interface ExportJobStatusResponse {
   jobId: string;
-  status: 'queued' | 'planning' | 'processing' | 'completed' | 'failed';
+  status: 'queued' | 'planning' | 'processing' | 'retrying' | 'completed' | 'failed';
   createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;
@@ -114,6 +114,9 @@ export interface ExportJobStatusResponse {
   fileStem: string | null;
   warnings: string[];
   error: string | null;
+  retryCount: number;
+  retryLimit: number;
+  lastErrorAt: string | null;
   selectedFormats: string[];
   effectiveFormats: string[];
   rowCount: number;
