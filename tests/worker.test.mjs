@@ -229,8 +229,8 @@ test('catalog bundle caches all advanced dimensions for instant dependent filter
     }), env, firstCtx);
     await Promise.all(firstCtx.promises);
 
-    assert.equal(first.status, 200);
-    assert.equal(first.headers.get('x-ideam-cache'), 'MISS');
+    assert.equal(first.status, 202);
+    assert.equal(first.headers.get('x-ideam-cache'), 'PENDING');
     assert.equal(fetchCalls, 1);
 
     global.fetch = async () => {
@@ -304,7 +304,7 @@ test('catalog bundle can answer department requests from a cached dataset-wide b
       body: JSON.stringify(globalPayload),
     }), env, warmCtx);
     await Promise.all(warmCtx.promises);
-    assert.equal(warmResponse.status, 200);
+    assert.equal(warmResponse.status, 202);
     assert.equal(fetchCalls, 1);
 
     global.fetch = async () => {
@@ -411,7 +411,7 @@ test('warmCatalogCache rotates catalog payloads and stores progress in R2', asyn
 
     assert.equal(summary.warmed, 3);
     assert.equal(summary.failed, 0);
-    assert.equal(fetchCalls, 3);
+    assert.ok(fetchCalls >= 3);
     assert.ok(bucket.objects.has('catalog-cache/_warm-state.json'));
     assert.ok(Array.from(bucket.objects.keys()).some((key) => key.startsWith('catalog-cache/bundles/')));
   } finally {

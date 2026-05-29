@@ -506,6 +506,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   useEffect(() => {
     if (!acceptedTerms || !datasetId || !selectedDepartments.length || !meta?.catalogFilters?.length) return;
     let cancelled = false;
+    let retryPending = true;
     const definitions = meta.catalogFilters;
 
     setCatalogOptionErrors({});
@@ -513,7 +514,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
 
     const loadCatalogBundle = async () => {
       try {
-        const data = await apiJson<{ rows?: CatalogBundleRow[] }>('/api/catalog-bundle', {
+        const data = await apiJson<{ rows?: CatalogBundleRow[]; cachePending?: boolean }>('/api/catalog-bundle', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
@@ -523,18 +524,27 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         }, 'No fue posible cargar el catalogo de filtros.');
 
         if (cancelled) return;
+        retryPending = Boolean(data.cachePending);
         setCatalogBundleRows(data.rows || []);
-        setCatalogOptionStatus(Object.fromEntries(definitions.map((definition) => [definition.key, 'ready' as CatalogOptionStatus])));
+        setCatalogOptionStatus(Object.fromEntries(definitions.map((definition) => [
+          definition.key,
+          data.cachePending ? 'warming' as CatalogOptionStatus : 'ready' as CatalogOptionStatus,
+        ])));
       } catch {
         if (cancelled) return;
+        retryPending = false;
         setCatalogBundleRows([]);
         setCatalogOptionStatus(Object.fromEntries(definitions.map((definition) => [definition.key, 'error' as CatalogOptionStatus])));
       }
     };
 
     void loadCatalogBundle();
+    const retryTimer = window.setInterval(() => {
+      if (!cancelled && retryPending) void loadCatalogBundle();
+    }, 30000);
     return () => {
       cancelled = true;
+      window.clearInterval(retryTimer);
     };
   }, [acceptedTerms, datasetId, meta?.catalogFilters, selectedDepartments.join('|')]);
 

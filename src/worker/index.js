@@ -17,9 +17,10 @@ const EXPORT_JOB_MAX_FAILURES = 3;
 const EXPORT_JOB_RETRY_BASE_MS = 1000;
 const CATALOG_CACHE_TTL_SECONDS = 24 * 60 * 60;
 const CATALOG_WARM_LIMIT = 500;
-const CATALOG_CACHE_VERSION = "v2";
+const CATALOG_CACHE_VERSION = "v3";
 const CATALOG_CACHE_PREFIX = "catalog-cache/options";
 const CATALOG_BUNDLE_PREFIX = "catalog-cache/bundles";
+const DATE_RANGE_CACHE_PREFIX = "catalog-cache/date-ranges";
 const CATALOG_WARM_STATE_KEY = "catalog-cache/_warm-state.json";
 
 const DEFAULT_CONFIG = {
@@ -204,6 +205,10 @@ async function catalogBundleObjectKey(payload) {
   return `${CATALOG_BUNDLE_PREFIX}/${datasetPart}/${key}.json`;
 }
 
+function dateRangeObjectKey(datasetId) {
+  return `${DATE_RANGE_CACHE_PREFIX}/${fileSafePart(datasetId, "dataset")}.json`;
+}
+
 async function fromCatalogCache(payload) {
   if (typeof caches === "undefined" || !caches.default) return null;
   const cacheRequest = await catalogCacheRequest(payload);
@@ -246,6 +251,15 @@ async function readCatalogBundleCacheData(env, payload, ttlSeconds) {
   const expiresAt = object.customMetadata?.expiresAt;
   if (expiresAt && Date.parse(expiresAt) <= Date.now()) return null;
 
+  return object.json();
+}
+
+async function readDateRangeCacheData(env, datasetId, ttlSeconds) {
+  if (!env?.EXPORTS_BUCKET || ttlSeconds <= 0) return null;
+  const object = await env.EXPORTS_BUCKET.get(dateRangeObjectKey(datasetId));
+  if (!object) return null;
+  const expiresAt = object.customMetadata?.expiresAt;
+  if (expiresAt && Date.parse(expiresAt) <= Date.now()) return null;
   return object.json();
 }
 
@@ -306,6 +320,39 @@ async function storeCatalogBundleCache(env, payload, data, ttlSeconds, ctx) {
     ctx.waitUntil(write);
   } else {
     await write;
+  }
+}
+
+async function storeDateRangeCache(env, datasetId, data, ttlSeconds, ctx) {
+  if (!env?.EXPORTS_BUCKET || ttlSeconds <= 0) return;
+  const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+  const write = env.EXPORTS_BUCKET.put(dateRangeObjectKey(datasetId), JSON.stringify({ ...data, cacheTtlSeconds: ttlSeconds }), {
+    httpMetadata: {
+      contentType: "application/json; charset=utf-8",
+      cacheControl: `public, max-age=${ttlSeconds}`,
+    },
+    customMetadata: {
+      cacheVersion: CATALOG_CACHE_VERSION,
+      datasetId: String(datasetId || ""),
+      expiresAt,
+    },
+  }).catch(() => null);
+
+  if (ctx?.waitUntil) {
+    ctx.waitUntil(write);
+  } else {
+    await write;
+  }
+}
+
+async function refreshCatalogBundleCache(env, payload, dataset, config, ctx) {
+  const refresh = buildCatalogBundleData(config, payload, dataset)
+    .then((data) => storeCatalogBundleCache(env, payload, data, config.catalogCacheTtlSeconds))
+    .catch(() => null);
+  if (ctx?.waitUntil) {
+    ctx.waitUntil(refresh);
+  } else {
+    await refresh;
   }
 }
 
@@ -898,12 +945,29 @@ async function handleDateRange(request, env) {
     return jsonResponse({ error: "datasetId invalido o sin columna temporal." }, 400);
   }
 
-  const firstRow = await socrataGet(config, datasetId, {
+  const cached = await readDateRangeCacheData(env, datasetId, config.catalogCacheTtlSeconds);
+  if (cached) {
+    return jsonResponse(cached, 200, {
+      "cache-control": `public, max-age=${config.catalogCacheTtlSeconds}`,
+      "x-ideam-cache": "R2-HIT",
+    });
+  }
+
+  const data = await buildDateRangeData(config, dataset);
+  await storeDateRangeCache(env, datasetId, data, config.catalogCacheTtlSeconds);
+  return jsonResponse(data, 200, {
+    "cache-control": `public, max-age=${config.catalogCacheTtlSeconds}`,
+    "x-ideam-cache": "MISS",
+  });
+}
+
+async function buildDateRangeData(config, dataset) {
+  const firstRow = await socrataGet(config, dataset.id, {
     "$select": dataset.dateColumn,
     "$order": `${dataset.dateColumn} ASC`,
     "$limit": 1,
   });
-  const lastRow = await socrataGet(config, datasetId, {
+  const lastRow = await socrataGet(config, dataset.id, {
     "$select": dataset.dateColumn,
     "$order": `${dataset.dateColumn} DESC`,
     "$limit": 1,
@@ -914,14 +978,16 @@ async function handleDateRange(request, env) {
   const startDate = start ? String(start).slice(0, 10) : null;
   const endDate = end ? String(end).slice(0, 10) : null;
 
-  return jsonResponse({
-    datasetId,
+  return {
+    datasetId: dataset.id,
     dateColumn: dataset.dateColumn,
     startDate,
     endDate,
     startYear: startDate ? Number(startDate.slice(0, 4)) : null,
     endYear: endDate ? Number(endDate.slice(0, 4)) : null,
-  });
+    cachedAt: new Date().toISOString(),
+    cacheTtlSeconds: config.catalogCacheTtlSeconds,
+  };
 }
 
 async function handleMunicipalities(request, env) {
@@ -1017,8 +1083,8 @@ async function buildCatalogBundleData(config, payload, dataset) {
     "$select": "departamento, municipio, zona_hidrografica, codigo, nombre, count(*) as total",
     "$where": where,
     "$group": "departamento, municipio, zona_hidrografica, codigo, nombre",
-    "$order": "municipio, codigo",
-    "$limit": 5000,
+    "$order": "departamento, municipio, codigo",
+    "$limit": 50000,
   });
 
   return {
@@ -1091,10 +1157,16 @@ async function warmCatalogCache(env) {
     if (!dataset) continue;
     try {
       const cached = await fromCatalogBundleCache(env, payload, config.catalogCacheTtlSeconds);
-      if (cached) continue;
-      const data = await buildCatalogBundleData(config, payload, dataset);
-      await storeCatalogBundleCache(env, payload, data, config.catalogCacheTtlSeconds);
-      warmed += 1;
+      if (!cached) {
+        const data = await buildCatalogBundleData(config, payload, dataset);
+        await storeCatalogBundleCache(env, payload, data, config.catalogCacheTtlSeconds);
+        warmed += 1;
+      }
+      const dateCached = await readDateRangeCacheData(env, dataset.id, config.catalogCacheTtlSeconds);
+      if (!dateCached && dataset.dateColumn) {
+        const dateRange = await buildDateRangeData(config, dataset);
+        await storeDateRangeCache(env, dataset.id, dateRange, config.catalogCacheTtlSeconds);
+      }
     } catch {
       failed += 1;
     }
@@ -1127,6 +1199,15 @@ async function handleCatalogBundle(request, env, ctx) {
   if (cached) return cached;
 
   const globalPayload = catalogBundleAllDepartmentsPayload(payload.datasetId);
+  if (payload.warm === true || payload.forceRefresh === true) {
+    const data = await buildCatalogBundleData(config, payload, dataset);
+    await storeCatalogBundleCache(env, payload, data, config.catalogCacheTtlSeconds, ctx);
+    return jsonResponse(filterCatalogBundleDataByDepartments(data, payload.departments, config.catalogCacheTtlSeconds), 200, {
+      "cache-control": `public, max-age=${config.catalogCacheTtlSeconds}`,
+      "x-ideam-cache": "MISS-WARMED",
+    });
+  }
+
   const globalData = await readCatalogBundleCacheData(env, globalPayload, config.catalogCacheTtlSeconds);
   if (globalData) {
     return jsonResponse(filterCatalogBundleDataByDepartments(globalData, payload.departments, config.catalogCacheTtlSeconds), 200, {
@@ -1135,13 +1216,20 @@ async function handleCatalogBundle(request, env, ctx) {
     });
   }
 
-  const data = await buildCatalogBundleData(config, payload, dataset);
-  const response = jsonResponse(data, 200, {
-    "cache-control": `public, max-age=${config.catalogCacheTtlSeconds}`,
-    "x-ideam-cache": "MISS",
+  await refreshCatalogBundleCache(env, payload, dataset, config, ctx);
+  return jsonResponse({
+    datasetId: dataset.id,
+    departments: payload.departments,
+    columns: catalogBundleColumns(),
+    rows: [],
+    cachePending: true,
+    cachedAt: null,
+    cacheTtlSeconds: config.catalogCacheTtlSeconds,
+    message: "Catalogo en actualizacion. El usuario puede continuar y la descarga real usara Socrata.",
+  }, 202, {
+    "cache-control": "no-store",
+    "x-ideam-cache": "PENDING",
   });
-  await storeCatalogBundleCache(env, payload, data, config.catalogCacheTtlSeconds, ctx);
-  return response;
 }
 
 async function handleCatalogOptions(request, env, ctx) {

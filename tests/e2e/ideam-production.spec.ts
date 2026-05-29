@@ -20,11 +20,17 @@ test('production IDEAM flow returns catalog, creates a job, and downloads a comp
   expect(metaBody.datasets.map((dataset: { id: string }) => dataset.id)).toContain(DATASET_ID);
   expect(metaBody.departments).toContain(DEPARTMENT);
 
-  const catalog = await request.post('/api/catalog-bundle', {
-    data: { datasetId: DATASET_ID, departments: [DEPARTMENT] },
-  });
-  await expect(catalog).toBeOK();
-  const catalogBody = await catalog.json();
+  let catalogBody: { rows: Array<{ municipio?: string; codigoestacion?: string }> } = { rows: [] };
+  for (let attempt = 0; attempt < 12 && catalogBody.rows.length === 0; attempt += 1) {
+    const catalog = await request.post('/api/catalog-bundle', {
+      data: { datasetId: DATASET_ID, departments: [DEPARTMENT] },
+    });
+    await expect(catalog).toBeOK();
+    catalogBody = await catalog.json();
+    if (catalogBody.rows.length === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 5_000));
+    }
+  }
   expect(catalogBody.rows.length).toBeGreaterThan(0);
   expect(catalogBody.rows.some((row: { municipio?: string }) => String(row.municipio).toUpperCase() === 'BARRANQUILLA')).toBe(true);
 

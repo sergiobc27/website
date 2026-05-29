@@ -51,7 +51,19 @@ console.log(`Warming IDEAM catalog bundles from ${BASE_URL} with concurrency=${C
 const { data: meta } = await apiJson('/api/meta', undefined, 'No fue posible cargar metadata');
 const datasets = meta.datasets || [];
 const departments = meta.departments || [];
-const tasks = datasets.flatMap((dataset) => departments.map((department) => ({ datasetId: dataset.id, department })));
+const datasetFilter = process.env.CATALOG_WARM_DATASET || '';
+const departmentFilter = process.env.CATALOG_WARM_DEPARTMENT || '';
+const tasks = datasets
+  .filter((dataset) => !datasetFilter || dataset.id === datasetFilter)
+  .flatMap((dataset) =>
+    departments
+      .filter((department) => !departmentFilter || department === departmentFilter)
+      .map((department) => ({ datasetId: dataset.id, department }))
+  );
+
+if (!tasks.length) {
+  throw new Error('No catalog warm tasks matched the configured filters.');
+}
 
 let warmed = 0;
 let cacheHits = 0;
@@ -59,7 +71,7 @@ const failures = await worker(tasks, async ({ datasetId, department }) => {
   const { data, cache } = await apiJson('/api/catalog-bundle', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ datasetId, departments: [department] }),
+    body: JSON.stringify({ datasetId, departments: [department], warm: true }),
   }, `No fue posible calentar ${datasetId}/${department}`);
   warmed += 1;
   if (cache.includes('HIT')) cacheHits += 1;
