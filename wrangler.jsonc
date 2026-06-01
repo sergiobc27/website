@@ -17,10 +17,10 @@
     "PAGE_LIMIT": "50000",
     "PREVIEW_LIMIT": "200",
     "EXPORT_PAGE_SIZE": "10000",
-    "EXPORT_PAGE_CONCURRENCY": "3",
+    "EXPORT_PAGE_CONCURRENCY": "8",
     "SOCRATA_TIMEOUT_MS": "30000",
     "CATALOG_CACHE_TTL_SECONDS": "86400",
-    "CATALOG_WARM_LIMIT": "10"
+    "CATALOG_WARM_LIMIT": "48"
   },
   "triggers": {
     "crons": ["0,20,40 * * * *"]
@@ -64,6 +64,6 @@
   },
   "observability": {
     "enabled": true,
-    "head_sampling_rate": 1
+    "head_sampling_rate": 0.1
   }
 }

@@ -12,6 +12,19 @@
           "maxAge": 3600
         }
       }
+    },
+    {
+      "id": "expire-stale-catalog-cache-after-2-days",
+      "enabled": true,
+      "conditions": {
+        "prefix": "catalog-cache/"
+      },
+      "deleteObjectsTransition": {
+        "condition": {
+          "type": "Age",
+          "maxAge": 172800
+        }
+      }
     }
   ]
 }

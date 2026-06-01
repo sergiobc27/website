@@ -39,11 +39,38 @@ import type {
 } from '../../shared/ideamContracts';
 
 const HISTORY_KEY = 'ideam-history';
+const CONFIG_KEY = 'ideam-extractor-config';
 const MAX_OPERATION_LOGS = 80;
 const EXPORT_AVAILABILITY_MS = 60 * 60 * 1000;
 const EXPORT_PLAN_FAST_TIMEOUT_MS = 2500;
 
 type StepId = 'consent' | 'variable' | 'territory' | 'advanced' | 'time' | 'execute';
+
+const STEP_IDS: StepId[] = ['consent', 'variable', 'territory', 'advanced', 'time', 'execute'];
+
+interface StoredExtractorConfig {
+  acceptedTerms?: boolean;
+  step?: StepId;
+  datasetId?: string;
+  selectedDepartments?: string[];
+  selectedFormats?: OutputFormat[];
+  timeMode?: TimeMode;
+}
+
+// Persist only the configuration inputs that survive the component's mount-time
+// reset effects (catalog filters, station text and dates are intentionally not
+// restored because they are cleared/recomputed on load). This keeps a browser
+// reload from wiping the user's variable, territory and format selections.
+function loadStoredConfig(): StoredExtractorConfig {
+  try {
+    const raw = window.localStorage.getItem(CONFIG_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as StoredExtractorConfig;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
 type LogLevel = 'INFO' | 'SUCCESS' | 'ERROR';
 type TimeMode = 'full' | 'custom';
 type CatalogOptionStatus = 'idle' | 'loading' | 'ready' | 'warming' | 'error';
@@ -267,11 +294,16 @@ function summarizeRows(rows: Record<string, unknown>[], dateColumn: string) {
 }
 
 export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: ExtractorRuntimeState) => void }) {
+  const [storedConfig] = useState<StoredExtractorConfig>(loadStoredConfig);
   const [meta, setMeta] = useState<MetaResponse | null>(null);
-  const [step, setStep] = useState<StepId>('consent');
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
-  const [datasetId, setDatasetId] = useState('');
-  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
+  const [step, setStep] = useState<StepId>(
+    storedConfig.acceptedTerms && storedConfig.step && STEP_IDS.includes(storedConfig.step) ? storedConfig.step : 'consent'
+  );
+  const [acceptedTerms, setAcceptedTerms] = useState(Boolean(storedConfig.acceptedTerms));
+  const [datasetId, setDatasetId] = useState(typeof storedConfig.datasetId === 'string' ? storedConfig.datasetId : '');
+  const [selectedDepartments, setSelectedDepartments] = useState<string[]>(
+    Array.isArray(storedConfig.selectedDepartments) ? storedConfig.selectedDepartments : []
+  );
   const [catalogFilters, setCatalogFilters] = useState<Record<string, string[]>>({});
   const [catalogOptions, setCatalogOptions] = useState<Record<string, OptionItem[]>>({});
   const [catalogOptionStatus, setCatalogOptionStatus] = useState<Record<string, CatalogOptionStatus>>({});
@@ -283,10 +315,12 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   const [coverageReports, setCoverageReports] = useState<CoverageReport[]>([]);
   const [coverageLoading, setCoverageLoading] = useState(false);
   const [dateRange, setDateRange] = useState<DateRangeResponse | null>(null);
-  const [timeMode, setTimeMode] = useState<TimeMode>('full');
+  const [timeMode, setTimeMode] = useState<TimeMode>(storedConfig.timeMode === 'custom' ? 'custom' : 'full');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [selectedFormats, setSelectedFormats] = useState<OutputFormat[]>(['csv']);
+  const [selectedFormats, setSelectedFormats] = useState<OutputFormat[]>(
+    Array.isArray(storedConfig.selectedFormats) && storedConfig.selectedFormats.length ? storedConfig.selectedFormats : ['csv']
+  );
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [downloadMetrics, setDownloadMetrics] = useState<DownloadMetrics | null>(null);
   const [currentJob, setCurrentJob] = useState<ExportJobStatusResponse | null>(null);
@@ -409,7 +443,11 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       try {
         const data = await apiJson<MetaResponse>('/api/meta', undefined, 'No fue posible cargar la metadata.');
         setMeta(data);
-        setDatasetId(data.datasets[0]?.id || '');
+        // Keep a restored dataset selection if it is still valid; otherwise default
+        // to the first available dataset.
+        setDatasetId((current) =>
+          current && data.datasets.some((dataset) => dataset.id === current) ? current : data.datasets[0]?.id || ''
+        );
         appendLog('SUCCESS', 'Metadata cargada correctamente.');
       } catch (error) {
         appendLog('ERROR', error instanceof Error ? error.message : 'Error cargando metadata.');
@@ -417,6 +455,17 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     };
     void boot();
   }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        CONFIG_KEY,
+        JSON.stringify({ acceptedTerms, step, datasetId, selectedDepartments, selectedFormats, timeMode })
+      );
+    } catch {
+      // Ignore storage quota/availability errors; persistence is best-effort.
+    }
+  }, [acceptedTerms, step, datasetId, selectedDepartments, selectedFormats, timeMode]);
 
   useEffect(() => {
     const loadDateRange = async () => {

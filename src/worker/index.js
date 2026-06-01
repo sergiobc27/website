@@ -7,13 +7,17 @@ const { ParquetWriter } = writerModule;
 const { ParquetSchema } = schemaModule;
 
 const ASYNC_EXPORT_PAGE_BATCH = 3;
+const UNBOUNDED_PAGE_SPECULATION = 3;
 const EXPORT_RATE_LIMIT = 30;
 const EXPORT_RATE_WINDOW_MS = 60 * 60 * 1000;
+const CATALOG_RATE_LIMIT = 600;
+const CATALOG_RATE_WINDOW_MS = 60 * 60 * 1000;
 const EXPORT_OBJECT_TTL_SECONDS = 60 * 60;
 const SOCRATA_MAX_ATTEMPTS = 4;
 const SOCRATA_RETRY_BASE_MS = 350;
 const SOCRATA_TIMEOUT_MS = 30000;
 const EXPORT_JOB_MAX_FAILURES = 3;
+const EXPORT_JOB_MAX_BATCHES = 5000;
 const EXPORT_JOB_RETRY_BASE_MS = 1000;
 const CATALOG_CACHE_TTL_SECONDS = 24 * 60 * 60;
 const CATALOG_WARM_LIMIT = 500;
@@ -51,7 +55,7 @@ function getConfig(env) {
     pageLimit: positiveNumber(env?.PAGE_LIMIT, DEFAULT_CONFIG.pageLimit),
     previewLimit: positiveNumber(env?.PREVIEW_LIMIT, DEFAULT_CONFIG.previewLimit),
     exportPageSize: positiveNumber(env?.EXPORT_PAGE_SIZE, DEFAULT_CONFIG.exportPageSize),
-    exportPageConcurrency: Math.min(5, positiveNumber(env?.EXPORT_PAGE_CONCURRENCY, DEFAULT_CONFIG.exportPageConcurrency)),
+    exportPageConcurrency: Math.min(12, positiveNumber(env?.EXPORT_PAGE_CONCURRENCY, DEFAULT_CONFIG.exportPageConcurrency)),
     maxExportRows: positiveNumber(env?.MAX_EXPORT_ROWS, DEFAULT_CONFIG.maxExportRows),
     maxCatalogStations: env?.MAX_CATALOG_STATIONS ? positiveNumber(env.MAX_CATALOG_STATIONS, DEFAULT_CONFIG.maxCatalogStations) : DEFAULT_CONFIG.maxCatalogStations,
     socrataAppToken: env?.SOCRATA_APP_TOKEN || env?.SODA_APP_TOKEN || "",
@@ -574,7 +578,27 @@ async function socrataGet(config, datasetId, params) {
         signal: controller.signal,
       });
       if (response.ok) {
-        return response.json();
+        const contentType = (response.headers.get("content-type") || "").toLowerCase();
+        const text = await response.text();
+        const trimmed = text.trimStart();
+        const looksLikeHtml = contentType.includes("text/html") || trimmed.startsWith("<");
+        if (looksLikeHtml) {
+          // A 200 with an HTML body almost always means a routing/CDN/maintenance
+          // page slipped in front of Socrata. Treat it as a transient, retryable error.
+          lastError = new Error(
+            `Socrata devolvio HTML en lugar de JSON para ${datasetId} (posible error de enrutamiento o mantenimiento).`
+          );
+          if (attempt === SOCRATA_MAX_ATTEMPTS) {
+            throw lastError;
+          }
+          await new Promise((resolve) => setTimeout(resolve, SOCRATA_RETRY_BASE_MS * attempt));
+          continue;
+        }
+        try {
+          return JSON.parse(text);
+        } catch {
+          throw new Error(`Respuesta de Socrata no es JSON valido para ${datasetId}.`);
+        }
       }
 
       const retryable = response.status === 429 || response.status >= 500;
@@ -1122,7 +1146,13 @@ async function readCatalogWarmState(env) {
   if (!object) return { cursor: 0 };
   try {
     const state = await object.json();
-    return { cursor: Number.isFinite(Number(state.cursor)) ? Number(state.cursor) : 0 };
+    return {
+      cursor: Number.isFinite(Number(state.cursor)) ? Number(state.cursor) : 0,
+      warmed: Number.isFinite(Number(state.warmed)) ? Number(state.warmed) : null,
+      failed: Number.isFinite(Number(state.failed)) ? Number(state.failed) : null,
+      totalPayloads: Number.isFinite(Number(state.totalPayloads)) ? Number(state.totalPayloads) : null,
+      updatedAt: typeof state.updatedAt === "string" ? state.updatedAt : null,
+    };
   } catch {
     return { cursor: 0 };
   }
@@ -1182,7 +1212,29 @@ async function warmCatalogCache(env) {
   return { warmed, failed, nextCursor, totalPayloads: payloads.length };
 }
 
+async function handleCatalogStatus(env) {
+  const config = getConfig(env);
+  const payloads = buildCatalogWarmPayloads();
+  const state = await readCatalogWarmState(env);
+  const totalPayloads = Number.isFinite(state.totalPayloads) ? state.totalPayloads : payloads.length;
+  const cursor = Number.isFinite(state.cursor) ? state.cursor : 0;
+  return jsonResponse({
+    cacheVersion: CATALOG_CACHE_VERSION,
+    cacheTtlSeconds: config.catalogCacheTtlSeconds,
+    warmLimitPerRun: config.catalogWarmLimit,
+    totalPayloads,
+    cursor,
+    rotationPercent: totalPayloads > 0 ? Math.min(100, Math.round((cursor / totalPayloads) * 100)) : 0,
+    lastWarmed: state.warmed ?? null,
+    lastFailed: state.failed ?? null,
+    lastWarmAt: state.updatedAt ?? null,
+    datasets: DATASETS.map((dataset) => ({ id: dataset.id, name: dataset.name })),
+  }, 200, { "cache-control": "no-store" });
+}
+
 async function handleCatalogBundle(request, env, ctx) {
+  const rateLimited = await checkCatalogRateLimit(request, env);
+  if (rateLimited) return rateLimited;
   const config = getConfig(env);
   const payload = await request.json();
   const dataset = resolveDataset(payload.datasetId);
@@ -1233,6 +1285,8 @@ async function handleCatalogBundle(request, env, ctx) {
 }
 
 async function handleCatalogOptions(request, env, ctx) {
+  const rateLimited = await checkCatalogRateLimit(request, env);
+  if (rateLimited) return rateLimited;
   const config = getConfig(env);
   const payload = await request.json();
   const dataset = resolveDataset(payload.datasetId);
@@ -1690,6 +1744,7 @@ async function buildArchiveEntryFiles(rows, formats, basePath) {
   const pathParts = basePath.split("/");
   const fileName = pathParts.pop() || "datos";
   const parentPath = pathParts.join("/");
+  let parquetFailed = false;
 
   if (formats.includes("csv")) {
     files.push({ path: `${parentPath}/csv/${fileName}.csv`, bytes: encodeUtf8(rowsToCsv(rows)) });
@@ -1703,17 +1758,22 @@ async function buildArchiveEntryFiles(rows, formats, basePath) {
     try {
       files.push({ path: `${parentPath}/parquet/${fileName}.parquet`, bytes: await rowsToParquet(rows) });
     } catch (error) {
+      parquetFailed = true;
       if (!formats.includes("csv")) {
         files.push({ path: `${parentPath}/csv/${fileName}.csv`, bytes: encodeUtf8(rowsToCsv(rows)) });
       }
     }
   }
 
-  return files;
+  return { files, parquetFailed };
 }
 
 async function storeArchiveEntry(env, job, file) {
-  const key = `exports/${job.id}/entries/${crypto.randomUUID()}`;
+  // Derive the R2 key deterministically from the entry path so that reprocessing
+  // a page after a transient failure overwrites the same object instead of
+  // leaving an orphaned copy behind (the path already encodes part index + format).
+  const safePath = file.path.replace(/^\/+/, "");
+  const key = `exports/${job.id}/entries/${encodeURIComponent(safePath)}`;
   const bytes = file.bytes instanceof Uint8Array ? file.bytes : new Uint8Array(file.bytes);
   await env.EXPORTS_BUCKET.put(key, bytes, {
     httpMetadata: { contentType: "application/octet-stream", cacheControl: "no-store" },
@@ -1742,7 +1802,14 @@ async function storeJobArchiveEntries(env, job, dataset, rows, partIndex) {
     const suffix = String(partIndex).padStart(4, "0");
     const baseName = `${variable}_${department}_${municipality}_${suffix}`;
     const basePath = `${variable}/${department}/${municipality}/${baseName}`;
-    const files = await buildArchiveEntryFiles(group.rows, job.effectiveFormats, basePath);
+    const { files, parquetFailed } = await buildArchiveEntryFiles(group.rows, job.effectiveFormats, basePath);
+
+    if (parquetFailed) {
+      recordJobWarning(
+        job,
+        "No fue posible generar Parquet para parte del export; se entrego CSV como respaldo en esos archivos."
+      );
+    }
 
     for (const file of files) {
       stored.push(await storeArchiveEntry(env, job, file));
@@ -1750,6 +1817,14 @@ async function storeJobArchiveEntries(env, job, dataset, rows, partIndex) {
   }
 
   job.archiveEntries = (job.archiveEntries || []).concat(stored);
+}
+
+function recordJobWarning(job, message) {
+  const warnings = Array.isArray(job.warnings) ? job.warnings : [];
+  if (!warnings.includes(message)) {
+    warnings.push(message);
+  }
+  job.warnings = warnings;
 }
 
 function buildZipAssembly(entries, modifiedAt = new Date()) {
@@ -1819,7 +1894,15 @@ function createFixedLengthZipReadableStream(env, assembly, modifiedAt = new Date
 async function createFinalJobArchive(env, job, dataset, summary) {
   const fileName = buildJobZipFileName(dataset, job.finishedAt ? new Date(job.finishedAt) : new Date());
   const key = `exports/${job.id}/${fileName}`;
-  const archiveEntries = job.archiveEntries || [];
+  // Guard against duplicate paths that a partial-batch retry could have appended;
+  // deterministic R2 keys mean the bytes already overwrote, but the ZIP central
+  // directory must still list each path exactly once.
+  const dedupedEntries = new Map();
+  for (const entry of job.archiveEntries || []) {
+    dedupedEntries.set(entry.path, entry);
+  }
+  job.archiveEntries = Array.from(dedupedEntries.values());
+  const archiveEntries = job.archiveEntries;
   const modifiedAt = new Date();
   const assembly = buildZipAssembly(archiveEntries, modifiedAt);
   const expiresAt = new Date(Date.now() + EXPORT_OBJECT_TTL_SECONDS * 1000).toISOString();
@@ -1850,11 +1933,14 @@ async function createFinalJobArchive(env, job, dataset, summary) {
 }
 
 function buildJobProgress(job) {
-  const rowCount = Number.isFinite(job.plan?.rowCount)
+  const estimatedRowCount = Number.isFinite(job.plan?.rowCount)
     ? job.plan.rowCount
     : Number.isFinite(job.clientPlan?.rowCount)
       ? job.clientPlan.rowCount
       : (job.metrics?.rowCount ?? job.processedRows ?? 0);
+  // Never let an under-estimated client plan report fewer total rows than have
+  // already been processed, which would surface a progress bar above 100%.
+  const rowCount = Math.max(estimatedRowCount, job.processedRows || 0);
   const totalPages = Number.isFinite(job.plan?.totalPages)
     ? job.plan.totalPages
     : Number.isFinite(job.clientPlan?.totalPages)
@@ -2044,16 +2130,21 @@ async function createNoDataJobArchive(env, job, dataset) {
   const summary = finalizeAccumulatorState(job.summaryState, 0);
   const variable = hierarchyPart(dataset.name, "variable");
   const basePath = `${variable}/sin_datos/${variable}_sin_datos`;
-  const files = await buildArchiveEntryFiles([], job.effectiveFormats, basePath);
+  const { files } = await buildArchiveEntryFiles([], job.effectiveFormats, basePath);
 
   job.archiveEntries = [];
   for (const file of files) {
     job.archiveEntries.push(await storeArchiveEntry(env, job, file));
   }
+  recordJobWarning(
+    job,
+    "La consulta no encontro filas con los filtros seleccionados. Se genero un ZIP con archivos vacios como evidencia."
+  );
   await createFinalJobArchive(env, job, dataset, summary);
   job.metrics = {
     fileName: job.parts[0]?.fileName || buildJobZipFileName(dataset),
     rowCount: 0,
+    noData: true,
     stationCount: summary.stationCount,
     municipalityCount: summary.municipalityCount,
     departmentCount: summary.departmentCount,
@@ -2083,10 +2174,21 @@ async function processExportJobBatch(env, job) {
   let processedAnyPage = false;
 
   const plannedCursor = { ...(job.planCursor || { planIndex: 0, pageIndex: 0 }) };
+  const planPages = job.plan?.planPages || [];
   const descriptors = [];
+  let unboundedSpeculation = 0;
   for (let batchIndex = 0; batchIndex < config.exportPageConcurrency; batchIndex += 1) {
     const descriptor = getNextPageDescriptor(job, plannedCursor);
     if (!descriptor) break;
+    // When the page count of a plan is unknown we can only discover its end by
+    // fetching until a short/empty page arrives. Bound how many such speculative
+    // pages we issue per batch so a high concurrency setting does not fan out into
+    // a burst of empty Socrata requests at the tail of an unbounded plan.
+    const bounded = Number.isFinite(planPages[descriptor.planIndex]?.pageCount);
+    if (!bounded) {
+      unboundedSpeculation += 1;
+      if (unboundedSpeculation > UNBOUNDED_PAGE_SPECULATION) break;
+    }
     descriptors.push(descriptor);
     advanceJobCursor(job, false, plannedCursor);
   }
@@ -2108,12 +2210,21 @@ async function processExportJobBatch(env, job) {
     };
   }));
 
+  // Process every fetched page in cursor order. A plan that ends (empty or short
+  // page) is recorded so later pages of that same plan in this batch are skipped
+  // without being re-fetched in the next batch, while pages belonging to the next
+  // plan that were fetched concurrently are still consumed instead of discarded.
+  const finishedPlans = new Set();
+  let committedCursor = null;
   for (const { descriptor, normalized, planFinished } of pageResults) {
-    job.planCursor = { planIndex: descriptor.planIndex, pageIndex: descriptor.pageIndex };
+    if (finishedPlans.has(descriptor.planIndex)) {
+      continue;
+    }
     if (!normalized.length) {
-      advanceJobCursor(job, true);
+      finishedPlans.add(descriptor.planIndex);
+      committedCursor = { planIndex: descriptor.planIndex + 1, pageIndex: 0 };
       processedAnyPage = true;
-      break;
+      continue;
     }
 
     const partIndex = job.completedPages + 1;
@@ -2122,10 +2233,18 @@ async function processExportJobBatch(env, job) {
     job.summaryState = mergeAccumulatorState(job.summaryState, normalized, dataset.dateColumn);
     job.processedRows += normalized.length;
     job.completedPages += 1;
-
-    advanceJobCursor(job, planFinished);
     processedAnyPage = true;
-    if (planFinished) break;
+
+    if (planFinished) {
+      finishedPlans.add(descriptor.planIndex);
+      committedCursor = { planIndex: descriptor.planIndex + 1, pageIndex: 0 };
+    } else {
+      committedCursor = { planIndex: descriptor.planIndex, pageIndex: descriptor.pageIndex + 1 };
+    }
+  }
+
+  if (committedCursor) {
+    job.planCursor = committedCursor;
   }
 
   if (!processedAnyPage || !getNextPageDescriptor(job)) {
@@ -2175,22 +2294,30 @@ class ExportRateLimitDurableObject {
       return jsonResponse({ error: "Ruta interna de rate limit no encontrada." }, 404);
     }
 
+    // The limit/window are parameterized so the same Durable Object class can guard
+    // both heavy exports (strict) and lighter catalog lookups (generous) without a
+    // new binding or migration. Defaults preserve the original export behaviour.
+    const body = await request.json().catch(() => ({}));
+    const limit = positiveNumber(body?.limit, EXPORT_RATE_LIMIT);
+    const windowMs = positiveNumber(body?.windowMs, EXPORT_RATE_WINDOW_MS);
+    const scope = typeof body?.scope === "string" ? body.scope : "exportaciones";
+
     const now = Date.now();
     const record = (await this.state.storage.get("rate")) || {
       windowStart: now,
       count: 0,
     };
     const elapsed = now - Number(record.windowStart || 0);
-    const current = elapsed >= EXPORT_RATE_WINDOW_MS
+    const current = elapsed >= windowMs
       ? { windowStart: now, count: 0 }
       : { windowStart: Number(record.windowStart || now), count: Number(record.count || 0) };
 
-    if (current.count >= EXPORT_RATE_LIMIT) {
-      const retryAfterSeconds = Math.max(1, Math.ceil((EXPORT_RATE_WINDOW_MS - (now - current.windowStart)) / 1000));
+    if (current.count >= limit) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((windowMs - (now - current.windowStart)) / 1000));
       return jsonResponse(
         {
-          error: `Limite de exportaciones alcanzado. Intenta de nuevo en ${Math.ceil(retryAfterSeconds / 60)} minuto(s).`,
-          limit: EXPORT_RATE_LIMIT,
+          error: `Limite de ${scope} alcanzado. Intenta de nuevo en ${Math.ceil(retryAfterSeconds / 60)} minuto(s).`,
+          limit,
           retryAfterSeconds,
         },
         429,
@@ -2203,9 +2330,9 @@ class ExportRateLimitDurableObject {
 
     return jsonResponse({
       ok: true,
-      limit: EXPORT_RATE_LIMIT,
-      remaining: Math.max(0, EXPORT_RATE_LIMIT - current.count),
-      resetAt: new Date(current.windowStart + EXPORT_RATE_WINDOW_MS).toISOString(),
+      limit,
+      remaining: Math.max(0, limit - current.count),
+      resetAt: new Date(current.windowStart + windowMs).toISOString(),
     });
   }
 }
@@ -2328,6 +2455,12 @@ class ExportJobDurableObject {
 
     let nextAlarmDelayMs = 250;
     try {
+      job.batchCount = (job.batchCount || 0) + 1;
+      if (job.batchCount > EXPORT_JOB_MAX_BATCHES) {
+        throw new Error(
+          `El job supero el limite de ${EXPORT_JOB_MAX_BATCHES} lotes de procesamiento; se detiene para evitar consumo indefinido.`
+        );
+      }
       if (!job.plan) {
         job.status = "planning";
         await saveJobToStorage(this.state.storage, job);
@@ -2406,18 +2539,36 @@ async function handleCreateJob(request, env) {
 }
 
 async function checkExportRateLimit(request, env) {
+  return checkRateLimit(request, env, {
+    namespace: "export",
+    limit: EXPORT_RATE_LIMIT,
+    windowMs: EXPORT_RATE_WINDOW_MS,
+    scope: "exportaciones",
+  });
+}
+
+async function checkCatalogRateLimit(request, env) {
+  return checkRateLimit(request, env, {
+    namespace: "catalog",
+    limit: CATALOG_RATE_LIMIT,
+    windowMs: CATALOG_RATE_WINDOW_MS,
+    scope: "consultas de catalogo",
+  });
+}
+
+async function checkRateLimit(request, env, { namespace, limit, windowMs, scope }) {
   if (!env.EXPORT_RATE_LIMITER) {
     return null;
   }
 
   const clientIp = getClientIp(request);
-  const id = env.EXPORT_RATE_LIMITER.idFromName(`export:${clientIp}`);
+  const id = env.EXPORT_RATE_LIMITER.idFromName(`${namespace}:${clientIp}`);
   const stub = env.EXPORT_RATE_LIMITER.get(id);
   const response = await stub.fetch(
     new Request("https://export-rate-limit/check", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ clientIp }),
+      body: JSON.stringify({ clientIp, limit, windowMs, scope }),
     })
   );
 
@@ -2455,6 +2606,9 @@ async function handleApi(request, env, ctx) {
     }
     if (url.pathname === "/api/catalog-bundle" && request.method === "POST") {
       return await handleCatalogBundle(request, env, ctx);
+    }
+    if (url.pathname === "/api/catalog-status" && request.method === "GET") {
+      return await handleCatalogStatus(env);
     }
     if (url.pathname === "/api/stations-helper" && request.method === "POST") {
       return await handleStationHelper(request, env);

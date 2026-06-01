@@ -117,7 +117,7 @@ test('getConfig keeps MAX_EXPORT_ROWS available but nullable by default', () => 
   assert.equal(customConfig.exportPageConcurrency, 4);
   assert.equal(customConfig.socrataAppToken, 'token-123');
   assert.equal(customConfig.socrataTimeoutMs, 12000);
-  assert.equal(getConfig({ EXPORT_PAGE_CONCURRENCY: '99' }).exportPageConcurrency, 5);
+  assert.equal(getConfig({ EXPORT_PAGE_CONCURRENCY: '99' }).exportPageConcurrency, 12);
   assert.equal(getConfig({ SODA_APP_TOKEN: 'legacy-token' }).socrataAppToken, 'legacy-token');
 });
 
@@ -1255,6 +1255,8 @@ test('ExportJobDurableObject creates a no-data zip when filters return zero rows
     assert.equal(statusData.rowCount, 0);
     assert.equal(statusData.parts.length, 1);
     assert.equal(statusData.metrics.archivePartCount, 1);
+    assert.equal(statusData.metrics.noData, true);
+    assert.ok(statusData.warnings.some((warning) => warning.includes('no encontro filas')));
     assert.match(statusData.parts[0].fileName, /^precipitacion_\d{8}\.zip$/);
 
     const partResponse = await durableObject.fetch(new Request('https://export-job/parts/1'));
@@ -1264,6 +1266,151 @@ test('ExportJobDurableObject creates a no-data zip when filters return zero rows
     const names = Object.keys(zip.files).sort();
     assert.equal(names.some((name) => name.includes('manifest')), false);
     assert.ok(names.some((name) => name.startsWith('precipitacion/sin_datos/csv/') && name.endsWith('.csv')));
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('ExportJobDurableObject does not re-fetch pages when a batch spans two query plans', async () => {
+  const storageMap = new Map();
+  const state = {
+    storage: {
+      async get(key) {
+        return storageMap.get(key);
+      },
+      async put(key, value) {
+        storageMap.set(key, value);
+      },
+      async setAlarm(value) {
+        storageMap.set('__alarm__', value);
+      },
+    },
+  };
+  const objects = new Map();
+  const env = {
+    EXPORTS_BUCKET: {
+      async put(key, value, options = {}) {
+        const storedValue = value?.getReader ? new Uint8Array(await new Response(value).arrayBuffer()) : value;
+        objects.set(key, { value: storedValue, options });
+      },
+      async get(key) {
+        const item = objects.get(key);
+        if (!item) return null;
+        return {
+          body: new Blob([item.value]).stream(),
+          httpMetadata: item.options.httpMetadata || {},
+        };
+      },
+      async delete(key) {
+        objects.delete(key);
+      },
+    },
+    EXPORT_PAGE_SIZE: '2',
+  };
+
+  const originalFetch = global.fetch;
+  // Track every (plan-where, offset) page fetched so we can assert none is requested twice.
+  const fetchedKeys = [];
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+    const select = parsed.searchParams.get('$select');
+    if (parsed.pathname.includes('/hp9r-jxuu.json') && select === 'codigo') {
+      return new Response(JSON.stringify([]), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    if (select === 'count(*) as total') {
+      return new Response(JSON.stringify([{ total: '6' }]), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    if (parsed.searchParams.get('$limit') === '2') {
+      const where = parsed.searchParams.get('$where') || '';
+      const offset = Number(parsed.searchParams.get('$offset') || '0');
+      const planTag = where.includes('STA0400') ? 'plan1' : 'plan0';
+      fetchedKeys.push(`${planTag}|${offset}`);
+      // Each plan: a full page at offset 0 then a short page at offset 2 (3 rows per plan).
+      const rows = offset === 0
+        ? [
+            { codigoestacion: `${planTag}-a`, municipio: 'BARRANQUILLA', departamento: 'ATLANTICO', valorobservado: '1', fechaobservacion: '2024-01-01T00:00:00.000' },
+            { codigoestacion: `${planTag}-b`, municipio: 'BARRANQUILLA', departamento: 'ATLANTICO', valorobservado: '2', fechaobservacion: '2024-01-02T00:00:00.000' },
+          ]
+        : offset === 2
+          ? [
+              { codigoestacion: `${planTag}-c`, municipio: 'SOLEDAD', departamento: 'ATLANTICO', valorobservado: '3', fechaobservacion: '2024-01-03T00:00:00.000' },
+            ]
+          : [];
+      return new Response(JSON.stringify(rows), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    throw new Error(`Unexpected fetch call: ${parsed.toString()}`);
+  };
+
+  try {
+    const durableObject = new ExportJobDurableObject(state, env);
+    const createResponse = await durableObject.fetch(
+      new Request('https://export-job/create', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          jobId: 'job-cross-plan',
+          payload: {
+            datasetId: 's54a-sgyg',
+            departments: ['ATLANTICO'],
+            stationCodes: Array.from({ length: 401 }, (_, index) => `STA${String(index).padStart(4, '0')}`),
+            startDate: '2024-01-01',
+            endDate: '2024-01-31',
+          },
+          formats: ['csv'],
+          // A client plan with known pageCounts lets a single batch span the boundary
+          // between plan 0 and plan 1, exercising the cross-plan reuse path.
+          exportPlan: {
+            datasetId: 's54a-sgyg',
+            rowCount: 6,
+            totalPages: 4,
+            pageSize: 2,
+            queryPlans: 2,
+            stationPoolSize: 401,
+            planPages: [
+              { planIndex: 0, rowCount: 3, pageCount: 2 },
+              { planIndex: 1, rowCount: 3, pageCount: 2 },
+            ],
+          },
+        }),
+      })
+    );
+    assert.equal(createResponse.status, 202);
+
+    // Drive the job to completion across as many batches as needed.
+    for (let i = 0; i < 6; i += 1) {
+      const current = storageMap.get('job');
+      if (current && (current.status === 'completed' || current.status === 'failed')) break;
+      await durableObject.alarm();
+    }
+
+    const statusResponse = await durableObject.fetch(new Request('https://export-job/status'));
+    const statusData = await statusResponse.json();
+    assert.equal(statusData.status, 'completed');
+    assert.equal(statusData.processedRows, 6);
+    // No page should be fetched more than once: the page already pulled from plan 1
+    // while plan 0 ended must be consumed, not discarded and re-requested.
+    assert.equal(fetchedKeys.length, new Set(fetchedKeys).size);
+    assert.ok(fetchedKeys.includes('plan1|0'));
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('catalog-status endpoint reports warm coverage without hitting Socrata', async () => {
+  const env = { EXPORTS_BUCKET: createMemoryBucket(), CATALOG_WARM_LIMIT: '48' };
+  const originalFetch = global.fetch;
+  global.fetch = async () => {
+    throw new Error('catalog-status must not call Socrata');
+  };
+  try {
+    const response = await worker.fetch(new Request('https://ideam.test/api/catalog-status'), env, createWaitUntilContext());
+    assert.equal(response.status, 200);
+    const data = await response.json();
+    assert.ok(data.totalPayloads > 0);
+    assert.equal(data.warmLimitPerRun, 48);
+    assert.ok(Array.isArray(data.datasets));
+    assert.equal(data.datasets.length, 13);
+    assert.equal(typeof data.rotationPercent, 'number');
   } finally {
     global.fetch = originalFetch;
   }

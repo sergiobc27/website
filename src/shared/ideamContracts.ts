@@ -88,6 +88,7 @@ export interface ExportJobPart {
 export interface DownloadMetrics {
   fileName: string;
   rowCount: number;
+  noData?: boolean;
   stationCount: number;
   municipalityCount: number;
   departmentCount: number;

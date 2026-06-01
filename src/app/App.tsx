@@ -86,7 +86,7 @@ function SettingsView() {
           <ConfigRow name="SOCRATA_DOMAIN" value="https://www.datos.gov.co" />
           <ConfigRow name="CATALOG_DATASET_ID" value="hp9r-jxuu" />
           <ConfigRow name="PAGE_LIMIT" value="50000" />
-          <ConfigRow name="EXPORT_PAGE_SIZE" value="50000" />
+          <ConfigRow name="EXPORT_PAGE_SIZE" value="10000" />
           <ConfigRow name="PREVIEW_LIMIT" value="200" />
           <ConfigRow name="MAX_CATALOG_STATIONS" value="Opcional" />
         </div>
