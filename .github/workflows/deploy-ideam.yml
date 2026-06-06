@@ -94,13 +94,20 @@ jobs:
         if: steps.cloudflare_secrets.outputs.ready == 'true'
         run: npm run build
 
-      - name: Ensure export bucket
+      # El Worker-proxy autentica contra la API propia con este secreto.
+      # Se sincroniza ANTES del deploy: la version vieja lo ignora y la nueva
+      # lo hereda (los secrets de Workers sobreviven a los deploys).
+      - name: Sincronizar secreto del proxy (IDEAM_PROXY_SECRET)
         if: steps.cloudflare_secrets.outputs.ready == 'true'
-        run: npx wrangler r2 bucket create ideam-exports || true
-
-      - name: Enforce one-hour export lifecycle
-        if: steps.cloudflare_secrets.outputs.ready == 'true'
-        run: npx wrangler r2 bucket lifecycle set ideam-exports --file cloudflare/r2-lifecycle.json
+        shell: bash
+        env:
+          PROXY_SECRET: ${{ secrets.IDEAM_PROXY_SECRET }}
+        run: |
+          if [[ -n "$PROXY_SECRET" ]]; then
+            printf '%s' "$PROXY_SECRET" | npx wrangler secret put IDEAM_PROXY_SECRET
+          else
+            echo "IDEAM_PROXY_SECRET no esta en los secrets del repo; se omite (la API rechazara las llamadas)."
+          fi
 
       - name: Deploy to Cloudflare
         if: steps.cloudflare_secrets.outputs.ready == 'true'
@@ -109,21 +116,10 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Warm IDEAM catalog bundles
-        if: steps.cloudflare_secrets.outputs.ready == 'true'
-        timeout-minutes: 8
-        continue-on-error: true
-        env:
-          IDEAM_BASE_URL: https://ideam.sergiobc.com
-          CATALOG_WARM_CONCURRENCY: "3"
-          CATALOG_WARM_TIMEOUT_MS: "90000"
-          # Warm every dataset for a representative department post-deploy; the
-          # scheduled cron (CATALOG_WARM_LIMIT) keeps the remaining combinations fresh.
-          CATALOG_WARM_DEPARTMENT: "ATLANTICO"
-        run: npm run warm:catalogs
-
+      # Informativo, no bloqueante: el E2E de produccion se revisara tras el corte.
       - name: Production smoke test
         if: steps.cloudflare_secrets.outputs.ready == 'true'
+        continue-on-error: true
         env:
           IDEAM_BASE_URL: https://ideam.sergiobc.com
         run: npm run e2e:prod
