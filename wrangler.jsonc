@@ -12,31 +12,10 @@
     }
   ],
   "vars": {
-    "SOCRATA_DOMAIN": "https://www.datos.gov.co",
-    "CATALOG_DATASET_ID": "hp9r-jxuu",
-    "PAGE_LIMIT": "50000",
-    "PREVIEW_LIMIT": "200",
-    "EXPORT_PAGE_SIZE": "10000",
-    "EXPORT_PAGE_CONCURRENCY": "8",
-    "SOCRATA_TIMEOUT_MS": "30000",
-    "CATALOG_CACHE_TTL_SECONDS": "86400",
-    "CATALOG_WARM_LIMIT": "48"
+    // Origen de la API propia (Oracle, vía Cloudflare Tunnel).
+    "API_ORIGIN": "https://ideam-api.sergiobc.com"
   },
-  "triggers": {
-    "crons": ["0,20,40 * * * *"]
-  },
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "EXPORT_JOBS",
-        "class_name": "ExportJobDurableObject"
-      },
-      {
-        "name": "EXPORT_RATE_LIMITER",
-        "class_name": "ExportRateLimitDurableObject"
-      }
-    ]
-  },
+  // El secreto IDEAM_PROXY_SECRET se configura con: wrangler secret put IDEAM_PROXY_SECRET
   "migrations": [
     {
       "tag": "v2_export_jobs",
@@ -45,12 +24,11 @@
     {
       "tag": "v3_export_rate_limiter",
       "new_sqlite_classes": ["ExportRateLimitDurableObject"]
-    }
-  ],
-  "r2_buckets": [
+    },
     {
-      "binding": "EXPORTS_BUCKET",
-      "bucket_name": "ideam-exports"
+      // La lógica de jobs y rate limit vive ahora en la API propia (Postgres).
+      "tag": "v4_remove_durable_objects",
+      "deleted_classes": ["ExportJobDurableObject", "ExportRateLimitDurableObject"]
     }
   ],
   "assets": {

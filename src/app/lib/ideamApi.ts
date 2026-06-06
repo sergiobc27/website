@@ -3,7 +3,12 @@ const PRODUCTION_API_ORIGIN = 'https://ideam.sergiobc.com';
 export function apiUrl(path: string) {
   if (path.startsWith('http')) return path;
   if (typeof window === 'undefined') return path;
-  return window.location.hostname === 'ideam.sergiobc.com' ? path : `${PRODUCTION_API_ORIGIN}${path}`;
+  const host = window.location.hostname;
+  // Same-origin (relative) when served by the production domain or by a local
+  // dev server (wrangler dev / vite), so the local Worker handles /api calls and
+  // there is no cross-origin CORS block. Other hosts fall back to production.
+  if (host === 'ideam.sergiobc.com' || host === 'localhost' || host === '127.0.0.1') return path;
+  return `${PRODUCTION_API_ORIGIN}${path}`;
 }
 
 async function parseJsonResponse<T>(response: Response, fallbackMessage: string): Promise<T & { error?: string }> {
