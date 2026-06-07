@@ -25,7 +25,9 @@ const CACHEABLE_GET_PATHS = new Set([
 // (/api/export-page, /api/catalog-status, /api/export legacy).
 const PUBLIC_API_ROUTES = new Set([
   "/api/health",
-  "/api/ready",
+  // /api/ready NO es público: toca la DB (SELECT 1, conexión del pool) y sería
+  // un DoS barato anónimo. El healthcheck del box lo consulta por 127.0.0.1,
+  // sin pasar por el Worker (auditoría #4).
   "/api/meta",
   "/api/date-range",
   "/api/municipalities",

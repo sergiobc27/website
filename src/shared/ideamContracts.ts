@@ -108,7 +108,7 @@ export interface ReturnPeriodsResponse {
 export interface SpiPoint {
   month: string;
   precipitation: number;
-  spi: number;
+  spi: number | null; // null cuando el mes tiene <3 años de historia (no calculable)
   category: string;
 }
 
@@ -116,6 +116,7 @@ export interface SpiResponse {
   scale: number;
   points: SpiPoint[];
   latest: SpiPoint | null;
+  spiCeiling?: number | null;
   warnings: string[];
   method?: string;
 }
@@ -123,6 +124,7 @@ export interface SpiResponse {
 export interface HistogramResponse {
   dryDays: number;
   wetDays: number;
+  noDataDays?: number;
   maxDaily: number;
   bins: Array<{ from: number; to: number; count: number }>;
 }

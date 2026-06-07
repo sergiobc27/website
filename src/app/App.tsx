@@ -51,6 +51,10 @@ export default function App() {
       if (params) {
         setFichaParams(params);
         setCurrentView('ficha');
+      } else {
+        // Back/forward a un hash que ya no es de ficha: salir de la ficha en
+        // vez de quedar con la vista desincronizada (auditoría #4).
+        setCurrentView((current) => (current === 'ficha' ? 'dashboard' : current));
       }
     };
     window.addEventListener('hashchange', onHashChange);

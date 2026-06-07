@@ -69,7 +69,7 @@ function popupHtml(p: StationProperties) {
       ${row('Estado', p.estado)}
       ${row('Categoría', p.categoria)}
       ${row('Municipio', `${p.municipio ?? 'N/D'}, ${p.departamento ?? 'N/D'}`)}
-      ${row('Altitud', p.altitud !== null ? `${p.altitud} m` : null)}
+      ${row('Altitud', p.altitud != null && String(p.altitud) !== '' ? `${p.altitud} m` : null)}
       ${row('Corriente', p.corriente)}
       <div class="ideam-spark" style="margin-top: 8px; min-height: 64px; opacity: .8;">Cargando serie histórica...</div>
       <button type="button" class="ideam-compare-btn" style="margin-top: 8px; width: 100%; padding: 5px 8px; border: 1px solid #C9A227; border-radius: 6px; background: rgba(201,162,39,.12); color: #8a6f1a; font-weight: 600; cursor: pointer; font: inherit; font-size: 12px;">

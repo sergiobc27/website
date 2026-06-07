@@ -32,7 +32,8 @@ interface StationLite {
   departamento: string;
 }
 
-function spiColor(z: number) {
+function spiColor(z: number | null) {
+  if (z === null) return '#3f3f46'; // no calculable (<3 años de historia)
   if (z <= -2) return '#7f1d1d';
   if (z <= -1.5) return '#A3161A';
   if (z <= -1) return '#dc7633';
@@ -182,7 +183,8 @@ export function Hidrologia() {
   }, [returnPeriods]);
 
   const spiData = useMemo(
-    () => (spi?.points || []).slice(-120).map((p) => ({ ...p, label: p.month })),
+    // Los meses no calculables (spi=null) se omiten del gráfico de barras.
+    () => (spi?.points || []).slice(-120).filter((p) => p.spi !== null).map((p) => ({ ...p, label: p.month })),
     [spi]
   );
 
@@ -348,7 +350,7 @@ export function Hidrologia() {
                 <p className="text-muted-foreground text-sm">Registro mensual insuficiente para el SPI.</p>
               ) : (
                 <>
-                  {spi.latest && (
+                  {spi.latest && spi.latest.spi !== null && (
                     <div className="mb-3 flex items-center gap-3 rounded-lg border border-border bg-background px-3 py-2">
                       <span className="font-mono text-2xl font-bold" style={{ color: spiColor(spi.latest.spi) }}>
                         {spi.latest.spi > 0 ? `+${spi.latest.spi}` : spi.latest.spi}

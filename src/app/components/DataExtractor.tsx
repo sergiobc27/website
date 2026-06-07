@@ -115,8 +115,11 @@ function readHistory(): HistoryEntry[] {
 
 function saveHistory(entry: HistoryEntry) {
   const history = readHistory();
-  history.unshift(entry);
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 30)));
+  // Dedup por jobId: una recarga (o 2 pestañas) en la ventana de carrera del
+  // finalize creaba entradas duplicadas del mismo export (auditoría #4).
+  const deduped = entry.jobId ? history.filter((item) => item.jobId !== entry.jobId) : history;
+  deduped.unshift(entry);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(deduped.slice(0, 30)));
 }
 
 function formatDateLabel(value: string | null | undefined) {
@@ -683,6 +686,17 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         }
       } catch (error) {
         if (cancelled) return;
+        // 404/410 = el job ya no existe (expiró o se barrió tras un reinicio):
+        // es DEFINITIVO, no transitorio — cortar de inmediato con mensaje claro
+        // en vez de 5 reintentos + error de red genérico (auditoría #4). Los
+        // reintentos quedan solo para 502/503/504 puntuales del proxy.
+        if (error instanceof ApiError && (error.status === 404 || error.status === 410)) {
+          setIsBusy(false);
+          setCurrentJobId(null);
+          setActiveTask('La exportacion ya no esta disponible');
+          appendLog('ERROR', 'La exportacion expiro o se interrumpio en el servidor. Genera una nueva.');
+          return;
+        }
         // Un 502/524 puntual del proxy NO significa que el job murió: seguir
         // ocupado y reintentar; solo rendirse tras varios fallos seguidos.
         pollFailuresRef.current += 1;
