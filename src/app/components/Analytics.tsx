@@ -15,6 +15,7 @@ import {
   YAxis,
 } from 'recharts';
 import { SkeletonLoader } from './SkeletonLoader';
+import { Slider } from './ui/slider';
 import { apiJson } from '../lib/ideamApi';
 import type {
   AnalyticsByRegionResponse,
@@ -70,6 +71,10 @@ export function Analytics() {
   const [department, setDepartment] = useState(''); // '' = todo el país
   const [interval, setInterval] = useState<AnalyticsInterval>('year');
   const [metric, setMetric] = useState<AnalyticsMetric>('avg');
+  // Rango de años seleccionado [desde, hasta]; null = aún sin límites conocidos
+  // (se inicializan al rango completo del dataset cuando llega el overview).
+  const [yearRange, setYearRange] = useState<[number, number] | null>(null);
+  const [yearTouched, setYearTouched] = useState(false);
 
   const [departments, setDepartments] = useState<string[]>([]);
   const [overview, setOverview] = useState<AnalyticsDatasetOverview[]>([]);
@@ -83,9 +88,33 @@ export function Analytics() {
   const [isLoadingPanels, setIsLoadingPanels] = useState(true);
   const [error, setError] = useState('');
 
+  // Límites de años disponibles del dataset elegido (del overview).
+  const datasetBounds = useMemo(() => {
+    const found = overview.find((d) => d.id === datasetId);
+    const start = found?.firstObservation ? Number(found.firstObservation.slice(0, 4)) : 2003;
+    const end = found?.lastObservation ? Number(found.lastObservation.slice(0, 4)) : new Date().getFullYear();
+    return { start, end };
+  }, [overview, datasetId]);
+
+  // Al cambiar de dataset (o al cargar), reencuadra el rango al completo salvo
+  // que el usuario ya lo haya tocado manualmente.
+  useEffect(() => {
+    if (!yearTouched) setYearRange([datasetBounds.start, datasetBounds.end]);
+  }, [datasetBounds.start, datasetBounds.end, yearTouched]);
+
+  // El rango solo viaja al backend si NO es el completo (evita filtrar de más).
+  const dateParams = useMemo(() => {
+    if (!yearRange) return {};
+    const [from, to] = yearRange;
+    const params: { startDate?: string; endDate?: string } = {};
+    if (from > datasetBounds.start) params.startDate = `${from}-01-01`;
+    if (to < datasetBounds.end) params.endDate = `${to}-12-31`;
+    return params;
+  }, [yearRange, datasetBounds]);
+
   const scopePayload = useMemo(
-    () => ({ datasetId, departments: department ? [department] : [] }),
-    [datasetId, department]
+    () => ({ datasetId, departments: department ? [department] : [], ...dateParams }),
+    [datasetId, department, dateParams]
   );
 
   useEffect(() => {
@@ -335,6 +364,40 @@ export function Analytics() {
             }))}
           />
         </div>
+
+        {yearRange && datasetBounds.end > datasetBounds.start && (
+          <div className="mt-4 flex flex-col gap-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold uppercase tracking-wide text-muted-foreground">Rango de años</span>
+              <span className="font-mono text-card-foreground">
+                {yearRange[0]} – {yearRange[1]}
+                {yearTouched && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setYearTouched(false);
+                      setYearRange([datasetBounds.start, datasetBounds.end]);
+                    }}
+                    className="ml-2 text-accent hover:underline"
+                  >
+                    (todo)
+                  </button>
+                )}
+              </span>
+            </div>
+            <Slider
+              min={datasetBounds.start}
+              max={datasetBounds.end}
+              step={1}
+              value={yearRange}
+              onValueChange={(value) => {
+                setYearTouched(true);
+                setYearRange([value[0], value[1] ?? value[0]]);
+              }}
+              aria-label="Rango de años a analizar"
+            />
+          </div>
+        )}
       </div>
 
       {error && (
