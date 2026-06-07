@@ -3,6 +3,7 @@ import { Building2, Check, Link2, MapPin, CalendarRange, Database } from 'lucide
 import { Area, AreaChart, Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { SkeletonLoader } from './SkeletonLoader';
 import { apiJson } from '../lib/ideamApi';
+import { datasetUnit, unitSuffix } from '../lib/units';
 import type {
   AnalyticsByStationResponse,
   AnalyticsClimatologyResponse,
@@ -162,6 +163,7 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
   };
 
   const datasetName = datasets.find((d) => d.id === datasetId)?.name || '';
+  const unidad = datasetUnit(datasetId);
   const tooltipStyle = { backgroundColor: 'var(--background)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--foreground)' };
   const ready = department && municipality;
 
@@ -252,7 +254,7 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
-              <h3 className="mb-6 font-bold text-card-foreground">Climatología mensual</h3>
+              <h3 className="mb-6 font-bold text-card-foreground">Climatología mensual{unitSuffix(unidad)}</h3>
               {isLoading ? (
                 <SkeletonLoader rows={4} />
               ) : climatologyData.every((m) => m.media === null) ? (
@@ -275,7 +277,7 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
             </div>
 
             <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
-              <h3 className="mb-6 font-bold text-card-foreground">Promedio anual</h3>
+              <h3 className="mb-6 font-bold text-card-foreground">Promedio anual{unitSuffix(unidad)}</h3>
               {isLoading ? (
                 <SkeletonLoader rows={4} />
               ) : yearlyData.length === 0 ? (

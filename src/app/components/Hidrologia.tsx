@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, BarChart4, CloudRain, Droplets, Plus, Search, Waves } from 'lucide-react';
+import { AlertTriangle, BarChart4, CheckCircle2, CloudRain, Droplets, Plus, Search, Waves } from 'lucide-react';
 import {
   Bar,
   BarChart,
@@ -16,6 +16,7 @@ import {
   YAxis,
 } from 'recharts';
 import { SkeletonLoader } from './SkeletonLoader';
+import { CalculadoraCaudal } from './CalculadoraCaudal';
 import { apiJson, apiUrl } from '../lib/ideamApi';
 import type {
   AnalyticsTimeseriesResponse,
@@ -413,6 +414,10 @@ export function Hidrologia() {
             )}
           </div>
 
+          {idf?.available && idf.equation && (
+            <CalculadoraCaudal equation={idf.equation} durations={idf.durations} />
+          )}
+
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
             <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
               <div className="mb-4 flex items-center justify-between gap-4">
@@ -428,10 +433,28 @@ export function Hidrologia() {
                 <p className="text-muted-foreground text-sm">Registro insuficiente para ajustar (mínimo 5 años válidos).</p>
               ) : (
                 <>
+                  {returnPeriods.goodnessOfFit && (
+                    <div
+                      className={`mb-4 flex items-start gap-2 rounded-lg border px-3 py-2 text-xs ${
+                        returnPeriods.goodnessOfFit.passes
+                          ? 'border-success/40 bg-success/10 text-success'
+                          : 'border-accent/40 bg-accent/10 text-accent'
+                      }`}
+                    >
+                      {returnPeriods.goodnessOfFit.passes ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}
+                      <span>
+                        <strong>Bondad de ajuste (Kolmogorov-Smirnov):</strong>{' '}
+                        {returnPeriods.goodnessOfFit.passes
+                          ? 'el ajuste Gumbel es aceptable'
+                          : 'el ajuste Gumbel NO pasa el test; usa los cuantiles con cautela'}{' '}
+                        — D = {returnPeriods.goodnessOfFit.statistic} {returnPeriods.goodnessOfFit.passes ? '<' : '≥'} {returnPeriods.goodnessOfFit.critical} (crítico, α = {returnPeriods.goodnessOfFit.alpha}). Exigido por el Manual de Drenaje INVÍAS.
+                      </span>
+                    </div>
+                  )}
                   <div className="mb-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
                     {returnPeriods.quantiles.map((q) => (
                       <div key={q.returnPeriod} className="rounded-lg border border-border bg-background p-2 text-center">
-                        <p className="text-xs text-muted-foreground">Tr {q.returnPeriod}a</p>
+                        <p className="text-xs text-muted-foreground">Tr {q.returnPeriod} años</p>
                         <p className="font-mono text-sm font-bold text-card-foreground">{q.value}</p>
                         <p className="text-[10px] text-muted-foreground">mm/día</p>
                       </div>

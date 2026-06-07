@@ -3,6 +3,7 @@ import { GitCompareArrows, Plus, Search, X } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts';
 import { SkeletonLoader } from './SkeletonLoader';
 import { apiJson, apiUrl } from '../lib/ideamApi';
+import { datasetUnit, unitSuffix } from '../lib/units';
 import type {
   AnalyticsByStationResponse,
   AnalyticsStationRow,
@@ -343,7 +344,7 @@ export function ComparadorEstaciones() {
       ) : (
         <>
           <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
-            <h3 className="mb-6 font-bold text-card-foreground">Promedio anual de {datasetName} · series superpuestas</h3>
+            <h3 className="mb-6 font-bold text-card-foreground">Promedio anual de {datasetName}{unitSuffix(datasetUnit(datasetId))} · series superpuestas</h3>
             {isLoading ? (
               <SkeletonLoader rows={4} />
             ) : chartData.length === 0 ? (
@@ -357,7 +358,7 @@ export function ComparadorEstaciones() {
                     <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} tickFormatter={(v: number) => formatValue(v)} width={70} />
                     <Tooltip
                       contentStyle={{ backgroundColor: 'var(--background)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--foreground)' }}
-                      formatter={(value: number, name: string) => [formatValue(value), stationLabel(name)]}
+                      formatter={(value: number, name: string) => [`${formatValue(value)}${unitSuffix(datasetUnit(datasetId))}`, stationLabel(name)]}
                     />
                     <Legend formatter={(value: string) => stationLabel(value)} />
                     {selectedCodes.map((code, index) => (

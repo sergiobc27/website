@@ -17,6 +17,7 @@ import {
 import { SkeletonLoader } from './SkeletonLoader';
 import { Slider } from './ui/slider';
 import { apiJson } from '../lib/ideamApi';
+import { metricUnit, unitSuffix } from '../lib/units';
 import type {
   AnalyticsByRegionResponse,
   AnalyticsByStationResponse,
@@ -265,6 +266,8 @@ export function Analytics() {
   const selectedDataset = overview.find((item) => item.id === datasetId);
   const metricLabel = METRIC_LABELS[metric];
   const scopeLabel = department || 'Todo el país';
+  const seriesUnit = metricUnit(datasetId, metric); // unidad de la métrica (mm, °C, obs...)
+  const varUnit = metricUnit(datasetId, 'avg'); // unidad física de la variable
 
   const seriesData = useMemo(
     () =>
@@ -417,7 +420,7 @@ export function Analytics() {
         <div className="mb-6 flex items-center justify-between gap-4">
           <div>
             <h3 className="font-bold text-card-foreground">
-              {metricLabel} {interval === 'year' ? 'anual' : 'mensual'} · {selectedDataset?.name || datasetId}
+              {metricLabel} {interval === 'year' ? 'anual' : 'mensual'} de {selectedDataset?.name || datasetId}{unitSuffix(seriesUnit)}
             </h3>
             <p className="text-sm text-muted-foreground">{scopeLabel}</p>
           </div>
@@ -439,11 +442,11 @@ export function Analytics() {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
                 <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} minTickGap={24} />
-                <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} tickFormatter={(v: number) => formatValue(v)} width={70} />
+                <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} tickFormatter={(v: number) => formatValue(v)} width={70} label={{ value: `${metricLabel}${unitSuffix(seriesUnit)}`, angle: -90, position: 'insideLeft', style: { fontSize: 10, textAnchor: 'middle' } }} />
                 <Tooltip
                   contentStyle={tooltipStyle}
                   formatter={(value: number, name: string, item: { payload?: { n?: number } }) => [
-                    `${formatValue(value)} (${formatCount(item.payload?.n ?? 0)} obs.)`,
+                    `${formatValue(value)}${seriesUnit ? ' ' + seriesUnit : ''} (${formatCount(item.payload?.n ?? 0)} obs.)`,
                     metricLabel,
                   ]}
                 />
@@ -458,7 +461,7 @@ export function Analytics() {
         <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
           <div className="mb-6 flex items-center justify-between gap-4">
             <div>
-              <h3 className="font-bold text-card-foreground">Climatología mensual</h3>
+              <h3 className="font-bold text-card-foreground">Climatología mensual{unitSuffix(varUnit)}</h3>
               <p className="text-sm text-muted-foreground">Promedio histórico y extremos por mes · {scopeLabel}</p>
             </div>
             <CalendarRange className="h-5 w-5 shrink-0 text-accent" />
@@ -471,8 +474,8 @@ export function Analytics() {
                 <ComposedChart data={climatologyData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
                   <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} />
-                  <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} tickFormatter={(v: number) => formatValue(v)} width={70} />
-                  <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => formatValue(value)} />
+                  <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} tickFormatter={(v: number) => formatValue(v)} width={70} label={{ value: varUnit, angle: -90, position: 'insideLeft', style: { fontSize: 10, textAnchor: 'middle' } }} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(value: number, name: string) => [`${formatValue(value)}${varUnit ? ' ' + varUnit : ''}`, name]} />
                   <Bar dataKey="media" fill="var(--accent)" radius={[6, 6, 0, 0]} isAnimationActive={false} />
                   <Line type="monotone" dataKey="máximo" stroke="var(--primary)" strokeWidth={1.5} dot={false} isAnimationActive={false} />
                   <Line type="monotone" dataKey="mínimo" stroke="currentColor" className="text-muted-foreground" strokeWidth={1.5} dot={false} isAnimationActive={false} />
@@ -504,7 +507,7 @@ export function Analytics() {
                   <Tooltip
                     contentStyle={tooltipStyle}
                     formatter={(value: number, name: string, item: { payload?: { label?: string; media?: number | null; estaciones?: number } }) => [
-                      `${formatCount(value)} obs. · media ${formatValue(item.payload?.media)} · ${formatCount(item.payload?.estaciones ?? 0)} estaciones`,
+                      `${formatCount(value)} obs. · media ${formatValue(item.payload?.media)}${varUnit ? ' ' + varUnit : ''} · ${formatCount(item.payload?.estaciones ?? 0)} estaciones`,
                       item.payload?.label ?? '',
                     ]}
                   />

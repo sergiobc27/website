@@ -92,6 +92,14 @@ export interface ReturnPeriodQuantile {
   value: number;
 }
 
+export interface GoodnessOfFit {
+  test: string;
+  statistic: number;
+  critical: number;
+  alpha: number;
+  passes: boolean;
+}
+
 export interface ReturnPeriodsResponse {
   datasetId: string;
   stationYears: Array<{ year: number; maximum: number; days: number }>;
@@ -101,6 +109,7 @@ export interface ReturnPeriodsResponse {
   gumbel: { mu: number; beta: number } | null;
   quantiles: ReturnPeriodQuantile[];
   empirical: ReturnPeriodQuantile[];
+  goodnessOfFit?: GoodnessOfFit | null;
   warnings: string[];
   method?: string;
 }
