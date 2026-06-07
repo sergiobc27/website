@@ -19,7 +19,7 @@ import {
   TimerReset,
 } from 'lucide-react';
 import { EmptyState } from './EmptyState';
-import { apiJson, apiUrl } from '../lib/ideamApi';
+import { ApiError, apiJson, apiUrl } from '../lib/ideamApi';
 import type {
   CatalogBundleRow,
   CatalogFilterDefinition,
@@ -40,6 +40,7 @@ import type {
 
 const HISTORY_KEY = 'ideam-history';
 const CONFIG_KEY = 'ideam-extractor-config';
+const ACTIVE_JOB_KEY = 'ideam-extractor-active-job';
 const MAX_OPERATION_LOGS = 80;
 const EXPORT_AVAILABILITY_MS = 60 * 60 * 1000;
 const EXPORT_PLAN_FAST_TIMEOUT_MS = 2500;
@@ -467,7 +468,36 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     }
   }, [acceptedTerms, step, datasetId, selectedDepartments, selectedFormats, timeMode]);
 
+  // El job activo sobrevive recargas: un export de 10+ min no debe perderse
+  // porque el usuario recargó la página (el ZIP vive 1h en el servidor).
   useEffect(() => {
+    try {
+      if (currentJobId) window.localStorage.setItem(ACTIVE_JOB_KEY, currentJobId);
+      else window.localStorage.removeItem(ACTIVE_JOB_KEY);
+    } catch {
+      // best-effort
+    }
+  }, [currentJobId]);
+
+  useEffect(() => {
+    try {
+      const savedJobId = window.localStorage.getItem(ACTIVE_JOB_KEY);
+      if (savedJobId) {
+        appendLog('INFO', `Reconectando con la exportacion en curso (${savedJobId.slice(0, 8)}...).`);
+        setIsBusy(true);
+        setOperationStartedAt(performance.now());
+        setCurrentJobId(savedJobId);
+      }
+    } catch {
+      // best-effort
+    }
+    // Solo al montar: re-engancha el polling si había un job activo.
+  }, []);
+
+  useEffect(() => {
+    // cancelled evita que la respuesta lenta del dataset ANTERIOR pise las
+    // fechas del nuevo (race al cambiar rápido de variable).
+    let cancelled = false;
     const loadDateRange = async () => {
       if (!datasetId) return;
       appendLog('INFO', 'Consultando rango temporal disponible...');
@@ -477,15 +507,20 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           undefined,
           'No fue posible cargar el rango temporal.'
         );
+        if (cancelled) return;
         setDateRange(data);
         setStartDate(data.startDate || '');
         setEndDate(data.endDate || '');
         appendLog('SUCCESS', `Rango temporal disponible: ${data.startYear || 'N/D'} - ${data.endYear || 'N/D'}.`);
       } catch (error) {
+        if (cancelled) return;
         appendLog('ERROR', error instanceof Error ? error.message : 'Error cargando rango temporal.');
       }
     };
     void loadDateRange();
+    return () => {
+      cancelled = true;
+    };
   }, [datasetId]);
 
   useEffect(() => {
@@ -621,8 +656,36 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     if (!currentJobId) return undefined;
 
     let cancelled = false;
+    let timer: number | undefined;
+    const pollStartedAt = Date.now();
+
+    // Backoff: 2s el primer minuto, 5s hasta los 5 min, 10s después. Evita
+    // martillar la API (y el rate limit de lecturas) en exports largos.
+    const nextDelay = () => {
+      const elapsed = Date.now() - pollStartedAt;
+      if (elapsed < 60_000) return 2_000;
+      if (elapsed < 300_000) return 5_000;
+      return 10_000;
+    };
+
+    const schedule = () => {
+      if (cancelled) return;
+      timer = window.setTimeout(() => void pollJob(), nextDelay());
+    };
 
     const pollJob = async () => {
+      // Timeout duro de cliente: el job puede seguir en el servidor, pero la
+      // UI no debe quedarse consultando para siempre.
+      if (Date.now() - pollStartedAt > 30 * 60_000) {
+        setIsBusy(false);
+        setCurrentJobId(null);
+        setActiveTask('La exportacion continua en el servidor');
+        appendLog(
+          'INFO',
+          'Se dejo de consultar el job tras 30 minutos. Si termino, el ZIP aparecera disponible al reintentar desde el historial.'
+        );
+        return;
+      }
       try {
         const data = await apiJson<ExportJobStatusResponse>(
           `/api/jobs/${currentJobId}`,
@@ -642,50 +705,63 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           completedParts: data.parts.length,
         });
 
-        if (data.status === 'queued') {
+        if (data.status === 'queued' || data.status === 'planning') {
+          setIsBusy(true);
           setProgress(data.progressPercent);
           setActiveTask(data.currentStage);
-        } else if (data.status === 'planning') {
-          setProgress(data.progressPercent);
-          setActiveTask(data.currentStage);
+          schedule();
         } else if (data.status === 'retrying') {
+          setIsBusy(true);
           setProgress(data.progressPercent);
           setActiveTask(`${data.currentStage} (${data.retryCount}/${data.retryLimit})`);
+          schedule();
         } else if (data.status === 'processing') {
+          setIsBusy(true);
           setProgress(data.progressPercent);
           setActiveTask(`${data.currentStage}: pagina ${data.currentPage}/${Math.max(data.totalPages, 1)}`);
+          schedule();
         } else if (data.status === 'completed') {
           setProgress(100);
           setActiveTask('ZIP listo para descargar');
           setIsBusy(false);
           await finalizeCompletedJob(data);
+          // Limpia el job activo (y su persistencia): si no, una recarga
+          // posterior re-finalizaría el job y duplicaría el historial.
+          setCurrentJobId(null);
         } else if (data.status === 'failed') {
           setProgress(100);
           setActiveTask('Error en descarga');
           setIsBusy(false);
           setCurrentJobId(null);
           appendLog('ERROR', data.error || 'El job de exportacion fallo.');
+        } else {
+          schedule();
         }
       } catch (error) {
         if (cancelled) return;
+        // Un 502/524 puntual del proxy NO significa que el job murió: seguir
+        // ocupado y reintentar; solo rendirse tras varios fallos seguidos.
         pollFailuresRef.current += 1;
-        setIsBusy(false);
-        appendLog('ERROR', error instanceof Error ? error.message : 'Error consultando el job.');
-        if (pollFailuresRef.current >= 3) {
+        if (pollFailuresRef.current >= 5) {
+          setIsBusy(false);
           setCurrentJobId(null);
           setActiveTask('No fue posible consultar el job');
+          appendLog('ERROR', error instanceof Error ? error.message : 'Error consultando el job.');
+        } else {
+          appendLog(
+            'INFO',
+            `Fallo transitorio consultando el job (${pollFailuresRef.current}/5); reintentando...`
+          );
+          schedule();
         }
       }
     };
 
     void pollJob();
-    const timer = window.setInterval(() => {
-      void pollJob();
-    }, 2000);
 
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      if (timer !== undefined) window.clearTimeout(timer);
     };
   }, [currentJobId, finalizeCompletedJob]);
 
@@ -918,9 +994,18 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       appendLog('SUCCESS', `Job ${data.jobId.slice(0, 8)} creado. El backend continuara la exportacion por lotes.`);
     } catch (error) {
       setProgress(100);
-      setActiveTask('Error en descarga');
       setIsBusy(false);
-      appendLog('ERROR', error instanceof Error ? error.message : 'Error durante la descarga.');
+      if (error instanceof ApiError && error.status === 429) {
+        const wait = error.retryAfterSeconds ? ` en ~${Math.ceil(error.retryAfterSeconds / 60)} minuto(s)` : ' en unos minutos';
+        setActiveTask('Servidor ocupado');
+        appendLog('ERROR', `${error.message} Intenta de nuevo${wait}.`);
+      } else if (error instanceof ApiError && error.status === 413) {
+        setActiveTask('Seleccion demasiado grande');
+        appendLog('ERROR', error.message);
+      } else {
+        setActiveTask('Error en descarga');
+        appendLog('ERROR', error instanceof Error ? error.message : 'Error durante la descarga.');
+      }
     }
   };
 

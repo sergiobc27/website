@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Database, Download, Settings, FileText, BarChart3, ChevronLeft, ChevronRight, TrendingUp } from 'lucide-react';
+import { Activity, Database, Download, Settings, FileText, BarChart3, ChevronLeft, ChevronRight, MapPin, TrendingUp } from 'lucide-react';
 import logoVertical from "../../imports/Logo_CUC_PNG_letra_blanca_barra_roja_vtcal.png";
 import logoCollapsed from "../../imports/u.png";
 import logoIdeam from "../../imports/Ideam_(Colombia)_logo.png";
@@ -15,8 +15,10 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
   const menuItems = [
     { id: 'dashboard', icon: BarChart3, label: 'Dashboard' },
     { id: 'analytics', icon: TrendingUp, label: 'Analítica' },
+    { id: 'map', icon: MapPin, label: 'Mapa de Estaciones' },
     { id: 'extractor', icon: Database, label: 'Extractor de Datos' },
     { id: 'history', icon: Download, label: 'Historial' },
+    { id: 'status', icon: Activity, label: 'Estado del Espejo' },
     { id: 'settings', icon: Settings, label: 'Ajustes de API' },
     { id: 'docs', icon: FileText, label: 'Documentacion' },
   ];

@@ -1,9 +1,13 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { BookOpen, CheckCircle2, Cloud, Database, FileArchive, KeyRound, ShieldCheck, Terminal } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
 import { Dashboard } from './components/Dashboard';
 import { Analytics } from './components/Analytics';
+import { EstadoEspejo } from './components/EstadoEspejo';
+
+// El mapa carga MapLibre (~220KB gzip): lazy para no engordar el bundle inicial.
+const MapaEstaciones = lazy(() => import('./components/MapaEstaciones'));
 import { DataExtractor } from './components/DataExtractor';
 import type { ExtractorRuntimeState } from './components/DataExtractor';
 import { DownloadHistory } from './components/DownloadHistory';
@@ -29,6 +33,8 @@ export default function App() {
     const breadcrumbMap: Record<string, string[]> = {
       dashboard: ['Inicio', 'Dashboard'],
       analytics: ['Inicio', 'Analítica'],
+      map: ['Inicio', 'Mapa de Estaciones'],
+      status: ['Inicio', 'Estado del Espejo'],
       extractor: ['Inicio', 'Extractor de Datos'],
       history: ['Inicio', 'Historial de Descargas'],
       settings: ['Inicio', 'Ajustes de API'],
@@ -43,6 +49,14 @@ export default function App() {
         return <Dashboard />;
       case 'analytics':
         return <Analytics />;
+      case 'map':
+        return (
+          <Suspense fallback={<p className="text-muted-foreground text-sm">Cargando mapa...</p>}>
+            <MapaEstaciones />
+          </Suspense>
+        );
+      case 'status':
+        return <EstadoEspejo />;
       case 'history':
         return <DownloadHistory />;
       case 'settings':

@@ -30,6 +30,18 @@ async function parseJsonResponse<T>(response: Response, fallbackMessage: string)
   }
 }
 
+export class ApiError extends Error {
+  status: number;
+  retryAfterSeconds: number | null;
+
+  constructor(message: string, status: number, retryAfterSeconds: number | null = null) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
 export async function apiJson<T>(path: string, init: RequestInit | undefined, fallbackMessage: string) {
   const response = await fetch(apiUrl(path), {
     ...init,
@@ -41,7 +53,12 @@ export async function apiJson<T>(path: string, init: RequestInit | undefined, fa
   });
   const data = await parseJsonResponse<T>(response, fallbackMessage);
   if (!response.ok) {
-    throw new Error(data.error || fallbackMessage);
+    const retryAfter = Number(response.headers.get('retry-after'));
+    throw new ApiError(
+      data.error || fallbackMessage,
+      response.status,
+      Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null
+    );
   }
   return data;
 }

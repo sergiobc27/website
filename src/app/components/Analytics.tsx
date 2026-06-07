@@ -6,6 +6,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   ComposedChart,
   Line,
   ResponsiveContainer,
@@ -17,6 +18,7 @@ import { SkeletonLoader } from './SkeletonLoader';
 import { apiJson } from '../lib/ideamApi';
 import type {
   AnalyticsByRegionResponse,
+  AnalyticsByStationResponse,
   AnalyticsClimatologyResponse,
   AnalyticsDatasetOverview,
   AnalyticsDatasetsOverviewResponse,
@@ -74,6 +76,8 @@ export function Analytics() {
   const [timeseries, setTimeseries] = useState<AnalyticsTimeseriesResponse | null>(null);
   const [climatology, setClimatology] = useState<AnalyticsClimatologyResponse | null>(null);
   const [regions, setRegions] = useState<AnalyticsByRegionResponse | null>(null);
+  const [monthlySeries, setMonthlySeries] = useState<AnalyticsTimeseriesResponse | null>(null);
+  const [topStations, setTopStations] = useState<AnalyticsByStationResponse | null>(null);
 
   const [isLoadingSeries, setIsLoadingSeries] = useState(true);
   const [isLoadingPanels, setIsLoadingPanels] = useState(true);
@@ -174,6 +178,54 @@ export function Analytics() {
     return () => controller.abort();
   }, [scopePayload]);
 
+  // Serie mensual reciente (para anomalías) + top de estaciones: secundarios,
+  // no bloquean los paneles principales si fallan.
+  useEffect(() => {
+    const controller = new AbortController();
+    const load = async () => {
+      const since = new Date();
+      since.setMonth(since.getMonth() - 24);
+      try {
+        const [monthly, byStation] = await Promise.all([
+          apiJson<AnalyticsTimeseriesResponse>(
+            '/api/analytics/timeseries',
+            {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                ...scopePayload,
+                interval: 'month',
+                metric: 'avg',
+                startDate: since.toISOString().slice(0, 10),
+              }),
+              signal: controller.signal,
+            },
+            'No fue posible cargar la serie mensual reciente.'
+          ),
+          apiJson<AnalyticsByStationResponse>(
+            '/api/analytics/by-station',
+            {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify(scopePayload),
+              signal: controller.signal,
+            },
+            'No fue posible cargar el ranking de estaciones.'
+          ),
+        ]);
+        setMonthlySeries(monthly);
+        setTopStations(byStation);
+      } catch {
+        if (!controller.signal.aborted) {
+          setMonthlySeries(null);
+          setTopStations(null);
+        }
+      }
+    };
+    void load();
+    return () => controller.abort();
+  }, [scopePayload]);
+
   const selectedDataset = overview.find((item) => item.id === datasetId);
   const metricLabel = METRIC_LABELS[metric];
   const scopeLabel = department || 'Todo el país';
@@ -213,6 +265,26 @@ export function Analytics() {
         })),
     [regions]
   );
+
+  // Anomalía = desviación % del mes observado frente a su media climatológica
+  // (misma combinación de filtros). Cálculo 100% en el cliente: ambas series
+  // ya están cargadas.
+  const anomalyData = useMemo(() => {
+    if (!monthlySeries || !climatology) return [];
+    const climByMonth = new Map(climatology.months.map((m) => [m.month, m.mean]));
+    return monthlySeries.points
+      .filter((point) => point.value !== null)
+      .slice(-24)
+      .flatMap((point) => {
+        const month = Number(point.bucket.slice(5, 7));
+        const clim = climByMonth.get(month);
+        if (!clim) return [];
+        const pct = (((point.value as number) - clim) / clim) * 100;
+        return [{ label: formatBucketLabel(point.bucket, 'month'), anomalia: Math.round(pct * 10) / 10 }];
+      });
+  }, [monthlySeries, climatology]);
+
+  const stationRows = (topStations?.stations || []).slice(0, 10);
 
   const tooltipStyle = {
     backgroundColor: 'var(--background)',
@@ -369,6 +441,73 @@ export function Analytics() {
                   <Bar dataKey="observaciones" fill="var(--primary)" radius={[0, 6, 6, 0]} isAnimationActive={false} />
                 </BarChart>
               </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+          <div className="mb-6 flex items-center justify-between gap-4">
+            <div>
+              <h3 className="font-bold text-card-foreground">Anomalías mensuales (últimos 24 meses)</h3>
+              <p className="text-sm text-muted-foreground">Desviación % vs el promedio histórico del mismo mes · {scopeLabel}</p>
+            </div>
+            <Activity className="h-5 w-5 shrink-0 text-accent" />
+          </div>
+          {anomalyData.length === 0 ? (
+            <p className="text-muted-foreground text-sm">Sin datos suficientes para calcular anomalías.</p>
+          ) : (
+            <div style={{ width: '100%', height: '240px' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={anomalyData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
+                  <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} minTickGap={20} />
+                  <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} tickFormatter={(v: number) => `${v}%`} width={56} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`${value > 0 ? '+' : ''}${value}% vs lo normal`, 'Anomalía']} />
+                  <Bar dataKey="anomalia" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                    {anomalyData.map((entry) => (
+                      <Cell key={entry.label} fill={entry.anomalia >= 0 ? '#2563eb' : '#A3161A'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <div>
+              <h3 className="font-bold text-card-foreground">Top 10 estaciones</h3>
+              <p className="text-sm text-muted-foreground">Por volumen de observaciones · {scopeLabel}</p>
+            </div>
+            <MapPin className="h-5 w-5 shrink-0 text-accent" />
+          </div>
+          {stationRows.length === 0 ? (
+            <p className="text-muted-foreground text-sm">Sin datos para esta combinación de filtros.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[420px] text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="py-2 pr-3 font-semibold">Estación</th>
+                    <th className="py-2 pr-3 font-semibold">Municipio</th>
+                    <th className="py-2 pr-3 text-right font-semibold">Obs.</th>
+                    <th className="py-2 text-right font-semibold">Última obs.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stationRows.map((station) => (
+                    <tr key={station.code} className="border-b border-border/60">
+                      <td className="py-2 pr-3 font-mono text-card-foreground">{station.code}</td>
+                      <td className="py-2 pr-3 text-muted-foreground">{station.municipality || 'N/D'}</td>
+                      <td className="py-2 pr-3 text-right font-mono text-card-foreground">{formatCount(station.rowCount)}</td>
+                      <td className="py-2 text-right text-muted-foreground">{station.lastObservation?.slice(0, 7) || 'N/D'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

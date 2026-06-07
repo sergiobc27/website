@@ -72,6 +72,21 @@ export interface AnalyticsClimatologyResponse {
   months: AnalyticsClimatologyMonth[];
 }
 
+export interface AnalyticsStationRow {
+  code: string;
+  municipality: string | null;
+  department: string | null;
+  rowCount: number;
+  mean: number | null;
+  firstObservation: string | null;
+  lastObservation: string | null;
+}
+
+export interface AnalyticsByStationResponse {
+  datasetId: string;
+  stations: AnalyticsStationRow[];
+}
+
 export interface AnalyticsDatasetOverview {
   id: string;
   name: string;
