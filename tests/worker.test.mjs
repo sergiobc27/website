@@ -11,14 +11,17 @@ const API_ORIGIN = 'https://ideam-api.sergiobc.com';
  */
 function stubFetch() {
   const calls = [];
+  const options = [];
   const original = global.fetch;
-  global.fetch = async (request) => {
-    // El Worker llama fetch(new Request(...)). Capturamos esa Request.
+  global.fetch = async (request, init) => {
+    // El Worker llama fetch(new Request(...), opciones?). Capturamos ambos.
     calls.push(request);
+    options.push(init);
     return new Response('upstream-ok', { status: 200 });
   };
   return {
     calls,
+    options,
     restore() {
       global.fetch = original;
     },
@@ -142,6 +145,32 @@ test('rutas no-/api se sirven desde env.ASSETS.fetch sin tocar el upstream', asy
     assert.equal(assets.calls.length, 1);
     assert.equal(fetchStub.calls.length, 0);
     assert.equal(assets.calls[0].url, 'https://ideam.test/index.html');
+  } finally {
+    fetchStub.restore();
+  }
+});
+
+test('GETs de la lista blanca llevan cacheEverything; el resto no', async () => {
+  const fetchStub = stubFetch();
+  try {
+    const env = { API_ORIGIN, IDEAM_PROXY_SECRET: 'x', ASSETS: createAssetsStub() };
+
+    // Cacheable: GET /api/meta.
+    await worker.fetch(new Request('https://ideam.test/api/meta'), env);
+    assert.deepEqual(fetchStub.options[0], { cf: { cacheEverything: true } });
+
+    // NO cacheable: el estado de un job es vivo.
+    await worker.fetch(new Request('https://ideam.test/api/jobs/abc'), env);
+    assert.equal(fetchStub.options[1], undefined);
+
+    // NO cacheable: POST de analitica (aunque exista una ruta GET en la lista,
+    // el metodo POST queda fuera). Sin body: undici en Node exige 'duplex' para
+    // bodies en streaming, cosa que el runtime real de Workers no requiere.
+    await worker.fetch(
+      new Request('https://ideam.test/api/analytics/datasets-overview', { method: 'POST' }),
+      env
+    );
+    assert.equal(fetchStub.options[2], undefined);
   } finally {
     fetchStub.restore();
   }
