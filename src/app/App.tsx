@@ -7,6 +7,7 @@ import { Analytics } from './components/Analytics';
 import { EstadoEspejo } from './components/EstadoEspejo';
 import { ComparadorEstaciones } from './components/ComparadorEstaciones';
 import { FichaClimatica } from './components/FichaClimatica';
+import { Hidrologia } from './components/Hidrologia';
 
 // El mapa carga MapLibre (~220KB gzip): lazy para no engordar el bundle inicial.
 const MapaEstaciones = lazy(() => import('./components/MapaEstaciones'));
@@ -71,6 +72,7 @@ export default function App() {
       map: ['Inicio', 'Mapa de Estaciones'],
       compare: ['Inicio', 'Comparador'],
       ficha: ['Inicio', 'Ficha Climática'],
+      hydro: ['Inicio', 'Hidrología'],
       status: ['Inicio', 'Estado del Espejo'],
       extractor: ['Inicio', 'Extractor de Datos'],
       history: ['Inicio', 'Historial de Descargas'],
@@ -94,6 +96,8 @@ export default function App() {
         );
       case 'compare':
         return <ComparadorEstaciones />;
+      case 'hydro':
+        return <Hidrologia />;
       case 'ficha':
         return (
           <FichaClimatica

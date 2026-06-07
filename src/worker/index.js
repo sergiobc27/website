@@ -43,6 +43,9 @@ const PUBLIC_API_ROUTES = new Set([
   "/api/analytics/by-region",
   "/api/analytics/by-station",
   "/api/analytics/monthly-climatology",
+  "/api/analytics/return-periods",
+  "/api/analytics/spi",
+  "/api/analytics/histogram",
 ]);
 
 function isPublicApiPath(pathname) {

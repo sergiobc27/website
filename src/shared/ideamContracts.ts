@@ -87,6 +87,46 @@ export interface AnalyticsByStationResponse {
   stations: AnalyticsStationRow[];
 }
 
+export interface ReturnPeriodQuantile {
+  returnPeriod: number;
+  value: number;
+}
+
+export interface ReturnPeriodsResponse {
+  datasetId: string;
+  stationYears: Array<{ year: number; maximum: number; days: number }>;
+  n: number;
+  mean?: number;
+  std?: number;
+  gumbel: { mu: number; beta: number } | null;
+  quantiles: ReturnPeriodQuantile[];
+  empirical: ReturnPeriodQuantile[];
+  warnings: string[];
+  method?: string;
+}
+
+export interface SpiPoint {
+  month: string;
+  precipitation: number;
+  spi: number;
+  category: string;
+}
+
+export interface SpiResponse {
+  scale: number;
+  points: SpiPoint[];
+  latest: SpiPoint | null;
+  warnings: string[];
+  method?: string;
+}
+
+export interface HistogramResponse {
+  dryDays: number;
+  wetDays: number;
+  maxDaily: number;
+  bins: Array<{ from: number; to: number; count: number }>;
+}
+
 export interface AnalyticsDatasetOverview {
   id: string;
   name: string;
