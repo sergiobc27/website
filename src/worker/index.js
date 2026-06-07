@@ -48,6 +48,7 @@ const PUBLIC_API_ROUTES = new Set([
   "/api/analytics/return-periods",
   "/api/analytics/spi",
   "/api/analytics/histogram",
+  "/api/analytics/idf",
 ]);
 
 function isPublicApiPath(pathname) {

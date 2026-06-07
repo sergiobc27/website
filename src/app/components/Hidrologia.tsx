@@ -6,7 +6,9 @@ import {
   CartesianGrid,
   Cell,
   ComposedChart,
+  Legend,
   Line,
+  LineChart,
   ResponsiveContainer,
   Scatter,
   Tooltip,
@@ -18,9 +20,12 @@ import { apiJson, apiUrl } from '../lib/ideamApi';
 import type {
   AnalyticsTimeseriesResponse,
   HistogramResponse,
+  IdfResponse,
   ReturnPeriodsResponse,
   SpiResponse,
 } from '../../shared/ideamContracts';
+
+const IDF_COLORS = ['#60a5fa', '#34d399', '#C9A227', '#f59e0b', '#A3161A', '#7f1d1d'];
 
 const PRECIP_DATASET = 's54a-sgyg';
 const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -59,6 +64,7 @@ export function Hidrologia() {
   const [spi, setSpi] = useState<SpiResponse | null>(null);
   const [spiScale, setSpiScale] = useState<3 | 6 | 12>(12);
   const [histogramData, setHistogramData] = useState<HistogramResponse | null>(null);
+  const [idf, setIdf] = useState<IdfResponse | null>(null);
   const [hyetographYear, setHyetographYear] = useState('');
   const [hyetograph, setHyetograph] = useState<AnalyticsTimeseriesResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -113,13 +119,15 @@ export function Hidrologia() {
       setIsLoading(true);
       setError('');
       try {
-        const [rp, hist] = await Promise.all([
+        const [rp, hist, idfData] = await Promise.all([
           apiJson<ReturnPeriodsResponse>('/api/analytics/return-periods', post(scopeFor(station.codigo), controller.signal), 'Sin períodos de retorno.'),
           apiJson<HistogramResponse>('/api/analytics/histogram', post(scopeFor(station.codigo), controller.signal), 'Sin histograma.'),
+          apiJson<IdfResponse>('/api/analytics/idf', post(scopeFor(station.codigo), controller.signal), 'Sin IDF.'),
         ]);
         if (controller.signal.aborted) return;
         setReturnPeriods(rp);
         setHistogramData(hist);
+        setIdf(idfData);
         const lastYear = rp.stationYears.at(-1)?.year;
         setHyetographYear((current) => current || (lastYear ? String(lastYear) : ''));
       } catch (cause) {
@@ -207,6 +215,21 @@ export function Hidrologia() {
 
   const years = useMemo(() => (returnPeriods?.stationYears || []).map((y) => String(y.year)), [returnPeriods]);
 
+  // Curvas IDF: fila por duración, una columna de intensidad por período de
+  // retorno (formato que Recharts grafica como familia de líneas).
+  const idfChartData = useMemo(() => {
+    if (!idf?.available) return [];
+    const byDur = new Map<number, Record<string, number>>();
+    for (const curve of idf.curves) {
+      for (const point of curve.points) {
+        const row = byDur.get(point.durMin) || { durMin: point.durMin };
+        row[`tr${curve.returnPeriod}`] = point.intensityMmH;
+        byDur.set(point.durMin, row);
+      }
+    }
+    return Array.from(byDur.values()).sort((a, b) => a.durMin - b.durMin);
+  }, [idf]);
+
   return (
     <div className="space-y-6">
       <div>
@@ -271,6 +294,121 @@ export function Hidrologia() {
               <div>{returnPeriods?.warnings.map((w) => <p key={w}>{w}</p>)}</div>
             </div>
           )}
+
+          {/* CURVAS IDF — pieza estrella, ancho completo */}
+          <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <div>
+                <h3 className="font-bold text-card-foreground">Curvas IDF · Intensidad–Duración–Frecuencia</h3>
+                <p className="text-sm text-muted-foreground">
+                  {idf?.available
+                    ? `Intensidad (mm/h) vs duración, una curva por período de retorno · ${idf.nYears} años, datos de 10 min`
+                    : 'Familia de curvas de diseño de drenaje'}
+                </p>
+              </div>
+              <CloudRain className="h-5 w-5 shrink-0 text-accent" />
+            </div>
+            {isLoading ? (
+              <SkeletonLoader rows={5} />
+            ) : !idf?.available ? (
+              <p className="text-muted-foreground text-sm">
+                {idf?.message || 'Esta estación no tiene curvas IDF disponibles todavía.'}
+              </p>
+            ) : (
+              <div className="space-y-4">
+                <div style={{ width: '100%', height: '320px' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={idfChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
+                      <XAxis
+                        dataKey="durMin"
+                        type="number"
+                        scale="log"
+                        domain={['dataMin', 'dataMax']}
+                        ticks={[10, 20, 30, 60, 120, 180, 360, 720, 1440]}
+                        stroke="currentColor"
+                        className="text-muted-foreground"
+                        style={{ fontSize: '11px' }}
+                        label={{ value: 'Duración (min, escala log)', position: 'insideBottom', offset: -2, fontSize: 10 }}
+                      />
+                      <YAxis
+                        scale="log"
+                        domain={['auto', 'auto']}
+                        stroke="currentColor"
+                        className="text-muted-foreground"
+                        style={{ fontSize: '11px' }}
+                        width={52}
+                        label={{ value: 'mm/h', angle: -90, position: 'insideLeft', fontSize: 10 }}
+                      />
+                      <Tooltip
+                        contentStyle={tooltipStyle}
+                        formatter={(value: number, name: string) => [`${value} mm/h`, name.replace('tr', 'Tr ') + ' años']}
+                        labelFormatter={(v) => `Duración ${v} min`}
+                      />
+                      <Legend formatter={(value: string) => `Tr ${value.replace('tr', '')} años`} />
+                      {(idf.returnPeriods || []).map((tr, index) => (
+                        <Line
+                          key={tr}
+                          type="monotone"
+                          dataKey={`tr${tr}`}
+                          stroke={IDF_COLORS[index % IDF_COLORS.length]}
+                          strokeWidth={2}
+                          dot={{ r: 2 }}
+                          connectNulls
+                          isAnimationActive={false}
+                        />
+                      ))}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {idf.equation && (
+                  <div className="rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-sm">
+                    <span className="text-muted-foreground">Ecuación ajustada: </span>
+                    <span className="font-mono font-semibold text-card-foreground">
+                      I = {idf.equation.K} · T<sup>{idf.equation.m}</sup> / D<sup>{idf.equation.n}</sup>
+                    </span>
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      (I en mm/h, T en años, D en min · R² = {idf.equation.r2})
+                    </span>
+                  </div>
+                )}
+
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[560px] text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                        <th className="py-2 pr-3 font-semibold">Dur. (min)</th>
+                        {(idf.returnPeriods || []).map((tr) => (
+                          <th key={tr} className="py-2 pr-3 text-right font-semibold">Tr {tr}a</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {idfChartData.map((row) => (
+                        <tr key={row.durMin} className="border-b border-border/60">
+                          <td className="py-2 pr-3 font-mono text-card-foreground">{row.durMin}</td>
+                          {(idf.returnPeriods || []).map((tr) => (
+                            <td key={tr} className="py-2 pr-3 text-right font-mono text-card-foreground">
+                              {row[`tr${tr}`] != null ? `${row[`tr${tr}`]}` : '—'}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="mt-1 text-xs text-muted-foreground">Intensidades en mm/h.</p>
+                </div>
+
+                {(idf.warnings || []).map((w) => (
+                  <div key={w} className="flex items-start gap-2 text-xs text-accent">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>{w}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
             <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">

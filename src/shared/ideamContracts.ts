@@ -129,6 +129,30 @@ export interface HistogramResponse {
   bins: Array<{ from: number; to: number; count: number }>;
 }
 
+export interface IdfPoint {
+  durMin: number;
+  depthMm: number;
+  intensityMmH: number;
+}
+
+export interface IdfCurve {
+  returnPeriod: number;
+  points: IdfPoint[];
+}
+
+export interface IdfResponse {
+  available: boolean;
+  message?: string;
+  datasetId?: string;
+  nYears?: number;
+  durations: number[];
+  returnPeriods: number[];
+  curves: IdfCurve[];
+  equation: { K: number; m: number; n: number; r2: number } | null;
+  warnings: string[];
+  method?: string;
+}
+
 export interface AnalyticsDatasetOverview {
   id: string;
   name: string;
