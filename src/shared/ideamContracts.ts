@@ -31,6 +31,61 @@ export interface MetaResponse {
   dataFreshness?: DataFreshness;
 }
 
+export type AnalyticsInterval = 'day' | 'month' | 'year';
+export type AnalyticsMetric = 'avg' | 'sum' | 'min' | 'max' | 'count';
+
+export interface AnalyticsTimeseriesPoint {
+  bucket: string;
+  value: number | null;
+  n: number;
+}
+
+export interface AnalyticsTimeseriesResponse {
+  datasetId: string;
+  interval: AnalyticsInterval;
+  metric: AnalyticsMetric;
+  points: AnalyticsTimeseriesPoint[];
+}
+
+export interface AnalyticsRegionRow {
+  department: string;
+  rowCount: number;
+  mean: number | null;
+  stationCount: number;
+}
+
+export interface AnalyticsByRegionResponse {
+  datasetId: string;
+  regions: AnalyticsRegionRow[];
+}
+
+export interface AnalyticsClimatologyMonth {
+  month: number;
+  mean: number | null;
+  min: number | null;
+  max: number | null;
+  n: number;
+}
+
+export interface AnalyticsClimatologyResponse {
+  datasetId: string;
+  months: AnalyticsClimatologyMonth[];
+}
+
+export interface AnalyticsDatasetOverview {
+  id: string;
+  name: string;
+  category: string;
+  rowCount: number;
+  stationCount: number;
+  firstObservation: string | null;
+  lastObservation: string | null;
+}
+
+export interface AnalyticsDatasetsOverviewResponse {
+  datasets: AnalyticsDatasetOverview[];
+}
+
 export interface DateRangeResponse {
   datasetId: string;
   startDate: string | null;

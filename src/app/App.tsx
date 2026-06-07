@@ -3,6 +3,7 @@ import { BookOpen, CheckCircle2, Cloud, Database, FileArchive, KeyRound, ShieldC
 import { Sidebar } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
 import { Dashboard } from './components/Dashboard';
+import { Analytics } from './components/Analytics';
 import { DataExtractor } from './components/DataExtractor';
 import type { ExtractorRuntimeState } from './components/DataExtractor';
 import { DownloadHistory } from './components/DownloadHistory';
@@ -27,6 +28,7 @@ export default function App() {
   const getBreadcrumbs = () => {
     const breadcrumbMap: Record<string, string[]> = {
       dashboard: ['Inicio', 'Dashboard'],
+      analytics: ['Inicio', 'Analítica'],
       extractor: ['Inicio', 'Extractor de Datos'],
       history: ['Inicio', 'Historial de Descargas'],
       settings: ['Inicio', 'Ajustes de API'],
@@ -39,6 +41,8 @@ export default function App() {
     switch (currentView) {
       case 'dashboard':
         return <Dashboard />;
+      case 'analytics':
+        return <Analytics />;
       case 'history':
         return <DownloadHistory />;
       case 'settings':
