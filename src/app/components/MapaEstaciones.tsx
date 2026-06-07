@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import type { FeatureCollection, Point as GeoJsonPoint } from 'geojson';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -123,6 +123,8 @@ export default function MapaEstaciones() {
   const [departamentoFilter, setDepartamentoFilter] = useState('');
   const [zonaFilter, setZonaFilter] = useState('');
   const [corrienteFilter, setCorrienteFilter] = useState('');
+  // Diferido: filtrar 18K features en cada tecla causaba jank (auditoría #5 #13).
+  const corrienteQuery = useDeferredValue(corrienteFilter);
   const [altitudMax, setAltitudMax] = useState<number | null>(null); // tope superior (m)
   const [sparkDataset, setSparkDataset] = useState('s54a-sgyg');
   const [choroplethOn, setChoroplethOn] = useState(false);
@@ -332,6 +334,10 @@ export default function MapaEstaciones() {
     [allStations]
   );
 
+  // Match de corriente: parcial e insensible a tildes/mayúsculas (antes la
+  // igualdad estricta vaciaba el mapa con texto parcial sin feedback — aud #5 #14).
+  const corrienteNorm = useMemo(() => normalizeName(corrienteQuery.trim()), [corrienteQuery]);
+
   const visibleStations = useMemo(
     () =>
       allStations.filter((f) => {
@@ -340,11 +346,16 @@ export default function MapaEstaciones() {
         if (categoriaFilter && p.categoria !== categoriaFilter) return false;
         if (departamentoFilter && p.departamento !== departamentoFilter) return false;
         if (zonaFilter && p.zonaHidrografica !== zonaFilter) return false;
-        if (corrienteFilter && p.corriente !== corrienteFilter) return false;
-        if (altitudMax != null && (Number(p.altitud) || 0) > altitudMax) return false;
+        if (corrienteNorm && !normalizeName(p.corriente || '').includes(corrienteNorm)) return false;
+        if (altitudMax != null) {
+          // Altitud desconocida (null/no numérica) NO pasa un filtro de altitud:
+          // antes Number(null)=0 la colaba como nivel del mar (auditoría #5 #12).
+          const alt = Number(p.altitud);
+          if (!Number.isFinite(alt) || alt > altitudMax) return false;
+        }
         return true;
       }),
-    [allStations, estadoFilter, categoriaFilter, departamentoFilter, zonaFilter, corrienteFilter, altitudMax]
+    [allStations, estadoFilter, categoriaFilter, departamentoFilter, zonaFilter, corrienteNorm, altitudMax]
   );
 
   // Los filtros reescriben la fuente (setData) para que los clusters se

@@ -220,6 +220,7 @@ export function ComparadorEstaciones() {
     for (const code of selectedCodes) {
       const curve = idfByCode[code]?.curves.find((c) => c.returnPeriod === idfTr);
       for (const point of curve?.points || []) {
+        if (!(point.intensityMmH > 0)) continue; // eje log: descartar ≤0 (aud. #5 #10)
         const row = byDur.get(point.durMin) || { durMin: point.durMin };
         row[code] = point.intensityMmH;
         byDur.set(point.durMin, row);

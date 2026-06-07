@@ -96,10 +96,17 @@ export function Analytics() {
     return { start, end };
   }, [overview, datasetId]);
 
-  // Al cambiar de dataset (o al cargar), reencuadra el rango al completo salvo
-  // que el usuario ya lo haya tocado manualmente.
+  // Al cambiar de dataset (o al cargar), reencuadra el rango. Si el usuario ya
+  // lo tocó, CLAMPEA su selección a los nuevos límites en vez de dejarla fuera
+  // (evita emitir fechas anteriores al inicio del dataset → "Sin datos" sin
+  // explicación; auditoría #5 #7).
   useEffect(() => {
-    if (!yearTouched) setYearRange([datasetBounds.start, datasetBounds.end]);
+    setYearRange((prev) => {
+      if (!yearTouched || !prev) return [datasetBounds.start, datasetBounds.end];
+      const lo = Math.min(Math.max(prev[0], datasetBounds.start), datasetBounds.end);
+      const hi = Math.max(Math.min(prev[1], datasetBounds.end), datasetBounds.start);
+      return [Math.min(lo, hi), Math.max(lo, hi)];
+    });
   }, [datasetBounds.start, datasetBounds.end, yearTouched]);
 
   // El rango solo viaja al backend si NO es el completo (evita filtrar de más).

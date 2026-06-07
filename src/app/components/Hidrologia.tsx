@@ -222,6 +222,9 @@ export function Hidrologia() {
     const byDur = new Map<number, Record<string, number>>();
     for (const curve of idf.curves) {
       for (const point of curve.points) {
+        // El eje Y es logarítmico: una intensidad ≤0 daría log(0)=−∞ y rompería
+        // TODA la familia de curvas sin error visible (auditoría #5 #10).
+        if (!(point.intensityMmH > 0)) continue;
         const row = byDur.get(point.durMin) || { durMin: point.durMin };
         row[`tr${curve.returnPeriod}`] = point.intensityMmH;
         byDur.set(point.durMin, row);
@@ -369,7 +372,7 @@ export function Hidrologia() {
                       I = {idf.equation.K} · T<sup>{idf.equation.m}</sup> / D<sup>{idf.equation.n}</sup>
                     </span>
                     <span className="ml-2 text-xs text-muted-foreground">
-                      (I en mm/h, T en años, D en min · R² = {idf.equation.r2})
+                      (I en mm/h, T en años, D en min · R²<sub>log</sub> = {idf.equation.r2})
                     </span>
                   </div>
                 )}

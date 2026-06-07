@@ -148,7 +148,7 @@ export interface IdfResponse {
   durations: number[];
   returnPeriods: number[];
   curves: IdfCurve[];
-  equation: { K: number; m: number; n: number; r2: number } | null;
+  equation: { K: number; m: number; n: number; r2: number; r2Space?: string } | null;
   warnings: string[];
   method?: string;
 }
