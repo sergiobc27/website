@@ -72,6 +72,9 @@ function popupHtml(p: StationProperties) {
       ${row('Altitud', p.altitud !== null ? `${p.altitud} m` : null)}
       ${row('Corriente', p.corriente)}
       <div class="ideam-spark" style="margin-top: 8px; min-height: 64px; opacity: .8;">Cargando serie histórica...</div>
+      <button type="button" class="ideam-compare-btn" style="margin-top: 8px; width: 100%; padding: 5px 8px; border: 1px solid #C9A227; border-radius: 6px; background: rgba(201,162,39,.12); color: #8a6f1a; font-weight: 600; cursor: pointer; font: inherit; font-size: 12px;">
+        + Añadir al comparador
+      </button>
     </div>`;
 }
 
@@ -238,6 +241,28 @@ export default function MapaEstaciones() {
           .setLngLat(coordinates)
           .setHTML(popupHtml(props))
           .addTo(map);
+
+        // Integración con el Comparador: comparte estado vía localStorage.
+        const compareButton = popup.getElement()?.querySelector('.ideam-compare-btn') as HTMLButtonElement | null;
+        compareButton?.addEventListener('click', () => {
+          try {
+            const raw = JSON.parse(window.localStorage.getItem('ideam-comparador') || '[]');
+            const codes: string[] = Array.isArray(raw) ? raw.map(String) : [];
+            if (codes.includes(props.codigo)) {
+              compareButton.textContent = 'Ya está en el comparador';
+              return;
+            }
+            if (codes.length >= 5) {
+              compareButton.textContent = 'Comparador lleno (máx. 5)';
+              return;
+            }
+            codes.push(props.codigo);
+            window.localStorage.setItem('ideam-comparador', JSON.stringify(codes));
+            compareButton.textContent = '✓ Añadida — abre el Comparador';
+          } catch {
+            // best-effort
+          }
+        });
 
         const dataset = sparkDatasetRef.current;
         try {

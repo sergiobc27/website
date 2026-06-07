@@ -5,15 +5,29 @@ import { Navbar } from './components/Navbar';
 import { Dashboard } from './components/Dashboard';
 import { Analytics } from './components/Analytics';
 import { EstadoEspejo } from './components/EstadoEspejo';
+import { ComparadorEstaciones } from './components/ComparadorEstaciones';
+import { FichaClimatica } from './components/FichaClimatica';
 
 // El mapa carga MapLibre (~220KB gzip): lazy para no engordar el bundle inicial.
 const MapaEstaciones = lazy(() => import('./components/MapaEstaciones'));
+
+// La ficha municipal es compartible: #/ficha/DEPARTAMENTO/MUNICIPIO.
+function parseFichaHash(): { department: string; municipality: string } | null {
+  const match = window.location.hash.match(/^#\/ficha\/([^/]+)\/([^/]+)/);
+  if (!match) return null;
+  try {
+    return { department: decodeURIComponent(match[1]), municipality: decodeURIComponent(match[2]) };
+  } catch {
+    return null;
+  }
+}
 import { DataExtractor } from './components/DataExtractor';
 import type { ExtractorRuntimeState } from './components/DataExtractor';
 import { DownloadHistory } from './components/DownloadHistory';
 
 export default function App() {
-  const [currentView, setCurrentView] = useState('dashboard');
+  const [fichaParams, setFichaParams] = useState(parseFichaHash);
+  const [currentView, setCurrentView] = useState(() => (parseFichaHash() ? 'ficha' : 'dashboard'));
   const [runtime, setRuntime] = useState<ExtractorRuntimeState>({
     isBusy: false,
     activeTask: 'Esperando configuración',
@@ -29,11 +43,34 @@ export default function App() {
     document.documentElement.classList.toggle('dark', storedTheme ? storedTheme === 'dark' : prefersDark);
   }, []);
 
+  // Un enlace de ficha pegado/navegado abre la ficha directamente.
+  useEffect(() => {
+    const onHashChange = () => {
+      const params = parseFichaHash();
+      if (params) {
+        setFichaParams(params);
+        setCurrentView('ficha');
+      }
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  const navigate = (view: string) => {
+    if (view !== 'ficha' && window.location.hash.startsWith('#/ficha')) {
+      // Limpia el hash compartible al salir de la ficha.
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+    setCurrentView(view);
+  };
+
   const getBreadcrumbs = () => {
     const breadcrumbMap: Record<string, string[]> = {
       dashboard: ['Inicio', 'Dashboard'],
       analytics: ['Inicio', 'Analítica'],
       map: ['Inicio', 'Mapa de Estaciones'],
+      compare: ['Inicio', 'Comparador'],
+      ficha: ['Inicio', 'Ficha Climática'],
       status: ['Inicio', 'Estado del Espejo'],
       extractor: ['Inicio', 'Extractor de Datos'],
       history: ['Inicio', 'Historial de Descargas'],
@@ -55,6 +92,16 @@ export default function App() {
             <MapaEstaciones />
           </Suspense>
         );
+      case 'compare':
+        return <ComparadorEstaciones />;
+      case 'ficha':
+        return (
+          <FichaClimatica
+            key={`${fichaParams?.department || ''}|${fichaParams?.municipality || ''}`}
+            initialDepartment={fichaParams?.department}
+            initialMunicipality={fichaParams?.municipality}
+          />
+        );
       case 'status':
         return <EstadoEspejo />;
       case 'history':
@@ -70,9 +117,9 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar currentView={currentView} onNavigate={setCurrentView} />
+      <Sidebar currentView={currentView} onNavigate={navigate} />
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <Navbar breadcrumbs={getBreadcrumbs()} runtime={runtime} onNavigate={setCurrentView} />
+        <Navbar breadcrumbs={getBreadcrumbs()} runtime={runtime} onNavigate={navigate} />
         <main className="flex-1 overflow-y-auto p-4 md:p-6 scrollbar-thin scrollbar-thumb-[#2a2a2a] scrollbar-track-transparent">
           <div className={currentView === 'extractor' ? 'block' : 'hidden'}>
             <DataExtractor onRuntimeChange={setRuntime} />
