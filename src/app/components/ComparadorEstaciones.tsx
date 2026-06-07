@@ -7,8 +7,11 @@ import type {
   AnalyticsByStationResponse,
   AnalyticsStationRow,
   AnalyticsTimeseriesResponse,
+  IdfResponse,
   MetaResponse,
 } from '../../shared/ideamContracts';
+
+const PRECIP_DATASET = 's54a-sgyg';
 
 export const COMPARADOR_STORAGE_KEY = 'ideam-comparador';
 const MAX_STATIONS = 5;
@@ -46,6 +49,8 @@ export function ComparadorEstaciones() {
   const [query, setQuery] = useState('');
   const [seriesByCode, setSeriesByCode] = useState<Record<string, AnalyticsTimeseriesResponse>>({});
   const [stationStats, setStationStats] = useState<AnalyticsStationRow[]>([]);
+  const [idfByCode, setIdfByCode] = useState<Record<string, IdfResponse>>({});
+  const [idfTr, setIdfTr] = useState(10); // período de retorno para comparar curvas IDF
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -148,6 +153,40 @@ export function ComparadorEstaciones() {
     return () => controller.abort();
   }, [datasetId, selectedCodes.join('|')]);
 
+  // Curvas IDF por estación (solo precipitación): 1 llamada por estación, sin
+  // mezclar series crudas (cada IDF es puntual) → comparación válida.
+  useEffect(() => {
+    if (datasetId !== PRECIP_DATASET || !selectedCodes.length) {
+      setIdfByCode({});
+      return;
+    }
+    const controller = new AbortController();
+    const load = async () => {
+      const results = await Promise.all(
+        selectedCodes.map((code) =>
+          apiJson<IdfResponse>(
+            '/api/analytics/idf',
+            {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ datasetId, departments: [], catalogFilters: { stations: [code] } }),
+              signal: controller.signal,
+            },
+            'Sin IDF.'
+          ).catch(() => null)
+        )
+      );
+      if (controller.signal.aborted) return;
+      const map: Record<string, IdfResponse> = {};
+      selectedCodes.forEach((code, i) => {
+        if (results[i]) map[code] = results[i] as IdfResponse;
+      });
+      setIdfByCode(map);
+    };
+    void load();
+    return () => controller.abort();
+  }, [datasetId, selectedCodes.join('|')]);
+
   const suggestions = useMemo(() => {
     const q = query.trim().toUpperCase();
     if (q.length < 2) return [];
@@ -174,6 +213,30 @@ export function ComparadorEstaciones() {
     return Array.from(byYear.values()).sort((a, b) => String(a.year).localeCompare(String(b.year)));
   }, [selectedCodes, seriesByCode]);
 
+  // Curvas IDF comparadas: fila por duración, una columna de intensidad por
+  // estación (para el período de retorno elegido).
+  const idfChartData = useMemo(() => {
+    const byDur = new Map<number, Record<string, number>>();
+    for (const code of selectedCodes) {
+      const curve = idfByCode[code]?.curves.find((c) => c.returnPeriod === idfTr);
+      for (const point of curve?.points || []) {
+        const row = byDur.get(point.durMin) || { durMin: point.durMin };
+        row[code] = point.intensityMmH;
+        byDur.set(point.durMin, row);
+      }
+    }
+    return Array.from(byDur.values()).sort((a, b) => a.durMin - b.durMin);
+  }, [selectedCodes, idfByCode, idfTr]);
+
+  const hasIdf = datasetId === PRECIP_DATASET && idfChartData.length > 0;
+  const idfReturnPeriods = useMemo(() => {
+    for (const code of selectedCodes) {
+      const rp = idfByCode[code]?.returnPeriods;
+      if (rp?.length) return rp;
+    }
+    return [2, 5, 10, 25, 50, 100];
+  }, [selectedCodes, idfByCode]);
+
   const stationLabel = (code: string) => {
     const found = catalog.find((s) => s.codigo === code);
     return found ? `${found.nombre} (${code.slice(-4)})` : code;
@@ -191,7 +254,8 @@ export function ComparadorEstaciones() {
       <div>
         <h2 className="text-card-foreground text-2xl font-bold">Comparador de estaciones</h2>
         <p className="text-muted-foreground text-sm mt-1">
-          Superpone las series históricas de hasta {MAX_STATIONS} estaciones. También puedes añadirlas desde el popup del mapa.
+          Superpone las series históricas (y las curvas IDF, en precipitación) de hasta {MAX_STATIONS} estaciones.
+          También puedes añadirlas desde el popup del mapa.
         </p>
       </div>
 
@@ -312,6 +376,68 @@ export function ComparadorEstaciones() {
               </div>
             )}
           </div>
+
+          {datasetId === PRECIP_DATASET && (
+            <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="font-bold text-card-foreground">Curvas IDF comparadas</h3>
+                  <p className="text-sm text-muted-foreground">Intensidad (mm/h) vs duración para Tr = {idfTr} años · solo estaciones pluviográficas</p>
+                </div>
+                <div className="flex gap-1">
+                  {idfReturnPeriods.map((tr) => (
+                    <button
+                      key={tr}
+                      type="button"
+                      onClick={() => setIdfTr(tr)}
+                      aria-pressed={idfTr === tr}
+                      className={`rounded-md border px-2 py-1 text-xs font-semibold ${
+                        idfTr === tr ? 'border-accent bg-accent/15 text-accent' : 'border-border text-muted-foreground'
+                      }`}
+                    >
+                      {tr}a
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {isLoading ? (
+                <SkeletonLoader rows={4} />
+              ) : !hasIdf ? (
+                <p className="text-muted-foreground text-sm">
+                  Ninguna de las estaciones elegidas tiene curvas IDF precomputadas todavía (deben ser pluviográficas).
+                </p>
+              ) : (
+                <div style={{ width: '100%', height: '300px' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={idfChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
+                      <XAxis
+                        dataKey="durMin"
+                        type="number"
+                        scale="log"
+                        domain={['dataMin', 'dataMax']}
+                        ticks={[10, 20, 30, 60, 120, 180, 360, 720, 1440]}
+                        stroke="currentColor"
+                        className="text-muted-foreground"
+                        style={{ fontSize: '11px' }}
+                        label={{ value: 'Duración (min, log)', position: 'insideBottom', offset: -2, fontSize: 10 }}
+                      />
+                      <YAxis scale="log" domain={['auto', 'auto']} stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} width={52} label={{ value: 'mm/h', angle: -90, position: 'insideLeft', fontSize: 10 }} />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: 'var(--background)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--foreground)' }}
+                        formatter={(value: number, name: string) => [`${value} mm/h`, stationLabel(name)]}
+                        labelFormatter={(v) => `Duración ${v} min`}
+                      />
+                      <Legend formatter={(value: string) => stationLabel(value)} />
+                      {selectedCodes.map((code, index) => (
+                        <Line key={code} type="monotone" dataKey={code} stroke={SERIES_COLORS[index]} strokeWidth={2} dot={{ r: 2 }} connectNulls isAnimationActive={false} />
+                      ))}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
             <h3 className="mb-4 font-bold text-card-foreground">Estadísticos comparados</h3>
