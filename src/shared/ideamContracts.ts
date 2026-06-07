@@ -14,6 +14,13 @@ export interface CatalogFilterDefinition {
   labelColumn?: string;
 }
 
+export interface DataFreshness {
+  /** Fecha de la observación más reciente cargada en el espejo (ISO 8601). */
+  latestObservation: string | null;
+  /** Momento de la última sincronización exitosa con datos.gov.co (ISO 8601). */
+  lastSync: string | null;
+}
+
 export interface MetaResponse {
   datasets: DatasetMeta[];
   departments: string[];
@@ -21,6 +28,7 @@ export interface MetaResponse {
   exportPageSize: number;
   maxExportRows: number | null;
   catalogFilters: CatalogFilterDefinition[];
+  dataFreshness?: DataFreshness;
 }
 
 export interface DateRangeResponse {

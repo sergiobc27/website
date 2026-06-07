@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Clock3, Database, Download, MapPin, Waves } from 'lucide-react';
+import { Clock3, Database, Download, MapPin, RefreshCw, Waves } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { SkeletonLoader } from './SkeletonLoader';
+import type { DataFreshness } from '../../shared/ideamContracts';
 
 interface HistoryEntry {
   timestamp: string;
@@ -23,10 +24,29 @@ function formatDuration(value: number) {
   return `${Math.floor(totalSeconds / 60)}m ${String(totalSeconds % 60).padStart(2, '0')}s`;
 }
 
+function formatFreshnessDate(iso: string | null) {
+  if (!iso) return 'Sin datos';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return 'Sin datos';
+  return date.toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function formatFreshnessRelative(iso: string | null) {
+  if (!iso) return '';
+  const elapsedMs = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) return '';
+  const minutes = Math.round(elapsedMs / 60000);
+  if (minutes < 60) return `hace ${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `hace ${hours} h`;
+  return `hace ${Math.round(hours / 24)} días`;
+}
+
 export function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [datasets, setDatasets] = useState<Array<{ id: string; name: string }>>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [freshness, setFreshness] = useState<DataFreshness | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -38,6 +58,7 @@ export function Dashboard() {
         const data = await response.json();
         if (response.ok) {
           setDatasets(data.datasets || []);
+          setFreshness(data.dataFreshness || null);
         }
       } finally {
         setHistory(JSON.parse(localStorage.getItem('ideam-history') || '[]'));
@@ -76,6 +97,22 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-col gap-2 rounded-xl border border-border bg-card px-4 py-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+        <span className="flex items-center gap-2">
+          <Database className="h-3.5 w-3.5 shrink-0 text-accent" />
+          Fuente: IDEAM, datos abiertos de Colombia (datos.gov.co). Espejo propio sincronizado dos veces al día.
+        </span>
+        {freshness && (freshness.latestObservation || freshness.lastSync) && (
+          <span className="flex items-center gap-2 sm:text-right">
+            <RefreshCw className="h-3.5 w-3.5 shrink-0 text-accent" />
+            <span>
+              Dato más reciente: <span className="font-semibold text-card-foreground">{formatFreshnessDate(freshness.latestObservation)}</span>
+              {freshness.lastSync ? ` · sincronizado ${formatFreshnessRelative(freshness.lastSync)}` : ''}
+            </span>
+          </span>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard icon={Database} title="Datasets disponibles" value={String(datasets.length)} subtitle="Catalogo operativo" />
         <MetricCard icon={Download} title="Filas descargadas" value={totals.rows.toLocaleString('es-CO')} subtitle={`${history.length} ejecuciones`} />
