@@ -55,6 +55,7 @@ function canDownloadAgain(item: HistoryEntry) {
 
 export function DownloadHistory() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [downloadError, setDownloadError] = useState('');
 
   useEffect(() => {
     setHistory(readHistory());
@@ -78,8 +79,20 @@ export function DownloadHistory() {
     setHistory([]);
   };
 
-  const downloadHistoryItem = (item: HistoryEntry) => {
+  const downloadHistoryItem = async (item: HistoryEntry) => {
     if (!item.downloadPath) return;
+    setDownloadError('');
+    // Sonda HEAD: el reloj local puede estar desfasado del expiresAt del
+    // servidor; si el ZIP ya no existe (410/404), aviso dentro de la app.
+    try {
+      const probe = await fetch(apiUrl(item.downloadPath), { method: 'HEAD', cache: 'no-store' });
+      if (probe.status === 410 || probe.status === 404) {
+        setDownloadError(`"${item.fileName}" expiro en el servidor (la ventana es de 1 hora). Genera una nueva exportacion desde el Extractor.`);
+        return;
+      }
+    } catch {
+      // Sonda fallida por red: se intenta la descarga de todas formas.
+    }
     const link = document.createElement('a');
     link.href = apiUrl(item.downloadPath);
     link.download = item.fileName;
@@ -99,11 +112,18 @@ export function DownloadHistory() {
         <button
           onClick={clearHistory}
           className="flex items-center justify-center gap-2 rounded-lg border border-transparent bg-muted px-4 py-2 font-semibold text-muted-foreground transition-all hover:border-destructive/30 hover:bg-destructive/15 hover:text-destructive sm:w-auto"
+          type="button"
         >
           <Trash2 className="h-4 w-4" />
           Limpiar
         </button>
       </div>
+
+      {downloadError && (
+        <div role="alert" className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {downloadError}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard title="Descargas" value={String(stats.downloads)} icon={Download} />

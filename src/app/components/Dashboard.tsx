@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Clock3, Database, Download, MapPin, RefreshCw, Waves } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { SkeletonLoader } from './SkeletonLoader';
-import type { DataFreshness } from '../../shared/ideamContracts';
+import { apiJson } from '../lib/ideamApi';
+import type { DataFreshness, MetaResponse } from '../../shared/ideamContracts';
 
 interface HistoryEntry {
   timestamp: string;
@@ -51,15 +52,13 @@ export function Dashboard() {
   useEffect(() => {
     const load = async () => {
       try {
-        const response = await fetch('/api/meta', {
-          cache: 'no-store',
-          headers: { accept: 'application/json' },
-        });
-        const data = await response.json();
-        if (response.ok) {
-          setDatasets(data.datasets || []);
-          setFreshness(data.dataFreshness || null);
-        }
+        // apiJson resuelve el origen correcto también fuera de producción
+        // (previews *.pages.dev) y normaliza errores.
+        const data = await apiJson<MetaResponse>('/api/meta', undefined, 'No fue posible cargar la metadata.');
+        setDatasets(data.datasets || []);
+        setFreshness(data.dataFreshness || null);
+      } catch {
+        // El dashboard sigue útil con el historial local aunque falle la metadata.
       } finally {
         setHistory(JSON.parse(localStorage.getItem('ideam-history') || '[]'));
         setTimeout(() => setIsLoading(false), 400);

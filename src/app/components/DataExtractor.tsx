@@ -219,80 +219,8 @@ function buildOptionsFromCatalogBundle(
   return byKey;
 }
 
-function rowsToCsv(rows: Record<string, unknown>[]) {
-  if (!rows.length) return '';
-
-  const columns = Array.from(
-    rows.reduce((set, row) => {
-      Object.keys(row).forEach((key) => set.add(key));
-      return set;
-    }, new Set<string>())
-  );
-
-  const escape = (value: unknown) => {
-    const text = value === null || value === undefined ? '' : String(value);
-    return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-  };
-
-  const header = columns.join(',');
-  const body = rows.map((row) => columns.map((column) => escape(row[column])).join(','));
-  return [header, ...body].join('\n');
-}
-
-function createSummaryAccumulator() {
-  return {
-    stationCodes: new Set<string>(),
-    municipalities: new Set<string>(),
-    departments: new Set<string>(),
-    zones: new Set<string>(),
-    observedStartMs: null as number | null,
-    observedEndMs: null as number | null,
-  };
-}
-
-function updateSummaryAccumulator(
-  accumulator: ReturnType<typeof createSummaryAccumulator>,
-  rows: Record<string, unknown>[],
-  dateColumn: string
-) {
-  rows.forEach((row) => {
-    if (row.codigoestacion) accumulator.stationCodes.add(String(row.codigoestacion));
-    if (row.municipio) accumulator.municipalities.add(String(row.municipio));
-    if (row.departamento) accumulator.departments.add(String(row.departamento));
-    if (row.zonahidrografica) accumulator.zones.add(String(row.zonahidrografica));
-    if (row[dateColumn]) {
-      const parsed = new Date(String(row[dateColumn]));
-      if (!Number.isNaN(parsed.valueOf())) {
-        const value = parsed.valueOf();
-        accumulator.observedStartMs =
-          accumulator.observedStartMs === null ? value : Math.min(accumulator.observedStartMs, value);
-        accumulator.observedEndMs =
-          accumulator.observedEndMs === null ? value : Math.max(accumulator.observedEndMs, value);
-      }
-    }
-  });
-}
-
-function finalizeSummaryAccumulator(
-  accumulator: ReturnType<typeof createSummaryAccumulator>,
-  rowCount: number
-) {
-  return {
-    rowCount,
-    stationCount: accumulator.stationCodes.size,
-    municipalityCount: accumulator.municipalities.size,
-    departmentCount: accumulator.departments.size,
-    zoneCount: accumulator.zones.size,
-    observedStart: accumulator.observedStartMs ? new Date(accumulator.observedStartMs).toISOString() : '',
-    observedEnd: accumulator.observedEndMs ? new Date(accumulator.observedEndMs).toISOString() : '',
-  };
-}
-
-function summarizeRows(rows: Record<string, unknown>[], dateColumn: string) {
-  const accumulator = createSummaryAccumulator();
-  updateSummaryAccumulator(accumulator, rows, dateColumn);
-  return finalizeSummaryAccumulator(accumulator, rows.length);
-}
+// (El armado de CSV/resúmenes en el navegador, de la era síncrona, se eliminó:
+// el backend genera los archivos desde el cutover al espejo propio.)
 
 export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: ExtractorRuntimeState) => void }) {
   const [storedConfig] = useState<StoredExtractorConfig>(loadStoredConfig);
@@ -391,7 +319,20 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     });
   }, []);
 
-  const triggerBrowserDownload = useCallback((downloadPath: string, fileName: string) => {
+  const triggerBrowserDownload = useCallback(async (downloadPath: string, fileName: string) => {
+    // Sonda HEAD antes del <a download>: si el ZIP expiró (410/404), el error
+    // se muestra EN la app en vez de una página cruda del servidor. La
+    // descarga real sigue siendo streaming nativo del navegador (un fetch a
+    // blob cargaría hasta 2GB en memoria).
+    try {
+      const probe = await fetch(downloadPath, { method: 'HEAD', cache: 'no-store' });
+      if (probe.status === 410 || probe.status === 404) {
+        appendLog('ERROR', 'El ZIP expiro en el servidor (la ventana de descarga es de 1 hora). Genera una nueva exportacion.');
+        return false;
+      }
+    } catch {
+      // Sonda fallida por red: se intenta la descarga de todas formas.
+    }
     const link = document.createElement('a');
     link.href = downloadPath;
     link.download = fileName;
@@ -399,11 +340,14 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     document.body.appendChild(link);
     link.click();
     link.remove();
-  }, []);
+    return true;
+  }, [appendLog]);
 
-  const downloadJobPart = useCallback((job: ExportJobStatusResponse, part: ExportJobPart) => {
-    triggerBrowserDownload(apiUrl(part.downloadPath), part.fileName);
-    appendLog('SUCCESS', `Descarga iniciada: ${part.fileName}. El enlace seguira disponible durante 1 hora.`);
+  const downloadJobPart = useCallback(async (job: ExportJobStatusResponse, part: ExportJobPart) => {
+    const started = await triggerBrowserDownload(apiUrl(part.downloadPath), part.fileName);
+    if (started) {
+      appendLog('SUCCESS', `Descarga iniciada: ${part.fileName}. El enlace seguira disponible durante 1 hora.`);
+    }
   }, [appendLog, triggerBrowserDownload]);
 
   const finalizeCompletedJob = useCallback(async (job: ExportJobStatusResponse) => {
@@ -1310,7 +1254,12 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
             {logs.length === 0 ? (
               <EmptyState />
             ) : (
-              <div className="bg-black rounded-lg p-4 h-[240px] overflow-y-auto font-mono text-sm">
+              <div
+                className="bg-black rounded-lg p-4 h-[240px] overflow-y-auto font-mono text-sm"
+                role="log"
+                aria-live="polite"
+                aria-label="Registro de operaciones"
+              >
                 {logs.map((log, index) => (
                   <div key={`${log.type}-${index}`} className="mb-1">
                     <span
