@@ -121,6 +121,9 @@ export default function MapaEstaciones() {
   const [estadoFilter, setEstadoFilter] = useState<'todas' | 'activa' | 'otra'>('todas');
   const [categoriaFilter, setCategoriaFilter] = useState('');
   const [departamentoFilter, setDepartamentoFilter] = useState('');
+  const [zonaFilter, setZonaFilter] = useState('');
+  const [corrienteFilter, setCorrienteFilter] = useState('');
+  const [altitudMax, setAltitudMax] = useState<number | null>(null); // tope superior (m)
   const [sparkDataset, setSparkDataset] = useState('s54a-sgyg');
   const [choroplethOn, setChoroplethOn] = useState(false);
   const [choroplethRange, setChoroplethRange] = useState<{ min: number; max: number } | null>(null);
@@ -315,16 +318,33 @@ export default function MapaEstaciones() {
     () => Array.from(new Set(allStations.map((f) => f.properties.departamento).filter(Boolean))).sort() as string[],
     [allStations]
   );
+  const zonas = useMemo(
+    () => Array.from(new Set(allStations.map((f) => f.properties.zonaHidrografica).filter(Boolean))).sort() as string[],
+    [allStations]
+  );
+  // Corrientes (ríos): muchas; se ofrecen como datalist para autocompletar.
+  const corrientes = useMemo(
+    () => Array.from(new Set(allStations.map((f) => f.properties.corriente).filter(Boolean))).sort() as string[],
+    [allStations]
+  );
+  const altitudMaxDisponible = useMemo(
+    () => allStations.reduce((max, f) => Math.max(max, Number(f.properties.altitud) || 0), 0),
+    [allStations]
+  );
 
   const visibleStations = useMemo(
     () =>
       allStations.filter((f) => {
-        if (estadoFilter !== 'todas' && f.properties.estadoNorm !== estadoFilter) return false;
-        if (categoriaFilter && f.properties.categoria !== categoriaFilter) return false;
-        if (departamentoFilter && f.properties.departamento !== departamentoFilter) return false;
+        const p = f.properties;
+        if (estadoFilter !== 'todas' && p.estadoNorm !== estadoFilter) return false;
+        if (categoriaFilter && p.categoria !== categoriaFilter) return false;
+        if (departamentoFilter && p.departamento !== departamentoFilter) return false;
+        if (zonaFilter && p.zonaHidrografica !== zonaFilter) return false;
+        if (corrienteFilter && p.corriente !== corrienteFilter) return false;
+        if (altitudMax != null && (Number(p.altitud) || 0) > altitudMax) return false;
         return true;
       }),
-    [allStations, estadoFilter, categoriaFilter, departamentoFilter]
+    [allStations, estadoFilter, categoriaFilter, departamentoFilter, zonaFilter, corrienteFilter, altitudMax]
   );
 
   // Los filtros reescriben la fuente (setData) para que los clusters se
@@ -482,6 +502,44 @@ export default function MapaEstaciones() {
               <option key={departamento} value={departamento}>{departamento}</option>
             ))}
           </select>
+          <select
+            value={zonaFilter}
+            onChange={(event) => setZonaFilter(event.target.value)}
+            className="h-9 max-w-48 rounded-lg border border-border bg-card px-3 text-sm text-card-foreground outline-none focus:border-accent"
+            aria-label="Filtrar por zona hidrográfica"
+          >
+            <option value="">Todas las zonas hidrográficas</option>
+            {zonas.map((zona) => (
+              <option key={zona} value={zona}>{zona}</option>
+            ))}
+          </select>
+          <input
+            list="corrientes-list"
+            value={corrienteFilter}
+            onChange={(event) => setCorrienteFilter(event.target.value)}
+            placeholder="Río / corriente"
+            className="h-9 max-w-44 rounded-lg border border-border bg-card px-3 text-sm text-card-foreground outline-none focus:border-accent"
+            aria-label="Filtrar por corriente o río"
+          />
+          <datalist id="corrientes-list">
+            {corrientes.map((corriente) => (
+              <option key={corriente} value={corriente} />
+            ))}
+          </datalist>
+          {altitudMaxDisponible > 0 && (
+            <select
+              value={altitudMax ?? ''}
+              onChange={(event) => setAltitudMax(event.target.value ? Number(event.target.value) : null)}
+              className="h-9 rounded-lg border border-border bg-card px-3 text-sm text-card-foreground outline-none focus:border-accent"
+              aria-label="Filtrar por altitud máxima"
+              title="Mostrar estaciones hasta esta altitud"
+            >
+              <option value="">Cualquier altitud</option>
+              {[500, 1000, 1500, 2000, 2500, 3000].filter((a) => a < altitudMaxDisponible).map((a) => (
+                <option key={a} value={a}>≤ {a} m</option>
+              ))}
+            </select>
+          )}
           <select
             value={sparkDataset}
             onChange={(event) => setSparkDataset(event.target.value)}
