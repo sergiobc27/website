@@ -19,11 +19,47 @@ const CACHEABLE_GET_PATHS = new Set([
   "/api/analytics/datasets-overview",
 ]);
 
+// Allowlist de rutas públicas (hallazgo de auditoría): el secreto del proxy
+// autentica al Worker, no al usuario — sin esta lista, TODA la API quedaba
+// expuesta de facto. Fuera quedan endpoints internos/huérfanos
+// (/api/export-page, /api/catalog-status, /api/export legacy).
+const PUBLIC_API_ROUTES = new Set([
+  "/api/health",
+  "/api/ready",
+  "/api/meta",
+  "/api/date-range",
+  "/api/municipalities",
+  "/api/stations.geojson",
+  "/api/catalog-bundle",
+  "/api/catalog-options",
+  "/api/stations-helper",
+  "/api/coverage",
+  "/api/preview",
+  "/api/export-plan",
+  "/api/jobs",
+  "/api/analytics/datasets-overview",
+  "/api/analytics/timeseries",
+  "/api/analytics/summary-stats",
+  "/api/analytics/by-region",
+  "/api/analytics/by-station",
+  "/api/analytics/monthly-climatology",
+]);
+
+function isPublicApiPath(pathname) {
+  return PUBLIC_API_ROUTES.has(pathname) || pathname.startsWith("/api/jobs/");
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
     if (url.pathname === "/api" || url.pathname.startsWith("/api/")) {
+      if (!isPublicApiPath(url.pathname)) {
+        return new Response(JSON.stringify({ error: "Ruta no disponible." }), {
+          status: 404,
+          headers: { "content-type": "application/json", "cache-control": "no-store" },
+        });
+      }
       const upstream = new URL(url.pathname + url.search, env.API_ORIGIN);
       const headers = new Headers(request.headers);
       headers.set("host", upstream.host);

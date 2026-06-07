@@ -90,15 +90,21 @@ test('reenvia /api/* a env.API_ORIGIN conservando path y query, con secreto y cf
   }
 });
 
-test('reenvia la raiz exacta /api', async () => {
+test('rutas /api fuera de la allowlist devuelven 404 sin tocar el upstream', async () => {
   const fetchStub = stubFetch();
   try {
     const env = { API_ORIGIN, ASSETS: createAssetsStub() };
-    const response = await worker.fetch(new Request('https://ideam.test/api'), env);
 
-    assert.equal(response.status, 200);
+    for (const path of ['/api', '/api/export-page', '/api/catalog-status', '/api/lo-que-sea']) {
+      const response = await worker.fetch(new Request(`https://ideam.test${path}`), env);
+      assert.equal(response.status, 404, `${path} debe ser 404`);
+    }
+    assert.equal(fetchStub.calls.length, 0);
+
+    // Los sub-recursos de jobs SÍ pasan (estado y descarga de parts).
+    const jobs = await worker.fetch(new Request('https://ideam.test/api/jobs/abc/parts/0'), env);
+    assert.equal(jobs.status, 200);
     assert.equal(fetchStub.calls.length, 1);
-    assert.equal(new URL(fetchStub.calls[0].url).pathname, '/api');
   } finally {
     fetchStub.restore();
   }
