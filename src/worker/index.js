@@ -59,6 +59,12 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    // Asistente (Workers AI): lo maneja el Worker EN EL EDGE, no se proxea al
+    // box (que no tiene IA). Aislado del resto: si falla, nada más se afecta.
+    if (url.pathname === "/api/chat" && request.method === "POST") {
+      return handleChat(request, env);
+    }
+
     if (url.pathname === "/api" || url.pathname.startsWith("/api/")) {
       if (!isPublicApiPath(url.pathname)) {
         return new Response(JSON.stringify({ error: "Ruta no disponible." }), {
@@ -88,3 +94,48 @@ export default {
     return env.ASSETS.fetch(request);
   },
 };
+
+// --- Asistente / tutor hidrológico (Workers AI) -------------------------------
+
+const CHAT_MODEL = "@cf/meta/llama-3.1-8b-instruct";
+
+const CHAT_SYSTEM = `Eres el asistente de "IDEAM Hydrology Data Automator", una plataforma web (ideam.sergiobc.com) de datos hidrometeorológicos del IDEAM (Colombia) creada como tesis de Ingeniería Civil. Eres un TUTOR que ayuda a estudiantes e ingenieros a entender y usar la plataforma. Responde SIEMPRE en español, claro y breve (2-5 frases salvo que pidan más).
+
+Puedes explicar conceptos de hidrología: precipitación, curvas IDF (Intensidad-Duración-Frecuencia), período de retorno, distribución de Gumbel, SPI (índice de sequía), hietograma, histograma, coeficiente de escorrentía, método racional Q=C·I·A, tiempo de concentración. Y puedes guiar el uso de las pestañas: Dashboard, Analítica, Mapa de Estaciones, Comparador, Ficha Climática, Hidrología (con la calculadora de caudal), Extractor de Datos, Estado del Espejo.
+
+REGLA CRÍTICA: NO inventes datos numéricos específicos (cifras de lluvia, caudales, intensidades, fechas, conteos de estaciones). Si te piden un dato concreto, NO lo adivines: indica en qué pestaña obtenerlo (p. ej. "consulta la pestaña Analítica para esa estación" o "usa la calculadora de caudal en Hidrología"). Si no sabes algo, dilo. Eres una ayuda educativa orientativa, NO una fuente para diseño definitivo de obras.`;
+
+function chatJson(obj, status = 200) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { "content-type": "application/json", "cache-control": "no-store" },
+  });
+}
+
+async function handleChat(request, env) {
+  if (!env.AI) return chatJson({ error: "El asistente no está disponible (IA no configurada)." }, 503);
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return chatJson({ error: "Solicitud inválida." }, 400);
+  }
+  // Saneo: solo roles válidos, contenido string acotado, máximo 10 turnos.
+  const incoming = Array.isArray(body.messages) ? body.messages : [];
+  const history = incoming
+    .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
+    .slice(-10)
+    .map((m) => ({ role: m.role, content: m.content.slice(0, 2000) }));
+  if (!history.length || history[history.length - 1].role !== "user") {
+    return chatJson({ error: "Falta el mensaje del usuario." }, 400);
+  }
+  try {
+    const result = await env.AI.run(CHAT_MODEL, {
+      messages: [{ role: "system", content: CHAT_SYSTEM }, ...history],
+      max_tokens: 512,
+    });
+    return chatJson({ reply: (result && result.response) || "", usage: (result && result.usage) || null });
+  } catch (err) {
+    return chatJson({ error: "El asistente no pudo responder en este momento. Intenta de nuevo." }, 502);
+  }
+}

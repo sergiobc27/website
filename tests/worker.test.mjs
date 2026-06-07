@@ -182,6 +182,49 @@ test('GETs de la lista blanca llevan cacheEverything; el resto no', async () => 
   }
 });
 
+test('POST /api/chat lo maneja el Worker (Workers AI), no se proxea al upstream', async () => {
+  const fetchStub = stubFetch();
+  try {
+    const aiCalls = [];
+    const env = {
+      API_ORIGIN,
+      IDEAM_PROXY_SECRET: 'x',
+      ASSETS: createAssetsStub(),
+      AI: { run: async (model, input) => { aiCalls.push({ model, input }); return { response: 'Hola, soy el tutor.', usage: { total_neurons: 40 } }; } },
+    };
+    const request = new Request('https://ideam.test/api/chat', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: '¿Qué es un período de retorno?' }] }),
+    });
+    const response = await worker.fetch(request, env);
+    assert.equal(response.status, 200);
+    const data = await response.json();
+    assert.equal(data.reply, 'Hola, soy el tutor.');
+    // NO se proxeó al box; se usó el binding AI con el system prompt + el turno.
+    assert.equal(fetchStub.calls.length, 0);
+    assert.equal(aiCalls.length, 1);
+    assert.equal(aiCalls[0].input.messages[0].role, 'system');
+    assert.equal(aiCalls[0].input.messages.at(-1).content, '¿Qué es un período de retorno?');
+  } finally {
+    fetchStub.restore();
+  }
+});
+
+test('POST /api/chat sin mensaje de usuario da 400, y sin binding AI da 503', async () => {
+  const fetchStub = stubFetch();
+  try {
+    const base = { API_ORIGIN, ASSETS: createAssetsStub(), AI: { run: async () => ({ response: 'x' }) } };
+    const vacio = await worker.fetch(new Request('https://ideam.test/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"messages":[]}' }), base);
+    assert.equal(vacio.status, 400);
+    const sinAI = await worker.fetch(new Request('https://ideam.test/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: 'hola' }] }) }), { API_ORIGIN, ASSETS: createAssetsStub() });
+    assert.equal(sinAI.status, 503);
+    assert.equal(fetchStub.calls.length, 0);
+  } finally {
+    fetchStub.restore();
+  }
+});
+
 test('una ruta que solo empieza con texto similar a api pero no /api va a ASSETS', async () => {
   const fetchStub = stubFetch();
   const assets = createAssetsStub();

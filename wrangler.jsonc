@@ -15,6 +15,11 @@
     // Origen de la API propia (Oracle, vía Cloudflare Tunnel).
     "API_ORIGIN": "https://ideam-api.sergiobc.com"
   },
+  // Workers AI: asistente/tutor en el edge (tier gratis 10.000 neurons/día, sin
+  // tarjeta). Aislado: corre en Cloudflare, no toca el box ni la API propia.
+  "ai": {
+    "binding": "AI"
+  },
   // El secreto IDEAM_PROXY_SECRET se configura con: wrangler secret put IDEAM_PROXY_SECRET
   "migrations": [
     {
