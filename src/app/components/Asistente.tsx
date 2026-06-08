@@ -59,8 +59,8 @@ export function Asistente() {
           <Sparkles className="h-6 w-6 text-accent" /> Asistente hidrológico
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Tutor para entender conceptos y usar la plataforma. Es una ayuda educativa orientativa — no inventa datos
-          ni reemplaza el criterio de diseño.
+          Ayuda con conceptos de hidrología y el uso de la plataforma — y solo con eso. Es orientativa: no inventa
+          datos ni reemplaza el criterio de diseño.
         </p>
       </div>
 
@@ -71,7 +71,13 @@ export function Asistente() {
         {messages.length === 0 && !isLoading && (
           <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-muted-foreground">
             <Bot className="h-10 w-10 text-accent" />
-            <p className="max-w-md text-sm">Pregúntame sobre conceptos de hidrología o cómo usar la plataforma. Por ejemplo:</p>
+            <div className="max-w-md text-sm">
+              <p className="font-semibold text-card-foreground">¡Hola! Soy el Asistente Hídrico de la plataforma.</p>
+              <p className="mt-1">
+                Te ayudo a entender conceptos de hidrología (IDF, período de retorno, SPI, caudal…) y a usar la
+                plataforma. <span className="text-card-foreground">Solo manejo temas relacionados con estos datos y la herramienta.</span> Prueba con:
+              </p>
+            </div>
             <div className="flex max-w-lg flex-wrap justify-center gap-2">
               {SUGERENCIAS.map((s) => (
                 <button
