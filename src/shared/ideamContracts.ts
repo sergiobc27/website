@@ -162,6 +162,19 @@ export interface IdfResponse {
   method?: string;
 }
 
+export interface IdfStation {
+  codigo: string;
+  nombre: string;
+  municipio: string;
+  departamento: string;
+  aniosValidos: number;
+}
+
+export interface IdfStationsResponse {
+  stations: IdfStation[];
+  count: number;
+}
+
 export interface AnalyticsDatasetOverview {
   id: string;
   name: string;

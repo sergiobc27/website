@@ -22,6 +22,7 @@ import type {
   AnalyticsTimeseriesResponse,
   HistogramResponse,
   IdfResponse,
+  IdfStationsResponse,
   ReturnPeriodsResponse,
   SpiResponse,
 } from '../../shared/ideamContracts';
@@ -36,6 +37,7 @@ interface StationLite {
   nombre: string;
   municipio: string;
   departamento: string;
+  aniosValidos?: number;
 }
 
 function spiColor(z: number | null) {
@@ -58,6 +60,7 @@ const tooltipStyle = {
 
 export function Hidrologia() {
   const [catalog, setCatalog] = useState<StationLite[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [station, setStation] = useState<StationLite | null>(null);
 
@@ -71,33 +74,48 @@ export function Hidrologia() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Solo las estaciones con IDF ya precomputado y usable (>=5 años): el resto
+  // daría "no disponible". Mostrarlas directamente evita que el usuario adivine
+  // un código a ciegas (las demás analíticas también funcionan sobre estas, que
+  // son las pluviográficas con buen registro).
   useEffect(() => {
     let cancelled = false;
-    fetch(apiUrl('/api/stations.geojson'), { headers: { accept: 'application/json' } })
+    setCatalogLoading(true);
+    fetch(apiUrl('/api/analytics/idf-stations'), { headers: { accept: 'application/json' } })
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error('catálogo'))))
-      .then((geo: { features: Array<{ properties: { codigo: string; nombre: string | null; municipio: string | null; departamento: string | null } }> }) => {
+      .then((data: IdfStationsResponse) => {
         if (cancelled) return;
         setCatalog(
-          geo.features.map((f) => ({
-            codigo: f.properties.codigo,
-            nombre: f.properties.nombre || f.properties.codigo,
-            municipio: f.properties.municipio || 'N/D',
-            departamento: f.properties.departamento || 'N/D',
+          (data.stations || []).map((s) => ({
+            codigo: s.codigo,
+            nombre: s.nombre || s.codigo,
+            municipio: s.municipio || 'N/D',
+            departamento: s.departamento || 'N/D',
+            aniosValidos: s.aniosValidos,
           }))
         );
       })
-      .catch(() => setError('No fue posible cargar el catálogo de estaciones.'));
+      .catch(() => setError('No fue posible cargar la lista de estaciones disponibles.'))
+      .finally(() => {
+        if (!cancelled) setCatalogLoading(false);
+      });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const suggestions = useMemo(() => {
+  // Lista filtrada por la búsqueda (o todas las disponibles si no hay query),
+  // ordenada por departamento → municipio para recorrerla cómodamente.
+  const filtered = useMemo(() => {
     const q = query.trim().toUpperCase();
-    if (q.length < 2) return [];
-    return catalog
-      .filter((s) => s.codigo.includes(q) || s.nombre.toUpperCase().includes(q) || s.municipio.toUpperCase().includes(q))
-      .slice(0, 8);
+    if (!q) return catalog;
+    return catalog.filter(
+      (s) =>
+        s.codigo.includes(q) ||
+        s.nombre.toUpperCase().includes(q) ||
+        s.municipio.toUpperCase().includes(q) ||
+        s.departamento.toUpperCase().includes(q)
+    );
   }, [catalog, query]);
 
   const scopeFor = (code: string) => ({
@@ -244,37 +262,68 @@ export function Hidrologia() {
       </div>
 
       <div className="rounded-xl border border-border bg-card p-4 shadow-[0_0_20px] shadow-accent/10">
-        <div className="relative flex flex-col gap-1.5 text-xs text-muted-foreground">
-          <span className="font-semibold uppercase tracking-wide">Estación (nombre, código o municipio)</span>
+        <div className="flex flex-col gap-1.5 text-xs text-muted-foreground">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-semibold uppercase tracking-wide">Estaciones con análisis disponible</span>
+            {!catalogLoading && (
+              <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent">
+                {catalog.length} disponibles
+              </span>
+            )}
+          </div>
           <div className="flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 focus-within:border-accent">
             <Search className="h-4 w-4 shrink-0" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={station ? `${station.nombre} · ${station.municipio}` : 'Ej: 0029004520 o VILLAVICENCIO'}
+              placeholder={station ? `${station.nombre} · ${station.municipio}` : 'Filtra por nombre, código, municipio o departamento'}
               className="w-full bg-transparent text-sm text-card-foreground outline-none"
             />
           </div>
-          {suggestions.length > 0 && (
-            <div className="absolute top-[64px] z-20 w-full overflow-hidden rounded-lg border border-border bg-card shadow-2xl">
-              {suggestions.map((s) => (
-                <button
-                  key={s.codigo}
-                  type="button"
-                  onClick={() => {
-                    setStation(s);
-                    setQuery('');
-                    setHyetographYear('');
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-card-foreground transition-colors hover:bg-accent/10"
-                >
-                  <Plus className="h-3.5 w-3.5 shrink-0 text-accent" />
-                  <span className="min-w-0">
-                    <span className="block truncate font-semibold">{s.nombre}</span>
-                    <span className="block truncate text-xs text-muted-foreground">{s.codigo} · {s.municipio}, {s.departamento}</span>
-                  </span>
-                </button>
-              ))}
+
+          {catalogLoading ? (
+            <p className="px-1 py-3 text-sm">Cargando estaciones disponibles…</p>
+          ) : catalog.length === 0 ? (
+            <p className="px-1 py-3 text-sm">
+              Aún no hay estaciones con curvas IDF precomputadas. El cálculo se ejecuta por estación y se irá poblando;
+              vuelve más tarde.
+            </p>
+          ) : (
+            <div className="mt-1 max-h-72 overflow-y-auto rounded-lg border border-border bg-background">
+              {filtered.length === 0 ? (
+                <p className="px-3 py-3 text-sm">Ninguna estación disponible coincide con «{query}».</p>
+              ) : (
+                filtered.slice(0, 200).map((s) => {
+                  const active = station?.codigo === s.codigo;
+                  return (
+                    <button
+                      key={s.codigo}
+                      type="button"
+                      onClick={() => {
+                        setStation(s);
+                        setHyetographYear('');
+                      }}
+                      className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-accent/10 ${
+                        active ? 'bg-accent/15 text-accent' : 'text-card-foreground'
+                      }`}
+                    >
+                      <Plus className="h-3.5 w-3.5 shrink-0 text-accent" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-semibold">{s.nombre}</span>
+                        <span className="block truncate text-xs text-muted-foreground">{s.codigo} · {s.municipio}, {s.departamento}</span>
+                      </span>
+                      {s.aniosValidos != null && (
+                        <span className="shrink-0 text-[11px] text-muted-foreground">{s.aniosValidos} años</span>
+                      )}
+                    </button>
+                  );
+                })
+              )}
+              {filtered.length > 200 && (
+                <p className="px-3 py-2 text-[11px] text-muted-foreground">
+                  Mostrando 200 de {filtered.length}. Afina el filtro para ver el resto.
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -287,8 +336,8 @@ export function Hidrologia() {
       {!station ? (
         <div className="rounded-xl border border-border bg-card p-10 text-center text-muted-foreground">
           <Droplets className="mx-auto mb-3 h-8 w-8 text-accent" />
-          <p className="font-semibold text-card-foreground">Elige una estación pluviométrica</p>
-          <p className="mt-1 text-sm">Los cuatro análisis se calculan sobre su registro completo en el espejo.</p>
+          <p className="font-semibold text-card-foreground">Elige una estación de la lista de arriba</p>
+          <p className="mt-1 text-sm">Solo aparecen las que tienen análisis disponible; los cálculos corren sobre su registro completo en el espejo.</p>
         </div>
       ) : (
         <>
