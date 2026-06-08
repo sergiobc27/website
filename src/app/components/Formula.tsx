@@ -23,12 +23,14 @@ export function V({ children }: { children: ReactNode }) {
   return <span style={{ fontStyle: 'italic' }}>{children}</span>;
 }
 
+// marginLeft: la cursiva se inclina a la derecha y el superíndice quedaba
+// "pegado" al cuerpo de la variable; un pequeño bearing izquierdo lo separa.
 export function Sup({ children }: { children: ReactNode }) {
-  return <sup style={{ fontSize: '0.68em', lineHeight: 0 }}>{children}</sup>;
+  return <sup style={{ fontSize: '0.68em', lineHeight: 0, marginLeft: '0.12em' }}>{children}</sup>;
 }
 
 export function Sub({ children }: { children: ReactNode }) {
-  return <sub style={{ fontSize: '0.68em', lineHeight: 0 }}>{children}</sub>;
+  return <sub style={{ fontSize: '0.68em', lineHeight: 0, marginLeft: '0.06em' }}>{children}</sub>;
 }
 
 /** Fracción con barra real: numerador sobre denominador. */

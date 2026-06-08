@@ -727,7 +727,7 @@ export function Hidrologia() {
                         {returnPeriods.goodnessOfFit.passes
                           ? 'el ajuste Gumbel es aceptable'
                           : 'el ajuste Gumbel NO pasa el test; usa los cuantiles con cautela'}{' '}
-                        — D = {returnPeriods.goodnessOfFit.statistic} {returnPeriods.goodnessOfFit.passes ? '<' : '≥'} {returnPeriods.goodnessOfFit.critical} (crítico, α = {returnPeriods.goodnessOfFit.alpha}). Exigido por el Manual de Drenaje INVÍAS.
+        — <V>D</V> = {returnPeriods.goodnessOfFit.statistic} {returnPeriods.goodnessOfFit.passes ? '<' : '≥'} {returnPeriods.goodnessOfFit.critical} (crítico, <V>α</V> = {returnPeriods.goodnessOfFit.alpha}). Exigido por el Manual de Drenaje INVÍAS.
                       </span>
                     </div>
                   )}
