@@ -175,6 +175,19 @@ export interface IdfStationsResponse {
   count: number;
 }
 
+export interface IdfNearestStation extends IdfStation {
+  distanceKm: number;
+  sameMunicipio: boolean;
+}
+
+export interface IdfNearestResponse {
+  located: boolean;
+  municipio: string;
+  departamento: string;
+  stations: IdfNearestStation[];
+  message?: string;
+}
+
 export interface AnalyticsDatasetOverview {
   id: string;
   name: string;

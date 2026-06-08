@@ -18,6 +18,7 @@ const CACHEABLE_GET_PATHS = new Set([
   "/api/stations.geojson",
   "/api/analytics/datasets-overview",
   "/api/analytics/idf-stations",
+  "/api/analytics/idf-nearest",
 ]);
 
 // Allowlist de rutas públicas (hallazgo de auditoría): el secreto del proxy
@@ -51,6 +52,7 @@ const PUBLIC_API_ROUTES = new Set([
   "/api/analytics/histogram",
   "/api/analytics/idf",
   "/api/analytics/idf-stations",
+  "/api/analytics/idf-nearest",
 ]);
 
 function isPublicApiPath(pathname) {

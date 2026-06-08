@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, BarChart4, CheckCircle2, CloudRain, Droplets, Plus, Search, Waves } from 'lucide-react';
+import { AlertTriangle, BarChart4, CheckCircle2, CloudRain, Droplets, MapPin, Navigation, Plus, Search, Waves } from 'lucide-react';
 import {
   Bar,
   BarChart,
@@ -21,8 +21,10 @@ import { apiJson, apiUrl } from '../lib/ideamApi';
 import type {
   AnalyticsTimeseriesResponse,
   HistogramResponse,
+  IdfNearestResponse,
   IdfResponse,
   IdfStationsResponse,
+  MetaResponse,
   ReturnPeriodsResponse,
   SpiResponse,
 } from '../../shared/ideamContracts';
@@ -63,6 +65,15 @@ export function Hidrologia() {
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [station, setStation] = useState<StationLite | null>(null);
+
+  // Modo de selección: explorar la lista, o "¿no sabes cuál?" → por municipio.
+  const [pickMode, setPickMode] = useState<'lista' | 'municipio'>('lista');
+  const [departments, setDepartments] = useState<string[]>([]);
+  const [selDep, setSelDep] = useState('');
+  const [munOptions, setMunOptions] = useState<string[]>([]);
+  const [selMun, setSelMun] = useState('');
+  const [nearest, setNearest] = useState<IdfNearestResponse | null>(null);
+  const [nearestLoading, setNearestLoading] = useState(false);
 
   const [returnPeriods, setReturnPeriods] = useState<ReturnPeriodsResponse | null>(null);
   const [spi, setSpi] = useState<SpiResponse | null>(null);
@@ -117,6 +128,65 @@ export function Hidrologia() {
         s.departamento.toUpperCase().includes(q)
     );
   }, [catalog, query]);
+
+  // Lista de departamentos (de /api/meta) — solo se carga al entrar al modo
+  // "por municipio", para no pedir nada extra a quien usa la lista directa.
+  useEffect(() => {
+    if (pickMode !== 'municipio' || departments.length) return;
+    let cancelled = false;
+    apiJson<MetaResponse>('/api/meta', undefined, 'Sin metadatos.')
+      .then((data) => {
+        if (!cancelled) setDepartments(data.departments || []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [pickMode, departments.length]);
+
+  // Municipios del departamento elegido.
+  useEffect(() => {
+    setMunOptions([]);
+    setSelMun('');
+    setNearest(null);
+    if (!selDep) return;
+    let cancelled = false;
+    apiJson<{ municipalities: string[] }>(
+      `/api/municipalities?department=${encodeURIComponent(selDep)}`,
+      undefined,
+      'Sin municipios.'
+    )
+      .then((data) => {
+        if (!cancelled) setMunOptions(data.municipalities || []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [selDep]);
+
+  // Estación(es) con IDF más cercanas al municipio elegido.
+  useEffect(() => {
+    if (!selMun || !selDep) return;
+    const controller = new AbortController();
+    setNearestLoading(true);
+    setNearest(null);
+    apiJson<IdfNearestResponse>(
+      `/api/analytics/idf-nearest?departamento=${encodeURIComponent(selDep)}&municipio=${encodeURIComponent(selMun)}`,
+      { signal: controller.signal },
+      'No fue posible calcular la estación más cercana.'
+    )
+      .then((data) => {
+        if (!controller.signal.aborted) setNearest(data);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setNearest(null);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setNearestLoading(false);
+      });
+    return () => controller.abort();
+  }, [selDep, selMun]);
 
   const scopeFor = (code: string) => ({
     datasetId: PRECIP_DATASET,
@@ -262,71 +332,208 @@ export function Hidrologia() {
       </div>
 
       <div className="rounded-xl border border-border bg-card p-4 shadow-[0_0_20px] shadow-accent/10">
-        <div className="flex flex-col gap-1.5 text-xs text-muted-foreground">
-          <div className="flex items-center justify-between gap-2">
-            <span className="font-semibold uppercase tracking-wide">Estaciones con análisis disponible</span>
-            {!catalogLoading && (
-              <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent">
-                {catalog.length} disponibles
-              </span>
-            )}
-          </div>
-          <div className="flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 focus-within:border-accent">
-            <Search className="h-4 w-4 shrink-0" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={station ? `${station.nombre} · ${station.municipio}` : 'Filtra por nombre, código, municipio o departamento'}
-              className="w-full bg-transparent text-sm text-card-foreground outline-none"
-            />
-          </div>
+        {/* Selector de modo: explorar la lista, o dejar que la herramienta
+            sugiera la estación más cercana a un municipio. */}
+        <div className="mb-3 flex w-full overflow-hidden rounded-lg border border-border text-sm">
+          <button
+            type="button"
+            onClick={() => setPickMode('lista')}
+            aria-pressed={pickMode === 'lista'}
+            className={`flex flex-1 items-center justify-center gap-2 px-3 py-2 font-semibold transition-colors ${
+              pickMode === 'lista' ? 'bg-accent/15 text-accent' : 'text-muted-foreground hover:text-card-foreground'
+            }`}
+          >
+            <Search className="h-4 w-4" /> Por estación
+          </button>
+          <button
+            type="button"
+            onClick={() => setPickMode('municipio')}
+            aria-pressed={pickMode === 'municipio'}
+            className={`flex flex-1 items-center justify-center gap-2 border-l border-border px-3 py-2 font-semibold transition-colors ${
+              pickMode === 'municipio' ? 'bg-accent/15 text-accent' : 'text-muted-foreground hover:text-card-foreground'
+            }`}
+          >
+            <MapPin className="h-4 w-4" /> Por municipio
+          </button>
+        </div>
 
-          {catalogLoading ? (
-            <p className="px-1 py-3 text-sm">Cargando estaciones disponibles…</p>
-          ) : catalog.length === 0 ? (
-            <p className="px-1 py-3 text-sm">
-              Aún no hay estaciones con curvas IDF precomputadas. El cálculo se ejecuta por estación y se irá poblando;
-              vuelve más tarde.
-            </p>
-          ) : (
-            <div className="mt-1 max-h-72 overflow-y-auto rounded-lg border border-border bg-background">
-              {filtered.length === 0 ? (
-                <p className="px-3 py-3 text-sm">Ninguna estación disponible coincide con «{query}».</p>
-              ) : (
-                filtered.slice(0, 200).map((s) => {
-                  const active = station?.codigo === s.codigo;
-                  return (
-                    <button
-                      key={s.codigo}
-                      type="button"
-                      onClick={() => {
-                        setStation(s);
-                        setHyetographYear('');
-                      }}
-                      className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-accent/10 ${
-                        active ? 'bg-accent/15 text-accent' : 'text-card-foreground'
-                      }`}
-                    >
-                      <Plus className="h-3.5 w-3.5 shrink-0 text-accent" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-semibold">{s.nombre}</span>
-                        <span className="block truncate text-xs text-muted-foreground">{s.codigo} · {s.municipio}, {s.departamento}</span>
-                      </span>
-                      {s.aniosValidos != null && (
-                        <span className="shrink-0 text-[11px] text-muted-foreground">{s.aniosValidos} años</span>
-                      )}
-                    </button>
-                  );
-                })
-              )}
-              {filtered.length > 200 && (
-                <p className="px-3 py-2 text-[11px] text-muted-foreground">
-                  Mostrando 200 de {filtered.length}. Afina el filtro para ver el resto.
-                </p>
+        {pickMode === 'lista' ? (
+          <div className="flex flex-col gap-1.5 text-xs text-muted-foreground">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-semibold uppercase tracking-wide">Estaciones con análisis disponible</span>
+              {!catalogLoading && (
+                <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent">
+                  {catalog.length} disponibles
+                </span>
               )}
             </div>
-          )}
-        </div>
+            <div className="flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 focus-within:border-accent">
+              <Search className="h-4 w-4 shrink-0" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={station ? `${station.nombre} · ${station.municipio}` : 'Filtra por nombre, código, municipio o departamento'}
+                className="w-full bg-transparent text-sm text-card-foreground outline-none"
+              />
+            </div>
+
+            {catalogLoading ? (
+              <p className="px-1 py-3 text-sm">Cargando estaciones disponibles…</p>
+            ) : catalog.length === 0 ? (
+              <p className="px-1 py-3 text-sm">
+                Aún no hay estaciones con curvas IDF precomputadas. El cálculo se ejecuta por estación y se irá poblando;
+                vuelve más tarde.
+              </p>
+            ) : (
+              <div className="mt-1 max-h-72 overflow-y-auto rounded-lg border border-border bg-background">
+                {filtered.length === 0 ? (
+                  <p className="px-3 py-3 text-sm">Ninguna estación disponible coincide con «{query}».</p>
+                ) : (
+                  filtered.slice(0, 200).map((s) => {
+                    const active = station?.codigo === s.codigo;
+                    return (
+                      <button
+                        key={s.codigo}
+                        type="button"
+                        onClick={() => {
+                          setStation(s);
+                          setHyetographYear('');
+                        }}
+                        className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-accent/10 ${
+                          active ? 'bg-accent/15 text-accent' : 'text-card-foreground'
+                        }`}
+                      >
+                        <Plus className="h-3.5 w-3.5 shrink-0 text-accent" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-semibold">{s.nombre}</span>
+                          <span className="block truncate text-xs text-muted-foreground">{s.codigo} · {s.municipio}, {s.departamento}</span>
+                        </span>
+                        {s.aniosValidos != null && (
+                          <span className="shrink-0 text-[11px] text-muted-foreground">{s.aniosValidos} años</span>
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+                {filtered.length > 200 && (
+                  <p className="px-3 py-2 text-[11px] text-muted-foreground">
+                    Mostrando 200 de {filtered.length}. Afina el filtro para ver el resto.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3 text-xs text-muted-foreground">
+            <p className="text-sm text-card-foreground">
+              ¿No sabes qué estación usar? Elige el municipio de tu proyecto y te sugerimos la estación con análisis
+              <span className="font-semibold"> más cercana</span>.
+            </p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <label className="flex flex-col gap-1">
+                <span className="font-semibold uppercase tracking-wide">Departamento</span>
+                <select
+                  value={selDep}
+                  onChange={(event) => setSelDep(event.target.value)}
+                  className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-card-foreground outline-none focus:border-accent"
+                >
+                  <option value="">{departments.length ? 'Selecciona…' : 'Cargando…'}</option>
+                  {departments.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="font-semibold uppercase tracking-wide">Municipio</span>
+                <select
+                  value={selMun}
+                  onChange={(event) => setSelMun(event.target.value)}
+                  disabled={!selDep || !munOptions.length}
+                  className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-card-foreground outline-none focus:border-accent disabled:opacity-50"
+                >
+                  <option value="">{!selDep ? 'Elige departamento primero' : munOptions.length ? 'Selecciona…' : 'Cargando…'}</option>
+                  {munOptions.map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            {nearestLoading && <p className="py-2 text-sm">Buscando la estación más cercana…</p>}
+
+            {nearest && !nearest.located && (
+              <p className="rounded-lg border border-border bg-background px-3 py-2 text-sm">{nearest.message}</p>
+            )}
+
+            {nearest && nearest.located && nearest.stations.length > 0 && (
+              <div className="flex flex-col gap-2">
+                {(() => {
+                  const best = nearest.stations[0];
+                  return (
+                    <div className="rounded-lg border border-accent/40 bg-accent/10 p-3">
+                      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-accent">
+                        <Navigation className="h-3.5 w-3.5" /> Estación más representativa para {selMun}
+                      </div>
+                      <p className="mt-1 text-sm font-bold text-card-foreground">{best.nombre}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {best.codigo} · {best.municipio}, {best.departamento}
+                      </p>
+                      <p className="mt-1 text-xs text-card-foreground">
+                        a <span className="font-semibold">{best.distanceKm} km</span> del centro del municipio
+                        {best.sameMunicipio && ' (dentro del municipio)'} · {best.aniosValidos} años de registro
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStation({ codigo: best.codigo, nombre: best.nombre, municipio: best.municipio, departamento: best.departamento, aniosValidos: best.aniosValidos });
+                          setHyetographYear('');
+                        }}
+                        className={`mt-2 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+                          station?.codigo === best.codigo
+                            ? 'bg-accent/20 text-accent'
+                            : 'bg-gradient-to-br from-primary to-accent text-white hover:opacity-90'
+                        }`}
+                      >
+                        <Plus className="h-3.5 w-3.5" /> {station?.codigo === best.codigo ? 'En uso' : 'Usar esta estación'}
+                      </button>
+                    </div>
+                  );
+                })()}
+
+                {nearest.stations.length > 1 && (
+                  <div className="rounded-lg border border-border bg-background">
+                    <p className="px-3 pt-2 text-[11px] font-semibold uppercase tracking-wide">Otras cercanas</p>
+                    {nearest.stations.slice(1).map((s) => (
+                      <button
+                        key={s.codigo}
+                        type="button"
+                        onClick={() => {
+                          setStation({ codigo: s.codigo, nombre: s.nombre, municipio: s.municipio, departamento: s.departamento, aniosValidos: s.aniosValidos });
+                          setHyetographYear('');
+                        }}
+                        className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-accent/10 ${
+                          station?.codigo === s.codigo ? 'bg-accent/15 text-accent' : 'text-card-foreground'
+                        }`}
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-semibold">{s.nombre}</span>
+                          <span className="block truncate text-xs text-muted-foreground">{s.municipio}, {s.departamento} · {s.aniosValidos} años</span>
+                        </span>
+                        <span className="shrink-0 text-[11px] text-muted-foreground">{s.distanceKm} km</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <p className="text-[11px] leading-snug text-muted-foreground">
+                  La distancia es una guía de representatividad: a más distancia —o terreno distinto, p. ej. en zonas de
+                  montaña la altitud pesa más que la distancia horizontal— menos representativa. La curva IDF sigue siendo
+                  puntual (de esa estación).
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {error && (
