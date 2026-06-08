@@ -35,10 +35,16 @@ function MensajeFormateado({ text }: { text: string }) {
       {blocks.map((block, bi) => {
         const lines = block.split('\n').filter((l) => l.trim().length > 0);
         if (lines.length === 0) return null;
-        if (/^\s*💡/.test(block)) {
+        if (/^\s*\**\s*(💡|dato curioso)/i.test(block)) {
+          // Limpia etiquetas/emojis repetidos ("Dato curioso: 💡 Dato curioso:")
+          // y deja un único realce uniforme.
+          const limpio = block
+            .replace(/\n+/g, ' ')
+            .replace(/(\*\*\s*)?💡?\s*dato curioso\s*:?\s*/gi, '')
+            .trim();
           return (
             <div key={bi} className="rounded-lg border border-accent/30 bg-accent/10 px-3 py-2">
-              {renderInline(block.replace(/\n+/g, ' ').trim(), `dc${bi}`)}
+              💡 <strong className="font-semibold">Dato curioso:</strong> {renderInline(limpio, `dc${bi}`)}
             </div>
           );
         }

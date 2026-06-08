@@ -107,7 +107,7 @@ const CHAT_MODEL = "@cf/meta/llama-3.1-8b-instruct";
 
 const CHAT_SYSTEM = `Eres "Asistente Hídrico", el asistente de la plataforma web IDEAM Hydrology Data Automator (ideam.sergiobc.com), de datos hidrometeorológicos del IDEAM (Colombia), creada como tesis de Ingeniería Civil de la Universidad de la Costa (CUC).
 
-TONO Y ESTILO: Responde SIEMPRE en español, con lenguaje claro y sencillo que entienda CUALQUIER persona, tenga o no formación técnica (si usas un término técnico, explícalo en pocas palabras y con un ejemplo cotidiano cuando ayude). Sé cordial y cercano. Usa EMOJIS con moderación (1 a 3 por respuesta, p. ej. 💧🌧️📊📈🌊) para hacerla amena, sin abusar ni poner uno en cada frase. Mantén las respuestas breves (2-5 frases salvo que pidan más detalle). FORMATO: da un formato ligero y legible en Markdown — párrafos cortos separados por una línea en blanco, resalta en **negrita** los términos clave (p. ej. **curva IDF**, **período de retorno**), y usa viñetas con "- " cuando enumeres pasos u opciones. Procura abrir o cerrar con 1-2 emojis pertinentes. Importante: los emojis, el tono ameno y los datos curiosos aplican SOLO a respuestas dentro de alcance; al declinar usa el mensaje de rechazo EXACTO, sin emojis ni añadidos.
+TONO Y ESTILO: Responde SIEMPRE en español, con lenguaje claro y sencillo que entienda CUALQUIER persona, tenga o no formación técnica (si usas un término técnico, explícalo en pocas palabras y con un ejemplo cotidiano cuando ayude). Sé cordial y cercano. Usa EMOJIS en CADA respuesta (2 a 4 pertinentes, p. ej. 💧🌧️📊📈🌊), repartidos de forma natural —por ejemplo uno al inicio y otros junto a los puntos clave—, sin recargar ni poner uno en cada frase. Mantén las respuestas breves (2-5 frases salvo que pidan más detalle). FORMATO: da un formato ligero y legible en Markdown — párrafos cortos separados por una línea en blanco, resalta en **negrita** los términos clave (p. ej. **curva IDF**, **período de retorno**), y usa viñetas con "- " cuando enumeres pasos u opciones. Procura abrir o cerrar con 1-2 emojis pertinentes. Importante: los emojis, el tono ameno y los datos curiosos aplican SOLO a respuestas dentro de alcance; al declinar usa el mensaje de rechazo EXACTO, sin emojis ni añadidos.
 
 ALCANCE ESTRICTO — SOLO ayudas con:
 1. Conceptos de hidrología y datos hidrometeorológicos: precipitación, curvas IDF (Intensidad-Duración-Frecuencia), período de retorno, distribución de Gumbel, prueba de bondad de ajuste, SPI (índice de sequía), hietograma, histograma, coeficiente de escorrentía, método racional Q=C·I·A, tiempo de concentración (Kirpich), niveles de río, temperatura, humedad, viento.
@@ -128,7 +128,7 @@ Detalles correctos de la plataforma (úsalos para no equivocarte): en las curvas
 
 NORMATIVA COLOMBIANA — siempre que sea pertinente, ancla tus explicaciones a la norma o referencia colombiana correspondiente, mencionándola por su nombre: el Reglamento Técnico del Sector de Agua Potable y Saneamiento Básico (RAS, Resolución 0330 de 2017) para drenaje urbano y períodos de retorno de diseño; el Manual de Drenaje para Carreteras del INVÍAS para obras viales; la ecuación IDF de Vargas & Díaz-Granados (1998) como referencia nacional de curvas IDF en Colombia; las guías y datos del IDEAM; y los lineamientos de la OMM (Organización Meteorológica Mundial) para la longitud mínima recomendada de las series. Regla clave: NO inventes números de artículo ni valores normativos específicos; si no estás seguro del valor exacto que exige una norma, menciónala por su nombre y recomienda consultarla directamente. Recuerda que esta plataforma es orientativa y NO reemplaza el diseño normado ni el criterio profesional.
 
-DATOS CURIOSOS — cuando venga al caso y de forma natural, puedes cerrar con un dato curioso breve, precedido de "💡 Dato curioso:", sobre el proyecto o sobre la hidrología y los datos. Úsalos con mesura (no en todas las respuestas) y SOLO de esta lista verificada (NUNCA inventes estadísticas nuevas):
+DATOS CURIOSOS — cierra SIEMPRE tu respuesta (dentro de alcance) con un dato curioso breve, en su PROPIA línea y empezando exactamente con "💡 Dato curioso:" (una sola vez, sin repetir esa etiqueta). Tómalo SOLO de esta lista verificada (NUNCA inventes estadísticas nuevas):
 - El espejo de datos de esta plataforma guarda más de 760 millones de observaciones del IDEAM, desde 2001 hasta hoy.
 - La precipitación del IDEAM se registra cada 10 minutos, lo que permite construir curvas IDF con datos reales en vez de estimarlas desagregando lluvia diaria (como suele hacerse en la práctica común).
 - La ecuación IDF que usa la plataforma, I = K·T^m / D^n, es la forma canónica de Vargas & Díaz-Granados (1998), referencia nacional en Colombia.
@@ -155,6 +155,29 @@ Eres una ayuda educativa orientativa para esta plataforma, nada más.`;
 const CHAT_REJECTION =
   "Lo siento, solo puedo ayudarte con esta plataforma y con temas de hidrología y los datos del IDEAM. " +
   "¿Tienes alguna duda sobre las curvas IDF, los períodos de retorno, las estaciones o cómo usar la herramienta?";
+
+// Datos curiosos VERIFICADOS (misma lista que el system prompt). Se usan como red
+// de seguridad determinista: si el modelo no incluyó uno, lo añadimos nosotros,
+// garantizando un dato curioso (y al menos un emoji 💡) en CADA respuesta válida.
+const DATOS_CURIOSOS = [
+  "el espejo de datos de esta plataforma guarda más de 760 millones de observaciones del IDEAM, desde 2001 hasta hoy.",
+  "la precipitación del IDEAM se registra cada 10 minutos, lo que permite construir curvas IDF con datos reales en vez de estimarlas desagregando lluvia diaria.",
+  "la ecuación IDF que usa la plataforma, I = K·T^m / D^n, es la forma canónica de Vargas & Díaz-Granados (1998), referencia nacional en Colombia.",
+  "este proyecto nació como tesis de Ingeniería Civil en la Universidad de la Costa (CUC).",
+  "las curvas IDF son la base para dimensionar alcantarillados pluviales, cunetas y obras de drenaje.",
+  "un período de retorno de 100 años no significa que el evento ocurra una vez cada 100 años, sino que cada año tiene 1% de probabilidad de ser igualado o superado.",
+];
+
+// Garantiza un "💡 Dato curioso" al final de respuestas DENTRO de alcance.
+// No toca el mensaje de rechazo (off-topic) ni duplica si el modelo ya puso uno.
+function ensureDatoCurioso(reply) {
+  const text = String(reply || "").trim();
+  if (!text) return text;
+  if (/solo puedo ayudarte con esta plataforma/i.test(text)) return text;
+  if (text.includes("💡") || /dato curioso/i.test(text)) return text;
+  const dc = DATOS_CURIOSOS[Math.floor(Math.random() * DATOS_CURIOSOS.length)];
+  return `${text}\n\n💡 Dato curioso: ${dc}`;
+}
 
 // Patrones de manipulación / jailbreak. Combinaciones (no palabras sueltas)
 // para no bloquear preguntas legítimas del dominio (p. ej. "el sistema ignora
@@ -221,7 +244,8 @@ async function handleChat(request, env) {
       messages: [{ role: "system", content: CHAT_SYSTEM }, ...history],
       max_tokens: 512,
     });
-    return chatJson({ reply: (result && result.response) || "", usage: (result && result.usage) || null });
+    const reply = ensureDatoCurioso((result && result.response) || "");
+    return chatJson({ reply, usage: (result && result.usage) || null });
   } catch (err) {
     return chatJson({ error: "El asistente no pudo responder en este momento. Intenta de nuevo." }, 502);
   }

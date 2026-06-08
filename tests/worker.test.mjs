@@ -200,7 +200,10 @@ test('POST /api/chat lo maneja el Worker (Workers AI), no se proxea al upstream'
     const response = await worker.fetch(request, env);
     assert.equal(response.status, 200);
     const data = await response.json();
-    assert.equal(data.reply, 'Hola, soy el tutor.');
+    // El Worker garantiza un dato curioso: conserva la respuesta del modelo y le
+    // añade un "💡 Dato curioso" al final si el modelo no incluyó uno.
+    assert.ok(data.reply.startsWith('Hola, soy el tutor.'));
+    assert.match(data.reply, /💡 Dato curioso:/);
     // NO se proxeó al box; se usó el binding AI con el system prompt + el turno.
     assert.equal(fetchStub.calls.length, 0);
     assert.equal(aiCalls.length, 1);
