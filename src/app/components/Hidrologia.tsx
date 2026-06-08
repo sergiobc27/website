@@ -31,6 +31,12 @@ import type {
 
 const IDF_COLORS = ['#60a5fa', '#34d399', '#C9A227', '#f59e0b', '#A3161A', '#7f1d1d'];
 
+// Δaltitud: en zona de montaña un desnivel grande importa más que la distancia
+// horizontal (otro piso térmico → otro régimen de lluvia). Avisamos sobre 300 m.
+const ALT_WARN_M = 300;
+const fmtAltDiff = (d: number | null) =>
+  d == null ? null : d === 0 ? '±0 m' : `${d > 0 ? '+' : '−'}${Math.abs(d)} m`;
+
 const PRECIP_DATASET = 's54a-sgyg';
 const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
@@ -480,8 +486,16 @@ export function Hidrologia() {
                       </p>
                       <p className="mt-1 text-xs text-card-foreground">
                         a <span className="font-semibold">{best.distanceKm} km</span> del centro del municipio
-                        {best.sameMunicipio && ' (dentro del municipio)'} · {best.aniosValidos} años de registro
+                        {best.sameMunicipio && ' (dentro del municipio)'}
+                        {best.altDiffM != null && <> · Δ altitud <span className="font-semibold">{fmtAltDiff(best.altDiffM)}</span></>}
+                        {' '}· {best.aniosValidos} años de registro
                       </p>
+                      {best.altDiffM != null && Math.abs(best.altDiffM) > ALT_WARN_M && (
+                        <p className="mt-1 flex items-start gap-1 text-[11px] text-accent">
+                          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                          Diferencia de altitud considerable: verifica que el régimen de lluvia sea comparable.
+                        </p>
+                      )}
                       <button
                         type="button"
                         onClick={() => {
@@ -519,16 +533,21 @@ export function Hidrologia() {
                           <span className="block truncate font-semibold">{s.nombre}</span>
                           <span className="block truncate text-xs text-muted-foreground">{s.municipio}, {s.departamento} · {s.aniosValidos} años</span>
                         </span>
-                        <span className="shrink-0 text-[11px] text-muted-foreground">{s.distanceKm} km</span>
+                        <span className="shrink-0 text-right text-[11px] text-muted-foreground">
+                          {s.distanceKm} km
+                          {s.altDiffM != null && (
+                            <span className={`block ${Math.abs(s.altDiffM) > ALT_WARN_M ? 'text-accent' : ''}`}>Δ {fmtAltDiff(s.altDiffM)}</span>
+                          )}
+                        </span>
                       </button>
                     ))}
                   </div>
                 )}
 
                 <p className="text-[11px] leading-snug text-muted-foreground">
-                  La distancia es una guía de representatividad: a más distancia —o terreno distinto, p. ej. en zonas de
-                  montaña la altitud pesa más que la distancia horizontal— menos representativa. La curva IDF sigue siendo
-                  puntual (de esa estación).
+                  La distancia y la Δaltitud (respecto al centro del municipio) son guías de representatividad: en zonas de
+                  montaña un desnivel grande pesa más que la distancia horizontal (otro piso térmico → otro régimen de
+                  lluvia). El criterio final es del ingeniero; la curva IDF sigue siendo puntual (de esa estación).
                 </p>
               </div>
             )}

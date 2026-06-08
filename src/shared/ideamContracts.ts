@@ -177,6 +177,7 @@ export interface IdfStationsResponse {
 
 export interface IdfNearestStation extends IdfStation {
   distanceKm: number;
+  altDiffM: number | null;
   sameMunicipio: boolean;
 }
 
