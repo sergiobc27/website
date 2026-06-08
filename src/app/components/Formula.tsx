@@ -23,14 +23,24 @@ export function V({ children }: { children: ReactNode }) {
   return <span style={{ fontStyle: 'italic' }}>{children}</span>;
 }
 
-// marginLeft: la cursiva se inclina a la derecha y el superíndice quedaba
-// "pegado" al cuerpo de la variable; un pequeño bearing izquierdo lo separa.
+// La cursiva se inclina a la derecha y el exponente rozaba el cuerpo de la
+// letra. Solución: además del bearing izquierdo, elevarlo más (position+top)
+// para que quede ARRIBA de la letra, no a su lado, y bajar verticalAlign de
+// super (UA) a baseline para no duplicar el desplazamiento.
 export function Sup({ children }: { children: ReactNode }) {
-  return <sup style={{ fontSize: '0.68em', lineHeight: 0, marginLeft: '0.12em' }}>{children}</sup>;
+  return (
+    <sup style={{ fontSize: '0.7em', lineHeight: 0, marginLeft: '0.16em', verticalAlign: 'baseline', position: 'relative', top: '-0.6em' }}>
+      {children}
+    </sup>
+  );
 }
 
 export function Sub({ children }: { children: ReactNode }) {
-  return <sub style={{ fontSize: '0.68em', lineHeight: 0, marginLeft: '0.06em' }}>{children}</sub>;
+  return (
+    <sub style={{ fontSize: '0.7em', lineHeight: 0, marginLeft: '0.08em', verticalAlign: 'baseline', position: 'relative', top: '0.28em' }}>
+      {children}
+    </sub>
+  );
 }
 
 /** Barra superior de media (x̄), p. ej. el promedio P̄. */
