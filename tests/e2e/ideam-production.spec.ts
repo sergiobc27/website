@@ -12,7 +12,10 @@ test('production IDEAM flow returns catalog, creates a job, and downloads a comp
 
   const health = await request.get('/api/health');
   await expect(health).toBeOK();
-  await expect(await health.json()).toMatchObject({ ok: true, service: 'ideam-web-app' });
+  // /api/health (proxeado a la API del box) devuelve { ok, time } — sin 'service'.
+  const healthBody = await health.json();
+  expect(healthBody).toMatchObject({ ok: true });
+  expect(typeof healthBody.time).toBe('string');
 
   const meta = await request.get('/api/meta');
   await expect(meta).toBeOK();
