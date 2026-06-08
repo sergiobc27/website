@@ -139,6 +139,7 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
           <span>— curva IDF ajustada de esta estación (D = Tc).</span>
         </p>
         <p>· Validez del método racional: áreas pequeñas — RAS 0330/2017 (urbano, A &lt; 80 ha) y Manual de Drenaje INVÍAS (A ≤ 2.5 km²). C debe escogerse según la cobertura real del área aportante.</p>
+        <p>· Frontera de alcance: esto es un producto HIDROLÓGICO (caudal e intensidad de diseño). El dimensionamiento estructural-hidráulico de la obra (box-culvert, refuerzo, socavación) se rige por NSR-10 / AASHTO / INVÍAS y queda fuera de esta herramienta.</p>
         <p className="text-accent">· Resultado orientativo de pre-dimensionamiento; para diseño definitivo valida con la normativa y un especialista.</p>
       </div>
     </div>
