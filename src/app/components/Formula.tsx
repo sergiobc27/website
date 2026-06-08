@@ -33,6 +33,11 @@ export function Sub({ children }: { children: ReactNode }) {
   return <sub style={{ fontSize: '0.68em', lineHeight: 0, marginLeft: '0.06em' }}>{children}</sub>;
 }
 
+/** Barra superior de media (x̄), p. ej. el promedio P̄. */
+export function Bar({ children }: { children: ReactNode }) {
+  return <span style={{ textDecoration: 'overline' }}>{children}</span>;
+}
+
 /** Fracción con barra real: numerador sobre denominador. */
 export function Frac({ num, den }: { num: ReactNode; den: ReactNode }) {
   return (

@@ -731,6 +731,17 @@ export function Hidrologia() {
                       </span>
                     </div>
                   )}
+                  {returnPeriods.gumbel && (
+                    <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-sm">
+                      <span className="text-muted-foreground">Cuantil de Gumbel:</span>
+                      <Formula className="text-base font-semibold text-card-foreground">
+                        <V>x</V><Sub>T</Sub>&nbsp;=&nbsp;<V>μ</V> − <V>β</V> · ln(−ln(1 − 1/<V>T</V>))
+                      </Formula>
+                      <span className="text-xs text-muted-foreground">
+                        (<V>μ</V> = {returnPeriods.gumbel.mu}, <V>β</V> = {returnPeriods.gumbel.beta} mm/día · método de momentos; <V>T</V> en años)
+                      </span>
+                    </div>
+                  )}
                   <div className="mb-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
                     {returnPeriods.quantiles.map((q) => (
                       <div key={q.returnPeriod} className="rounded-lg border border-border bg-background p-2 text-center">

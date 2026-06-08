@@ -16,6 +16,7 @@ import {
 } from 'recharts';
 import { SkeletonLoader } from './SkeletonLoader';
 import { Slider } from './ui/slider';
+import { Bar as MeanBar, Formula, Frac, V } from './Formula';
 import { apiJson } from '../lib/ideamApi';
 import { metricUnit, unitSuffix } from '../lib/units';
 import type {
@@ -525,6 +526,12 @@ export function Analytics() {
             <div>
               <h3 className="font-bold text-card-foreground">Anomalías mensuales (últimos 24 meses)</h3>
               <p className="text-sm text-muted-foreground">Desviación % vs el promedio histórico del mismo mes · {scopeLabel}</p>
+              <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                <Formula className="text-card-foreground">
+                  anomalía&nbsp;=&nbsp;<Frac num={<><V>P</V> − <MeanBar><V>P</V></MeanBar></>} den={<><MeanBar><V>P</V></MeanBar></>} />&nbsp;× 100&nbsp;%
+                </Formula>
+                <span>(<V>P</V> = lluvia del mes; <MeanBar><V>P</V></MeanBar> = promedio histórico de ese mes)</span>
+              </p>
             </div>
             <Activity className="h-5 w-5 shrink-0 text-accent" />
           </div>
