@@ -18,18 +18,19 @@ export function Formula({ children, className = '' }: { children: ReactNode; cla
   );
 }
 
-/** Variable matemática (cursiva), p. ej. I, T, D, Q, C, A, L, S. */
+/** Variable matemática. VERTICAL (no cursiva): así el exponente nunca roza el
+ * cuerpo de la letra (la cursiva se inclina justo donde va el exponente y el
+ * navegador no compensa esa inclinación). Estilo SI/ingeniería; consistente en
+ * cualquier equipo y fuente. */
 export function V({ children }: { children: ReactNode }) {
-  return <span style={{ fontStyle: 'italic' }}>{children}</span>;
+  return <span>{children}</span>;
 }
 
-// La cursiva se inclina a la derecha y el exponente rozaba el cuerpo de la
-// letra. Solución: además del bearing izquierdo, elevarlo más (position+top)
-// para que quede ARRIBA de la letra, no a su lado, y bajar verticalAlign de
-// super (UA) a baseline para no duplicar el desplazamiento.
+// verticalAlign baseline + position/top = superíndice elevado sin afectar el
+// interlineado. Con variables verticales basta un margen mínimo.
 export function Sup({ children }: { children: ReactNode }) {
   return (
-    <sup style={{ fontSize: '0.72em', lineHeight: 0, marginLeft: '0.24em', verticalAlign: 'baseline', position: 'relative', top: '-0.55em' }}>
+    <sup style={{ fontSize: '0.72em', lineHeight: 0, marginLeft: '0.06em', verticalAlign: 'baseline', position: 'relative', top: '-0.5em' }}>
       {children}
     </sup>
   );
@@ -37,7 +38,7 @@ export function Sup({ children }: { children: ReactNode }) {
 
 export function Sub({ children }: { children: ReactNode }) {
   return (
-    <sub style={{ fontSize: '0.7em', lineHeight: 0, marginLeft: '0.08em', verticalAlign: 'baseline', position: 'relative', top: '0.28em' }}>
+    <sub style={{ fontSize: '0.72em', lineHeight: 0, marginLeft: '0.04em', verticalAlign: 'baseline', position: 'relative', top: '0.28em' }}>
       {children}
     </sub>
   );
