@@ -544,7 +544,7 @@ export function Analytics() {
                   <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
                   <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} minTickGap={20} />
                   <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} tickFormatter={(v: number) => `${v}%`} width={56} />
-                  <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`${value > 0 ? '+' : ''}${value}% vs lo normal`, 'Anomalía']} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`${value > 0 ? '+' : ''}${formatValue(value)}% vs lo normal`, 'Anomalía']} />
                   <Bar dataKey="anomalia" radius={[4, 4, 0, 0]} isAnimationActive={false}>
                     {anomalyData.map((entry) => (
                       <Cell key={entry.label} fill={entry.anomalia >= 0 ? '#2563eb' : '#A3161A'} />

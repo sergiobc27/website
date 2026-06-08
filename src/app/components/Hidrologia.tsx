@@ -18,6 +18,7 @@ import {
 import { SkeletonLoader } from './SkeletonLoader';
 import { CalculadoraCaudal } from './CalculadoraCaudal';
 import { Formula, Frac, Sub, Sup, V } from './Formula';
+import { fmt } from '../lib/format';
 import { apiJson, apiUrl } from '../lib/ideamApi';
 import type {
   AnalyticsTimeseriesResponse,
@@ -622,7 +623,7 @@ export function Hidrologia() {
                       />
                       <Tooltip
                         contentStyle={tooltipStyle}
-                        formatter={(value: number, name: string) => [`${value} mm/h`, name.replace('tr', 'Tr ') + ' años']}
+                        formatter={(value: number, name: string) => [`${fmt(value, 1)} mm/h`, name.replace('tr', 'Tr ') + ' años']}
                         labelFormatter={(v) => `Duración ${v} min`}
                       />
                       <Legend formatter={(value: string) => `Tr ${value.replace('tr', '')} años`} />
@@ -648,12 +649,12 @@ export function Hidrologia() {
                     <Formula className="text-base font-semibold text-card-foreground">
                       <V>I</V>&nbsp;=&nbsp;
                       <Frac
-                        num={<>{idf.equation.K} · <V>T</V><Sup>{idf.equation.m}</Sup></>}
-                        den={<><V>D</V><Sup>{idf.equation.n}</Sup></>}
+                        num={<>{fmt(idf.equation.K, 3)} · <V>T</V><Sup>{fmt(idf.equation.m, 3)}</Sup></>}
+                        den={<><V>D</V><Sup>{fmt(idf.equation.n, 3)}</Sup></>}
                       />
                     </Formula>
                     <span className="text-xs text-muted-foreground">
-                      (<V>I</V> en mm/h, <V>T</V> en años, <V>D</V> en min · <V>R</V><Sup>2</Sup><Sub>log</Sub> = {idf.equation.r2})
+                      (<V>I</V> en mm/h, <V>T</V> en años, <V>D</V> en min · <V>R</V><Sup>2</Sup><Sub>log</Sub> = {fmt(idf.equation.r2, 3)})
                     </span>
                   </div>
                 )}
@@ -674,7 +675,7 @@ export function Hidrologia() {
                           <td className="py-2 pr-3 font-mono text-card-foreground">{row.durMin}</td>
                           {(idf.returnPeriods || []).map((tr) => (
                             <td key={tr} className="py-2 pr-3 text-right font-mono text-card-foreground">
-                              {row[`tr${tr}`] != null ? `${row[`tr${tr}`]}` : '—'}
+                              {row[`tr${tr}`] != null ? fmt(row[`tr${tr}`], 1) : '—'}
                             </td>
                           ))}
                         </tr>
@@ -727,7 +728,7 @@ export function Hidrologia() {
                         {returnPeriods.goodnessOfFit.passes
                           ? 'el ajuste Gumbel es aceptable'
                           : 'el ajuste Gumbel NO pasa el test; usa los cuantiles con cautela'}{' '}
-        — <V>D</V> = {returnPeriods.goodnessOfFit.statistic} {returnPeriods.goodnessOfFit.passes ? '<' : '≥'} {returnPeriods.goodnessOfFit.critical} (crítico, <V>α</V> = {returnPeriods.goodnessOfFit.alpha}). Exigido por el Manual de Drenaje INVÍAS.
+        — <V>D</V> = {fmt(returnPeriods.goodnessOfFit.statistic, 4)} {returnPeriods.goodnessOfFit.passes ? '<' : '≥'} {fmt(returnPeriods.goodnessOfFit.critical, 4)} (crítico, <V>α</V> = {fmt(returnPeriods.goodnessOfFit.alpha, 2)}). Exigido por el Manual de Drenaje INVÍAS.
                       </span>
                     </div>
                   )}
@@ -738,7 +739,7 @@ export function Hidrologia() {
                         <V>x</V><Sub>T</Sub>&nbsp;=&nbsp;<V>μ</V> − <V>β</V> · ln(−ln(1 − 1/<V>T</V>))
                       </Formula>
                       <span className="text-xs text-muted-foreground">
-                        (<V>μ</V> = {returnPeriods.gumbel.mu}, <V>β</V> = {returnPeriods.gumbel.beta} mm/día · método de momentos; <V>T</V> en años)
+                        (<V>μ</V> = {fmt(returnPeriods.gumbel.mu, 2)}, <V>β</V> = {fmt(returnPeriods.gumbel.beta, 2)} mm/día · método de momentos; <V>T</V> en años)
                       </span>
                     </div>
                   )}
@@ -746,7 +747,7 @@ export function Hidrologia() {
                     {returnPeriods.quantiles.map((q) => (
                       <div key={q.returnPeriod} className="rounded-lg border border-border bg-background p-2 text-center">
                         <p className="text-xs text-muted-foreground">Tr {q.returnPeriod} años</p>
-                        <p className="font-mono text-sm font-bold text-card-foreground">{q.value}</p>
+                        <p className="font-mono text-sm font-bold text-card-foreground">{fmt(q.value, 1)}</p>
                         <p className="text-[10px] text-muted-foreground">mm/día</p>
                       </div>
                     ))}
@@ -767,7 +768,7 @@ export function Hidrologia() {
                           label={{ value: 'Período de retorno (años, escala log)', position: 'insideBottom', offset: -2, fontSize: 10 }}
                         />
                         <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} width={48} />
-                        <Tooltip contentStyle={tooltipStyle} formatter={(value: number, name: string) => [`${value} mm/día`, name]} labelFormatter={(v) => `Tr ≈ ${v} años`} />
+                        <Tooltip contentStyle={tooltipStyle} formatter={(value: number, name: string) => [`${fmt(value, 1)} mm/día`, name]} labelFormatter={(v) => `Tr ≈ ${v} años`} />
                         <Line type="monotone" dataKey="ajustado" name="Gumbel ajustado" stroke="#C9A227" strokeWidth={2} dot={{ r: 3 }} connectNulls isAnimationActive={false} />
                         <Scatter dataKey="observado" name="Observado (Weibull)" fill="#A3161A" isAnimationActive={false} />
                       </ComposedChart>
@@ -808,7 +809,7 @@ export function Hidrologia() {
                   {spi.latest && spi.latest.spi !== null && (
                     <div className="mb-3 flex items-center gap-3 rounded-lg border border-border bg-background px-3 py-2">
                       <span className="font-mono text-2xl font-bold" style={{ color: spiColor(spi.latest.spi) }}>
-                        {spi.latest.spi > 0 ? `+${spi.latest.spi}` : spi.latest.spi}
+                        {spi.latest.spi > 0 ? `+${fmt(spi.latest.spi, 2)}` : fmt(spi.latest.spi, 2)}
                       </span>
                       <span className="text-sm">
                         <span className="block font-semibold text-card-foreground">{spi.latest.category}</span>
@@ -822,7 +823,7 @@ export function Hidrologia() {
                         <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
                         <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '10px' }} minTickGap={28} />
                         <YAxis domain={[-3, 3]} stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} width={32} />
-                        <Tooltip contentStyle={tooltipStyle} formatter={(value: number, name, item: { payload?: SpiPointLike }) => [`${value} (${item.payload?.category || ''})`, 'SPI']} />
+                        <Tooltip contentStyle={tooltipStyle} formatter={(value: number, name, item: { payload?: SpiPointLike }) => [`${fmt(value, 2)} (${item.payload?.category || ''})`, 'SPI']} />
                         <Bar dataKey="spi" isAnimationActive={false}>
                           {spiData.map((p) => (
                             <Cell key={p.month} fill={spiColor(p.spi)} />
@@ -861,7 +862,7 @@ export function Hidrologia() {
                       <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
                       <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} />
                       <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} width={48} />
-                      <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`${Math.round(value)} mm`, 'Acumulado']} />
+                      <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`${fmt(value, 0)} mm`, 'Acumulado']} />
                       <Bar dataKey="total" fill="#2563eb" radius={[4, 4, 0, 0]} isAnimationActive={false} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -875,7 +876,7 @@ export function Hidrologia() {
                   <h3 className="font-bold text-card-foreground">Histograma de acumulados diarios</h3>
                   <p className="text-sm text-muted-foreground">
                     {histogramData
-                      ? `${histogramData.dryDays.toLocaleString('es-CO')} días secos · ${histogramData.wetDays.toLocaleString('es-CO')} con lluvia · máx ${histogramData.maxDaily} mm`
+                      ? `${histogramData.dryDays.toLocaleString('es-CO')} días secos · ${histogramData.wetDays.toLocaleString('es-CO')} con lluvia · máx ${fmt(histogramData.maxDaily, 1)} mm`
                       : 'Distribución de frecuencias'}
                   </p>
                 </div>

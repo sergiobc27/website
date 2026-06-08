@@ -1,16 +1,17 @@
 import { useMemo, useState } from 'react';
 import { Calculator, Info } from 'lucide-react';
 import { Formula, Frac, Sub, Sup, V } from './Formula';
+import { fmt } from '../lib/format';
 
 // Coeficientes de escorrentía C típicos (rango y valor de referencia) — basados
 // en tablas de uso común en Colombia (RAS 0330 / manuales de drenaje).
 const TIPOS_SUPERFICIE: Array<{ label: string; c: number; rango: string }> = [
-  { label: 'Pavimento asfáltico / concreto', c: 0.85, rango: '0.70–0.95' },
-  { label: 'Techos / cubiertas', c: 0.85, rango: '0.75–0.95' },
-  { label: 'Zona comercial / densa', c: 0.7, rango: '0.60–0.85' },
-  { label: 'Residencial', c: 0.5, rango: '0.40–0.65' },
-  { label: 'Zonas verdes / parques', c: 0.2, rango: '0.10–0.30' },
-  { label: 'Suelo natural / cultivos', c: 0.2, rango: '0.10–0.35' },
+  { label: 'Pavimento asfáltico / concreto', c: 0.85, rango: '0,70–0,95' },
+  { label: 'Techos / cubiertas', c: 0.85, rango: '0,75–0,95' },
+  { label: 'Zona comercial / densa', c: 0.7, rango: '0,60–0,85' },
+  { label: 'Residencial', c: 0.5, rango: '0,40–0,65' },
+  { label: 'Zonas verdes / parques', c: 0.2, rango: '0,10–0,30' },
+  { label: 'Suelo natural / cultivos', c: 0.2, rango: '0,10–0,35' },
 ];
 
 const RETURN_PERIODS = [2, 5, 10, 25, 50, 100];
@@ -50,8 +51,8 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
     const maxDur = Math.max(...durations);
     const warnings: string[] = [];
     if (A > 80) warnings.push('Área > 80 ha: el método racional deja de ser válido (RAS 0330); usa modelación hidrológica (hidrograma / HEC-HMS).');
-    if (tc < minDur) warnings.push(`Tc = ${tc.toFixed(1)} min es menor que la duración mínima medida (${minDur} min): la intensidad se extrapola fuera del rango calibrado.`);
-    if (tc > maxDur) warnings.push(`Tc = ${tc.toFixed(1)} min excede la duración máxima (${maxDur} min): intensidad extrapolada.`);
+    if (tc < minDur) warnings.push(`Tc = ${fmt(tc, 1)} min es menor que la duración mínima medida (${minDur} min): la intensidad se extrapola fuera del rango calibrado.`);
+    if (tc > maxDur) warnings.push(`Tc = ${fmt(tc, 1)} min excede la duración máxima (${maxDur} min): intensidad extrapolada.`);
     return { tc, intensidad, q, warnings };
   }, [area, coefC, longitud, pendiente, tr, equation, durations]);
 
@@ -81,7 +82,7 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
             className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm text-card-foreground outline-none focus:border-accent"
           >
             {TIPOS_SUPERFICIE.map((t) => (
-              <option key={t.label} value={t.c}>{t.label} (C≈{t.c}, {t.rango})</option>
+              <option key={t.label} value={t.c}>{t.label} (C≈{fmt(t.c, 2)}, {t.rango})</option>
             ))}
           </select>
         </Field>
@@ -95,11 +96,11 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
 
       {result && (
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <Resultado titulo="Tiempo de concentración" valor={result.tc.toFixed(1)} unidad="min" sub="Kirpich (1940)" />
-          <Resultado titulo={`Intensidad (Tr ${tr}a, D = Tc)`} valor={result.intensidad.toFixed(1)} unidad="mm/h" sub="de la curva IDF" />
+          <Resultado titulo="Tiempo de concentración" valor={fmt(result.tc, 1)} unidad="min" sub="Kirpich (1940)" />
+          <Resultado titulo={`Intensidad (Tr ${tr}a, D = Tc)`} valor={fmt(result.intensidad, 1)} unidad="mm/h" sub="de la curva IDF" />
           <Resultado
             titulo="Caudal de diseño Q"
-            valor={result.q.toFixed(3)}
+            valor={fmt(result.q, 3)}
             unidad="m³/s"
             sub={<Formula><V>Q</V>&nbsp;=&nbsp;<Frac num={<><V>C</V> · <V>I</V> · <V>A</V></>} den={<>360</>} /></Formula>}
             destacado
@@ -126,7 +127,7 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span>·</span>
           <Formula className="text-sm text-card-foreground">
-            <V>T</V><Sub>c</Sub>&nbsp;=&nbsp;0.0195 · <V>L</V><Sup>0.77</Sup> · <V>S</V><Sup>−0.385</Sup>
+            <V>T</V><Sub>c</Sub>&nbsp;=&nbsp;0,0195 · <V>L</V><Sup>0,77</Sup> · <V>S</V><Sup>−0,385</Sup>
           </Formula>
           <span>— Tiempo de concentración de Kirpich (L en m, S en m/m, Tc en min).</span>
         </p>
