@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { EmptyState } from './EmptyState';
 import { ApiError, apiJson, apiUrl } from '../lib/ideamApi';
+import { fmt } from '../lib/format';
 import type {
   CatalogBundleRow,
   CatalogFilterDefinition,
@@ -131,13 +132,13 @@ function formatDateLabel(value: string | null | undefined) {
 function formatBytes(value: number) {
   if (!Number.isFinite(value) || value <= 0) return '0 B';
   if (value < 1024) return `${value} B`;
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
-  return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+  if (value < 1024 * 1024) return `${fmt(value / 1024, 1)} KB`;
+  return `${fmt(value / (1024 * 1024), 2)} MB`;
 }
 
 function formatDuration(value: number) {
   if (!Number.isFinite(value) || value <= 0) return '0 s';
-  if (value < 60000) return `${(value / 1000).toFixed(value < 10000 ? 1 : 0)} s`;
+  if (value < 60000) return `${fmt(value / 1000, value < 10000 ? 1 : 0)} s`;
 
   const totalSeconds = Math.round(value / 1000);
   const minutes = Math.floor(totalSeconds / 60);

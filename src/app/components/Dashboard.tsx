@@ -3,6 +3,7 @@ import { Clock3, Database, Download, MapPin, RefreshCw, Waves } from 'lucide-rea
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { SkeletonLoader } from './SkeletonLoader';
 import { apiJson } from '../lib/ideamApi';
+import { fmt } from '../lib/format';
 import type { DataFreshness, MetaResponse } from '../../shared/ideamContracts';
 
 interface HistoryEntry {
@@ -20,7 +21,7 @@ interface HistoryEntry {
 
 function formatDuration(value: number) {
   if (!Number.isFinite(value) || value <= 0) return '0 s';
-  if (value < 60000) return `${(value / 1000).toFixed(value < 10000 ? 1 : 0)} s`;
+  if (value < 60000) return `${fmt(value / 1000, value < 10000 ? 1 : 0)} s`;
   const totalSeconds = Math.round(value / 1000);
   return `${Math.floor(totalSeconds / 60)}m ${String(totalSeconds % 60).padStart(2, '0')}s`;
 }

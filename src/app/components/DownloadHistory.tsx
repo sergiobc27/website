@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Calendar, Clock3, Database, Download, MapPin, Trash2 } from 'lucide-react';
+import { fmt } from '../lib/format';
 
 const HISTORY_KEY = 'ideam-history';
 const PRODUCTION_API_ORIGIN = 'https://ideam.sergiobc.com';
@@ -30,13 +31,13 @@ function readHistory(): HistoryEntry[] {
 function formatBytes(value: number) {
   if (!Number.isFinite(value) || value <= 0) return '0 B';
   if (value < 1024) return `${value} B`;
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
-  return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+  if (value < 1024 * 1024) return `${fmt(value / 1024, 1)} KB`;
+  return `${fmt(value / (1024 * 1024), 2)} MB`;
 }
 
 function formatDuration(value: number) {
   if (!Number.isFinite(value) || value <= 0) return '0 s';
-  if (value < 60000) return `${(value / 1000).toFixed(value < 10000 ? 1 : 0)} s`;
+  if (value < 60000) return `${fmt(value / 1000, value < 10000 ? 1 : 0)} s`;
   const totalSeconds = Math.round(value / 1000);
   return `${Math.floor(totalSeconds / 60)}m ${String(totalSeconds % 60).padStart(2, '0')}s`;
 }
