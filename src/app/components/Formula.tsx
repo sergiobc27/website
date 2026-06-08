@@ -29,7 +29,7 @@ export function V({ children }: { children: ReactNode }) {
 // super (UA) a baseline para no duplicar el desplazamiento.
 export function Sup({ children }: { children: ReactNode }) {
   return (
-    <sup style={{ fontSize: '0.7em', lineHeight: 0, marginLeft: '0.16em', verticalAlign: 'baseline', position: 'relative', top: '-0.6em' }}>
+    <sup style={{ fontSize: '0.72em', lineHeight: 0, marginLeft: '0.24em', verticalAlign: 'baseline', position: 'relative', top: '-0.55em' }}>
       {children}
     </sup>
   );
