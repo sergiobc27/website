@@ -1,25 +1,46 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
 import { Bot, Send, Sparkles, User } from 'lucide-react';
 import { apiUrl } from '../lib/ideamApi';
 
+// Render de fórmulas LaTeX con KaTeX. KaTeX genera su propio markup seguro a
+// partir del LaTeX (no inserta HTML del usuario) y con throwOnError:false nunca
+// rompe la UI aunque el modelo emita LaTeX inválido.
+function Math({ tex, display }: { tex: string; display?: boolean }) {
+  let html = '';
+  try {
+    html = katex.renderToString(tex, { throwOnError: false, displayMode: !!display });
+  } catch {
+    return <code className="rounded bg-muted px-1 py-0.5 text-[0.8em]">{tex}</code>;
+  }
+  return display ? (
+    <span className="my-1 block overflow-x-auto text-center" dangerouslySetInnerHTML={{ __html: html }} />
+  ) : (
+    <span dangerouslySetInnerHTML={{ __html: html }} />
+  );
+}
+
 // Render ligero de markdown para las respuestas del asistente. Construye nodos
-// React (NUNCA HTML crudo) → sin riesgo de XSS aunque el LLM emita lo que sea.
-// Cubre lo que produce Llama: negritas, cursivas, `código`, viñetas, listas
-// numeradas, párrafos y el realce del "💡 Dato curioso".
+// React (NUNCA HTML crudo del modelo) → sin riesgo de XSS aunque el LLM emita lo
+// que sea. Cubre lo que produce Llama: fórmulas LaTeX ($…$), negritas, cursivas,
+// `código`, viñetas, listas numeradas, párrafos y el realce del "💡 Dato curioso".
 function renderInline(text: string, keyPrefix: string): ReactNode[] {
   const nodes: ReactNode[] = [];
-  const regex = /\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`/g;
+  const regex = /\$([^$\n]+)\$|\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let i = 0;
   while ((m = regex.exec(text)) !== null) {
     if (m.index > last) nodes.push(text.slice(last, m.index));
     if (m[1] !== undefined) {
-      nodes.push(<strong key={`${keyPrefix}-b${i}`} className="font-semibold">{m[1]}</strong>);
+      nodes.push(<Math key={`${keyPrefix}-m${i}`} tex={m[1]} />);
     } else if (m[2] !== undefined) {
-      nodes.push(<em key={`${keyPrefix}-i${i}`}>{m[2]}</em>);
+      nodes.push(<strong key={`${keyPrefix}-b${i}`} className="font-semibold">{m[2]}</strong>);
     } else if (m[3] !== undefined) {
-      nodes.push(<code key={`${keyPrefix}-c${i}`} className="rounded bg-muted px-1 py-0.5 text-[0.8em]">{m[3]}</code>);
+      nodes.push(<em key={`${keyPrefix}-i${i}`}>{m[3]}</em>);
+    } else if (m[4] !== undefined) {
+      nodes.push(<code key={`${keyPrefix}-c${i}`} className="rounded bg-muted px-1 py-0.5 text-[0.8em]">{m[4]}</code>);
     }
     last = m.index + m[0].length;
     i += 1;
@@ -35,6 +56,11 @@ function MensajeFormateado({ text }: { text: string }) {
       {blocks.map((block, bi) => {
         const lines = block.split('\n').filter((l) => l.trim().length > 0);
         if (lines.length === 0) return null;
+        // Fórmula en bloque (centrada): $$ ... $$
+        const mathBlock = block.match(/^\s*\$\$([\s\S]+?)\$\$\s*$/);
+        if (mathBlock) {
+          return <Math key={bi} tex={mathBlock[1].trim()} display />;
+        }
         if (/^\s*\**\s*(💡|dato curioso)/i.test(block)) {
           // Limpia etiquetas/emojis repetidos ("Dato curioso: 💡 Dato curioso:")
           // y deja un único realce uniforme.

@@ -142,8 +142,12 @@ REFERENCIAS VERIFICADAS (APA) — cuando una afirmación técnica se apoye en un
 11) Hidroclimatología de Colombia (ENSO): Poveda, G. (2004). La hidroclimatología de Colombia: una síntesis desde la escala inter-decadal hasta la escala diurna. Revista de la Academia Colombiana de Ciencias Exactas, Físicas y Naturales, 28(107), 201-222.
 12) Gestión y balance hídrico (Colombia): Instituto de Hidrología, Meteorología y Estudios Ambientales (IDEAM). (2023). Estudio Nacional del Agua 2022.
 13) Fuente de los datos: Instituto de Hidrología, Meteorología y Estudios Ambientales (IDEAM). Datos hidrometeorológicos, Datos Abiertos Colombia (datos.gov.co).
+14) Evapotranspiración y balance hídrico: Allen, R. G., Pereira, L. S., Raes, D., & Smith, M. (1998). Crop evapotranspiration: Guidelines for computing crop water requirements (FAO Irrigation and Drainage Paper No. 56). FAO.
+15) Metodología del SPI (escalas y umbrales): World Meteorological Organization. (2012). Standardized precipitation index user guide (M. Svoboda, M. Hayes & D. Wood; WMO-No. 1090). WMO.
 
 FRONTERA DE ALCANCE (diseño estructural y sismo-resistente): el diseño estructural y sismo-resistente regido por la NSR-10 (vigas, columnas, losas, cimentaciones, refuerzos, cargas y períodos de retorno SÍSMICOS, capacidad portante) está FUERA de tu alcance: declínalo y remite a un ingeniero estructural o geotécnico. OJO con la ambigüedad: el "período de retorno" de esta plataforma es HIDROLÓGICO (crecientes y lluvia, vía Gumbel/IDF), NO el período de retorno SÍSMICO de la NSR-10; acláralo si la pregunta lo mezcla. Excepción acotada: puedes entregar la intensidad o la curva IDF de lluvia (tu competencia) y remitir que su uso como CARGA de lluvia corresponde a la NSR-10 (Título B) y debe verificarlo un ingeniero estructural — es una remisión, NUNCA un cálculo estructural, y sin inventar números de artículo.
+
+FÓRMULAS — cuando muestres o expliques con una fórmula, escríbela SIEMPRE en LaTeX: en línea entre $ ... $ y centrada en bloque entre $$ ... $$ (cada fórmula de bloque en su propia línea, separada por líneas en blanco). Usa \\dfrac{}{} para fracciones, ^{} para exponentes, _{} para subíndices, \\cdot para multiplicar, \\sqrt{} para raíz y comandos de letras griegas (\\mu, \\sigma, \\alpha, \\beta, \\gamma). Ejemplos del dominio: curva IDF $$I = \\dfrac{K \\cdot T^{m}}{D^{n}}$$ ; método racional $$Q = C \\cdot I \\cdot A$$ ; Manning $$V = \\dfrac{1}{n}\\,R^{2/3}\\,S^{1/2}$$ . NUNCA escribas una fórmula como texto plano con asteriscos ni como imagen; y no inventes constantes ni valores numéricos: si no sabes una constante exacta, deja la variable.
 
 DATOS CURIOSOS — cierra SIEMPRE tu respuesta (dentro de alcance) con un dato curioso breve, en su PROPIA línea y empezando exactamente con "💡 Dato curioso:" (una sola vez, sin repetir esa etiqueta). Tómalo SOLO de esta lista verificada (NUNCA inventes estadísticas nuevas):
 - El espejo de datos de esta plataforma guarda más de 760 millones de observaciones del IDEAM, desde 2001 hasta hoy.
@@ -194,6 +198,42 @@ function ensureDatoCurioso(reply) {
   if (text.includes("💡") || /dato curioso/i.test(text)) return text;
   const dc = DATOS_CURIOSOS[Math.floor(Math.random() * DATOS_CURIOSOS.length)];
   return `${text}\n\n💡 Dato curioso: ${dc}`;
+}
+
+// Mapa de detección → cita APA verificada (misma lista blanca del system prompt).
+// Para fuentes con nombre genérico de método (Gumbel) se exige el año, para no
+// anexar la referencia ante una simple mención conceptual.
+const REFERENCIAS = [
+  { re: /\bRAS\b|Resoluci[oó]n\s*0?330/i, apa: "Ministerio de Vivienda, Ciudad y Territorio. (2017). Resolución 0330 de 2017 (Reglamento Técnico del Sector de Agua Potable y Saneamiento Básico, RAS)." },
+  { re: /INV[IÍ]AS|Manual de [Dd]renaje/i, apa: "Instituto Nacional de Vías. (2009). Manual de drenaje para carreteras. Ministerio de Transporte." },
+  { re: /Vargas|D[ií]az-?\s?Granados/i, apa: "Vargas, R., & Díaz-Granados, M. (1998). Curvas sintéticas regionalizadas de intensidad-duración-frecuencia para Colombia. Universidad de los Andes." },
+  { re: /WMO-?\s*1090|gu[ií]a.*SPI|SPI.*user guide/i, apa: "World Meteorological Organization. (2012). Standardized precipitation index user guide (M. Svoboda, M. Hayes & D. Wood; WMO-No. 1090). WMO." },
+  { re: /McKee/i, apa: "McKee, T. B., Doesken, N. J., & Kleist, J. (1993). The relationship of drought frequency and duration to time scales. En Proceedings of the 8th Conference on Applied Climatology (pp. 179-184). American Meteorological Society." },
+  { re: /Kirpich/i, apa: "Kirpich, Z. P. (1940). Time of concentration of small agricultural watersheds. Civil Engineering, 10(6), 362." },
+  { re: /T[eé]mez/i, apa: "Témez, J. R. (1978). Cálculo hidrometeorológico de caudales máximos en pequeñas cuencas naturales. MOPU." },
+  { re: /Mann-?Kendall|Kendall\D{0,12}1975/i, apa: "Kendall, M. G. (1975). Rank correlation methods (4.ª ed.). Charles Griffin." },
+  { re: /Poveda/i, apa: "Poveda, G. (2004). La hidroclimatología de Colombia: una síntesis desde la escala inter-decadal hasta la escala diurna. Revista de la Academia Colombiana de Ciencias Exactas, Físicas y Naturales, 28(107), 201-222." },
+  { re: /FAO[- ]?56|Penman-?Monteith|Allen\D{0,20}1998/i, apa: "Allen, R. G., Pereira, L. S., Raes, D., & Smith, M. (1998). Crop evapotranspiration: Guidelines for computing crop water requirements (FAO Irrigation and Drainage Paper No. 56). FAO." },
+  { re: /Estudio Nacional del Agua|\bENA\b/i, apa: "Instituto de Hidrología, Meteorología y Estudios Ambientales (IDEAM). (2023). Estudio Nacional del Agua 2022." },
+  { re: /Hidrolog[ií]a aplicada|Chow.{0,30}(1994|1988)/i, apa: "Chow, V. T., Maidment, D. R., & Mays, L. W. (1994). Hidrología aplicada. McGraw-Hill." },
+  { re: /Gumbel\D{0,12}1958|\(\s*1958\s*\)/i, apa: "Gumbel, E. J. (1958). Statistics of extremes. Columbia University Press." },
+  { re: /\bOMM\b|\bWMO\b/i, apa: "World Meteorological Organization. (2008). Guide to hydrological practices, Volume I (6th ed., WMO-No. 168)." },
+];
+
+// Garantiza la línea "📚 Referencia" cuando el bot citó una fuente conocida y no
+// la incluyó. No toca el rechazo ni duplica si el modelo ya la puso. Máx. 2.
+function ensureReferencia(reply) {
+  const text = String(reply || "").trim();
+  if (!text) return text;
+  if (/solo puedo ayudarte con esta plataforma/i.test(text)) return text;
+  if (/📚\s*referencia/i.test(text)) return text;
+  const hits = [];
+  for (const r of REFERENCIAS) {
+    if (r.re.test(text) && !hits.includes(r.apa)) hits.push(r.apa);
+    if (hits.length >= 2) break;
+  }
+  if (!hits.length) return text;
+  return `${text}\n\n${hits.map((a) => `📚 Referencia: ${a}`).join("\n")}`;
 }
 
 // Patrones de manipulación / jailbreak. Combinaciones (no palabras sueltas)
@@ -261,7 +301,9 @@ async function handleChat(request, env) {
       messages: [{ role: "system", content: CHAT_SYSTEM }, ...history],
       max_tokens: 512,
     });
-    const reply = ensureDatoCurioso((result && result.response) || "");
+    let reply = (result && result.response) || "";
+    reply = ensureReferencia(reply); // anexa "📚 Referencia" si citó y faltaba
+    reply = ensureDatoCurioso(reply); // garantiza "💡 Dato curioso" al final
     return chatJson({ reply, usage: (result && result.usage) || null });
   } catch (err) {
     return chatJson({ error: "El asistente no pudo responder en este momento. Intenta de nuevo." }, 502);
