@@ -21,6 +21,12 @@
     "binding": "AI"
   },
   // El secreto IDEAM_PROXY_SECRET se configura con: wrangler secret put IDEAM_PROXY_SECRET
+  // Sin crons: el Worker es un proxy + assets, no tiene handler scheduled().
+  // Dejarlo explícito en [] mata el cron heredado de la era Socrata (que disparaba
+  // cada 20 min y reventaba con "Handler does not export a scheduled() function").
+  "triggers": {
+    "crons": []
+  },
   "migrations": [
     {
       "tag": "v2_export_jobs",
