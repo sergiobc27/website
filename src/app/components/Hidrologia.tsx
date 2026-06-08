@@ -17,6 +17,7 @@ import {
 } from 'recharts';
 import { SkeletonLoader } from './SkeletonLoader';
 import { CalculadoraCaudal } from './CalculadoraCaudal';
+import { Formula, Frac, Sub, Sup, V } from './Formula';
 import { apiJson, apiUrl } from '../lib/ideamApi';
 import type {
   AnalyticsTimeseriesResponse,
@@ -642,13 +643,17 @@ export function Hidrologia() {
                 </div>
 
                 {idf.equation && (
-                  <div className="rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-sm">
-                    <span className="text-muted-foreground">Ecuación ajustada: </span>
-                    <span className="font-mono font-semibold text-card-foreground">
-                      I = {idf.equation.K} · T<sup>{idf.equation.m}</sup> / D<sup>{idf.equation.n}</sup>
-                    </span>
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      (I en mm/h, T en años, D en min · R²<sub>log</sub> = {idf.equation.r2})
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-sm">
+                    <span className="text-muted-foreground">Ecuación ajustada:</span>
+                    <Formula className="text-base font-semibold text-card-foreground">
+                      <V>I</V>&nbsp;=&nbsp;
+                      <Frac
+                        num={<>{idf.equation.K} · <V>T</V><Sup>{idf.equation.m}</Sup></>}
+                        den={<><V>D</V><Sup>{idf.equation.n}</Sup></>}
+                      />
+                    </Formula>
+                    <span className="text-xs text-muted-foreground">
+                      (<V>I</V> en mm/h, <V>T</V> en años, <V>D</V> en min · <V>R</V><Sup>2</Sup><Sub>log</Sub> = {idf.equation.r2})
                     </span>
                   </div>
                 )}

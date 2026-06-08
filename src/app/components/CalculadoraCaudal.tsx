@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Calculator, Info } from 'lucide-react';
+import { Formula, Frac, Sub, Sup, V } from './Formula';
 
 // Coeficientes de escorrentía C típicos (rango y valor de referencia) — basados
 // en tablas de uso común en Colombia (RAS 0330 / manuales de drenaje).
@@ -96,7 +97,13 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Resultado titulo="Tiempo de concentración" valor={result.tc.toFixed(1)} unidad="min" sub="Kirpich (1940)" />
           <Resultado titulo={`Intensidad (Tr ${tr}a, D = Tc)`} valor={result.intensidad.toFixed(1)} unidad="mm/h" sub="de la curva IDF" />
-          <Resultado titulo="Caudal de diseño Q" valor={result.q.toFixed(3)} unidad="m³/s" sub="Q = C·I·A / 360" destacado />
+          <Resultado
+            titulo="Caudal de diseño Q"
+            valor={result.q.toFixed(3)}
+            unidad="m³/s"
+            sub={<Formula><V>Q</V>&nbsp;=&nbsp;<Frac num={<><V>C</V> · <V>I</V> · <V>A</V></>} den={<>360</>} /></Formula>}
+            destacado
+          />
         </div>
       )}
 
@@ -109,9 +116,27 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
 
       <div className="mt-4 space-y-1 rounded-lg border border-border bg-background p-3 text-xs text-muted-foreground">
         <p className="font-semibold text-card-foreground">Método y referencias</p>
-        <p>· <span className="font-mono">Q = C · I · A / 360</span> — Método Racional (Q en m³/s, C adimensional, I en mm/h, A en hectáreas).</p>
-        <p>· <span className="font-mono">Tc = 0.0195 · L^0.77 · S^−0.385</span> — Tiempo de concentración de Kirpich (L en m, S en m/m, Tc en min).</p>
-        <p>· <span className="font-mono">I = K · T^m / D^n</span> — curva IDF ajustada de esta estación (D = Tc).</p>
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span>·</span>
+          <Formula className="text-sm text-card-foreground">
+            <V>Q</V>&nbsp;=&nbsp;<Frac num={<><V>C</V> · <V>I</V> · <V>A</V></>} den={<>360</>} />
+          </Formula>
+          <span>— Método Racional (Q en m³/s, C adimensional, I en mm/h, A en hectáreas).</span>
+        </p>
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span>·</span>
+          <Formula className="text-sm text-card-foreground">
+            <V>T</V><Sub>c</Sub>&nbsp;=&nbsp;0.0195 · <V>L</V><Sup>0.77</Sup> · <V>S</V><Sup>−0.385</Sup>
+          </Formula>
+          <span>— Tiempo de concentración de Kirpich (L en m, S en m/m, Tc en min).</span>
+        </p>
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span>·</span>
+          <Formula className="text-sm text-card-foreground">
+            <V>I</V>&nbsp;=&nbsp;<Frac num={<><V>K</V> · <V>T</V><Sup><V>m</V></Sup></>} den={<><V>D</V><Sup><V>n</V></Sup></>} />
+          </Formula>
+          <span>— curva IDF ajustada de esta estación (D = Tc).</span>
+        </p>
         <p>· Validez del método racional: áreas pequeñas — RAS 0330/2017 (urbano, A &lt; 80 ha) y Manual de Drenaje INVÍAS (A ≤ 2.5 km²). C debe escogerse según la cobertura real del área aportante.</p>
         <p className="text-accent">· Resultado orientativo de pre-dimensionamiento; para diseño definitivo valida con la normativa y un especialista.</p>
       </div>
@@ -128,7 +153,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function Resultado({ titulo, valor, unidad, sub, destacado }: { titulo: string; valor: string; unidad: string; sub: string; destacado?: boolean }) {
+function Resultado({ titulo, valor, unidad, sub, destacado }: { titulo: string; valor: string; unidad: string; sub: React.ReactNode; destacado?: boolean }) {
   return (
     <div className={`rounded-lg border p-3 ${destacado ? 'border-accent bg-accent/10' : 'border-border bg-background'}`}>
       <p className="text-xs text-muted-foreground">{titulo}</p>
