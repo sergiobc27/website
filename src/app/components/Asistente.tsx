@@ -1,6 +1,79 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Bot, Send, Sparkles, User } from 'lucide-react';
 import { apiUrl } from '../lib/ideamApi';
+
+// Render ligero de markdown para las respuestas del asistente. Construye nodos
+// React (NUNCA HTML crudo) → sin riesgo de XSS aunque el LLM emita lo que sea.
+// Cubre lo que produce Llama: negritas, cursivas, `código`, viñetas, listas
+// numeradas, párrafos y el realce del "💡 Dato curioso".
+function renderInline(text: string, keyPrefix: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const regex = /\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let i = 0;
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > last) nodes.push(text.slice(last, m.index));
+    if (m[1] !== undefined) {
+      nodes.push(<strong key={`${keyPrefix}-b${i}`} className="font-semibold">{m[1]}</strong>);
+    } else if (m[2] !== undefined) {
+      nodes.push(<em key={`${keyPrefix}-i${i}`}>{m[2]}</em>);
+    } else if (m[3] !== undefined) {
+      nodes.push(<code key={`${keyPrefix}-c${i}`} className="rounded bg-muted px-1 py-0.5 text-[0.8em]">{m[3]}</code>);
+    }
+    last = m.index + m[0].length;
+    i += 1;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+  return nodes;
+}
+
+function MensajeFormateado({ text }: { text: string }) {
+  const blocks = text.trim().split(/\n{2,}/);
+  return (
+    <div className="space-y-2">
+      {blocks.map((block, bi) => {
+        const lines = block.split('\n').filter((l) => l.trim().length > 0);
+        if (lines.length === 0) return null;
+        if (/^\s*💡/.test(block)) {
+          return (
+            <div key={bi} className="rounded-lg border border-accent/30 bg-accent/10 px-3 py-2">
+              {renderInline(block.replace(/\n+/g, ' ').trim(), `dc${bi}`)}
+            </div>
+          );
+        }
+        if (lines.every((l) => /^\s*[-*•]\s+/.test(l))) {
+          return (
+            <ul key={bi} className="list-disc space-y-1 pl-5">
+              {lines.map((l, li) => (
+                <li key={li}>{renderInline(l.replace(/^\s*[-*•]\s+/, ''), `ul${bi}-${li}`)}</li>
+              ))}
+            </ul>
+          );
+        }
+        if (lines.every((l) => /^\s*\d+[.)]\s+/.test(l))) {
+          return (
+            <ol key={bi} className="list-decimal space-y-1 pl-5">
+              {lines.map((l, li) => (
+                <li key={li}>{renderInline(l.replace(/^\s*\d+[.)]\s+/, ''), `ol${bi}-${li}`)}</li>
+              ))}
+            </ol>
+          );
+        }
+        return (
+          <p key={bi} className="leading-relaxed">
+            {lines.map((l, li) => (
+              <span key={li}>
+                {renderInline(l, `p${bi}-${li}`)}
+                {li < lines.length - 1 && <br />}
+              </span>
+            ))}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -98,8 +171,8 @@ export function Asistente() {
             <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${m.role === 'user' ? 'bg-primary/15 text-primary' : 'bg-accent/15 text-accent'}`}>
               {m.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
             </div>
-            <div className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm ${m.role === 'user' ? 'bg-primary/10 text-card-foreground' : 'border border-border bg-background text-card-foreground'}`}>
-              {m.content}
+            <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${m.role === 'user' ? 'whitespace-pre-wrap bg-primary/10 text-card-foreground' : 'border border-border bg-background text-card-foreground'}`}>
+              {m.role === 'user' ? m.content : <MensajeFormateado text={m.content} />}
             </div>
           </div>
         ))}
