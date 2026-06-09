@@ -23,6 +23,8 @@ import { fmt } from '../lib/format';
 import { apiJson, apiUrl } from '../lib/ideamApi';
 import type {
   AnalyticsTimeseriesResponse,
+  Fiabilidad,
+  FiabilidadNivel,
   HistogramResponse,
   IdfNearestResponse,
   IdfResponse,
@@ -49,6 +51,34 @@ interface StationLite {
   municipio: string;
   departamento: string;
   aniosValidos?: number;
+  fiabilidad?: Fiabilidad | null;
+}
+
+// Color del punto del semáforo (misma convención del detalle / Lote 3A).
+const NIVEL_COLOR: Record<FiabilidadNivel, string> = {
+  verde: '#10b981',
+  amarillo: '#f59e0b',
+  rojo: '#ef4444',
+};
+const NIVEL_LABEL: Record<FiabilidadNivel, string> = {
+  verde: 'Confiable',
+  amarillo: 'Fiabilidad media',
+  rojo: 'Baja fiabilidad',
+};
+
+function NivelChip({ activo, onClick, dot, children }: { activo: boolean; onClick: () => void; dot?: string; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+        activo ? 'border-accent bg-accent/15 text-accent' : 'border-border bg-background text-muted-foreground hover:border-accent/40'
+      }`}
+    >
+      {dot && <span className="h-2 w-2 rounded-full" style={{ backgroundColor: dot }} />}
+      {children}
+    </button>
+  );
 }
 
 function spiColor(z: number | null) {
@@ -73,6 +103,7 @@ export function Hidrologia() {
   const [catalog, setCatalog] = useState<StationLite[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [query, setQuery] = useState('');
+  const [nivelFiltro, setNivelFiltro] = useState<FiabilidadNivel | 'todos'>('todos');
   const [station, setStation] = useState<StationLite | null>(null);
 
   // Modo de selección: explorar la lista, o "¿no sabes cuál?" → por municipio.
@@ -112,6 +143,7 @@ export function Hidrologia() {
             municipio: s.municipio || 'N/D',
             departamento: s.departamento || 'N/D',
             aniosValidos: s.aniosValidos,
+            fiabilidad: s.fiabilidad ?? null,
           }))
         );
       })
@@ -128,15 +160,24 @@ export function Hidrologia() {
   // ordenada por departamento → municipio para recorrerla cómodamente.
   const filtered = useMemo(() => {
     const q = query.trim().toUpperCase();
-    if (!q) return catalog;
-    return catalog.filter(
-      (s) =>
+    return catalog.filter((s) => {
+      if (nivelFiltro !== 'todos' && s.fiabilidad?.level !== nivelFiltro) return false;
+      if (!q) return true;
+      return (
         s.codigo.includes(q) ||
         s.nombre.toUpperCase().includes(q) ||
         s.municipio.toUpperCase().includes(q) ||
         s.departamento.toUpperCase().includes(q)
-    );
-  }, [catalog, query]);
+      );
+    });
+  }, [catalog, query, nivelFiltro]);
+
+  // Conteo por nivel para los chips de filtro.
+  const conteoNivel = useMemo(() => {
+    const c = { verde: 0, amarillo: 0, rojo: 0 };
+    for (const s of catalog) if (s.fiabilidad) c[s.fiabilidad.level] += 1;
+    return c;
+  }, [catalog]);
 
   // Lista de departamentos (de /api/meta) — solo se carga al entrar al modo
   // "por municipio", para no pedir nada extra a quien usa la lista directa.
@@ -394,6 +435,19 @@ export function Hidrologia() {
               />
             </div>
 
+            {!catalogLoading && catalog.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                <NivelChip activo={nivelFiltro === 'todos'} onClick={() => setNivelFiltro('todos')}>
+                  Todas ({catalog.length})
+                </NivelChip>
+                {(['verde', 'amarillo', 'rojo'] as FiabilidadNivel[]).map((nv) => (
+                  <NivelChip key={nv} activo={nivelFiltro === nv} onClick={() => setNivelFiltro(nv)} dot={NIVEL_COLOR[nv]}>
+                    {NIVEL_LABEL[nv]} ({conteoNivel[nv]})
+                  </NivelChip>
+                ))}
+              </div>
+            )}
+
             {catalogLoading ? (
               <p className="px-1 py-3 text-sm">Cargando estaciones disponibles…</p>
             ) : catalog.length === 0 ? (
@@ -425,6 +479,13 @@ export function Hidrologia() {
                           <span className="block truncate font-semibold">{s.nombre}</span>
                           <span className="block truncate text-xs text-muted-foreground">{s.codigo} · {s.municipio}, {s.departamento}</span>
                         </span>
+                        {s.fiabilidad && (
+                          <span
+                            className="h-2.5 w-2.5 shrink-0 rounded-full"
+                            style={{ backgroundColor: NIVEL_COLOR[s.fiabilidad.level] }}
+                            title={`${NIVEL_LABEL[s.fiabilidad.level]}${s.fiabilidad.reasons?.length ? ' · ' + s.fiabilidad.reasons.join(' ') : ''}`}
+                          />
+                        )}
                         {s.aniosValidos != null && (
                           <span className="shrink-0 text-[11px] text-muted-foreground">{s.aniosValidos} años</span>
                         )}

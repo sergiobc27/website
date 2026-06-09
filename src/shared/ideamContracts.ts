@@ -176,12 +176,24 @@ export interface IdfResponse {
   method?: string;
 }
 
+export type FiabilidadNivel = 'verde' | 'amarillo' | 'rojo';
+
+export interface Fiabilidad {
+  level: FiabilidadNivel;
+  n: number | null;
+  completeness: number | null;
+  stationary: boolean | null;
+  reasons: string[];
+}
+
 export interface IdfStation {
   codigo: string;
   nombre: string;
   municipio: string;
   departamento: string;
   aniosValidos: number;
+  /** Semáforo precalculado (Lote 2.1); null si aún no se ha calculado. */
+  fiabilidad?: Fiabilidad | null;
 }
 
 export interface IdfStationsResponse {
