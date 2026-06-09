@@ -151,7 +151,9 @@ FÓRMULAS — cuando muestres o expliques con una fórmula, escríbela SIEMPRE e
 
 ADVERTENCIAS ESTADÍSTICAS — al explicar período de retorno o análisis de frecuencia, advierte de forma natural cuando aplique: (a) extrapolar a períodos de retorno grandes (50 o 100 años) sobre series cortas —frecuentes en el IDEAM, de 15 a 25 años— conlleva ALTA incertidumbre; (b) el análisis de frecuencia asume estacionariedad (que el clima no cambia), y en Colombia la variabilidad de El Niño/La Niña puede afectarlo, por lo que conviene revisar la tendencia de la serie (puedes citar a Poveda, 2004). No alarmes ni repitas esto en cada respuesta: solo cuando la pregunta toque Tr/frecuencia.
 
-DATOS CURIOSOS — cierra SIEMPRE tu respuesta (dentro de alcance) con un dato curioso breve, en su PROPIA línea y empezando exactamente con "💡 Dato curioso:" (una sola vez, sin repetir esa etiqueta). Tómalo SOLO de esta lista verificada (NUNCA inventes estadísticas nuevas):
+REFERENCIAS / PARA SABER MÁS — siempre que expliques un concepto, método o norma, cierra ofreciendo DÓNDE consultar más o EN QUÉ te basas, en su propia línea empezando con "📚 Referencia:". Usa SOLO fuentes de la lista blanca verificada (RAS 0330, INVÍAS, Vargas & Díaz-Granados 1998, Gumbel 1958, Kirpich, Témez, WMO/OMM, McKee 1993, Poveda 2004, FAO-56, ENA del IDEAM, Chow, etc.); cita autor/año o la norma, sin inventar páginas ni artículos. Si la pregunta es solo sobre CÓMO USAR la plataforma (descargas, filtros, pestañas), en vez de una cita remite a la pestaña correspondiente ("revisa la pestaña …"). No la fuerces si no aporta (un saludo o una aclaración trivial no necesitan referencia); colócala ANTES del dato curioso.
+
+DATOS CURIOSOS — cierra SIEMPRE tu respuesta (dentro de alcance) con un dato curioso breve, en su PROPIA línea y empezando exactamente con "💡 Dato curioso:" UNA SOLA VEZ. NUNCA repitas la etiqueta (nada de "Dato curioso: Dato curioso:"): escribe la etiqueta una vez y a continuación el dato. Tómalo SOLO de esta lista verificada (NUNCA inventes estadísticas nuevas):
 - El espejo de datos de esta plataforma guarda más de 760 millones de observaciones del IDEAM, desde 2001 hasta hoy.
 - La precipitación del IDEAM se registra cada 10 minutos, lo que permite construir curvas IDF con datos reales en vez de estimarlas desagregando lluvia diaria (como suele hacerse en la práctica común).
 - La ecuación IDF que usa la plataforma, I = K·T^m / D^n, es la forma canónica de Vargas & Díaz-Granados (1998), referencia nacional en Colombia.
@@ -193,8 +195,17 @@ const DATOS_CURIOSOS = [
 
 // Garantiza un "💡 Dato curioso" al final de respuestas DENTRO de alcance.
 // No toca el mensaje de rechazo (off-topic) ni duplica si el modelo ya puso uno.
+// Colapsa etiquetas "Dato curioso:" repetidas seguidas (el modelo a veces emite
+// "💡 Dato curioso: Dato curioso: …") dejando una sola etiqueta.
+function colapsarDatoCurioso(text) {
+  return text.replace(
+    /(?:💡\s*)?(?:\*\*\s*)?Dato\s+curioso\s*:\s*(?:\*\*\s*)?(?:(?:💡\s*)?(?:\*\*\s*)?Dato\s+curioso\s*:\s*(?:\*\*\s*)?)+/gi,
+    "💡 Dato curioso: ",
+  );
+}
+
 function ensureDatoCurioso(reply) {
-  const text = String(reply || "").trim();
+  const text = colapsarDatoCurioso(String(reply || "").trim());
   if (!text) return text;
   if (/solo puedo ayudarte con esta plataforma/i.test(text)) return text;
   if (text.includes("💡") || /dato curioso/i.test(text)) return text;
