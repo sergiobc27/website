@@ -231,6 +231,10 @@ const REFERENCIAS = [
   { re: /Hidrolog[ií]a aplicada|Chow.{0,30}(1994|1988)/i, apa: "Chow, V. T., Maidment, D. R., & Mays, L. W. (1994). Hidrología aplicada. McGraw-Hill." },
   { re: /Gumbel\D{0,12}1958|\(\s*1958\s*\)/i, apa: "Gumbel, E. J. (1958). Statistics of extremes. Columbia University Press." },
   { re: /\bOMM\b|\bWMO\b/i, apa: "World Meteorological Organization. (2008). Guide to hydrological practices, Volume I (6th ed., WMO-No. 168)." },
+  // Temas de la calculadora: aseguran una referencia aunque el modelo no la cite.
+  { re: /escorrent[ií]a|m[eé]todo racional/i, apa: "Ministerio de Vivienda, Ciudad y Territorio. (2017). Resolución 0330 de 2017 (Reglamento Técnico del Sector de Agua Potable y Saneamiento Básico, RAS)." },
+  { re: /tiempo de concentraci[oó]n/i, apa: "Kirpich, Z. P. (1940). Time of concentration of small agricultural watersheds. Civil Engineering, 10(6), 362." },
+  { re: /\bManning\b/i, apa: "Manning, R. (1891). On the flow of water in open channels and pipes. Transactions of the Institution of Civil Engineers of Ireland, 20, 161-207." },
 ];
 
 // Garantiza la línea "📚 Referencia" cuando el bot citó una fuente conocida y no
