@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, HelpCircle } from 'lucide-react';
+import { Tooltip } from '../Tooltip';
 
 /** Sección plegable reutilizable para el acordeón de la calculadora. */
 export function SeccionColapsable({
@@ -35,11 +36,21 @@ export function SeccionColapsable({
   );
 }
 
-/** Campo etiquetado (label vertical) reutilizado en las secciones. */
-export function Field({ label, children }: { label: string; children: ReactNode }) {
+/** Campo etiquetado (label vertical) reutilizado en las secciones. Si se pasa
+ * `help`, muestra un icono (?) con tooltip explicativo junto a la etiqueta. */
+export function Field({ label, help, children }: { label: string; help?: string; children: ReactNode }) {
   return (
     <label className="flex flex-col gap-1.5 text-xs text-muted-foreground">
-      <span className="font-semibold uppercase tracking-wide">{label}</span>
+      <span className="flex items-center gap-1 font-semibold uppercase tracking-wide">
+        {label}
+        {help && (
+          <Tooltip content={help}>
+            <span className="cursor-help text-muted-foreground/70">
+              <HelpCircle className="h-3 w-3" />
+            </span>
+          </Tooltip>
+        )}
+      </span>
       {children}
     </label>
   );
@@ -52,17 +63,20 @@ export function NumberInput({
   value,
   onChange,
   min = '0',
+  max,
   step = '0.1',
 }: {
   value: string;
   onChange: (v: string) => void;
   min?: string;
+  max?: string;
   step?: string;
 }) {
   return (
     <input
       type="number"
       min={min}
+      max={max}
       step={step}
       value={value}
       onChange={(e) => onChange(e.target.value)}

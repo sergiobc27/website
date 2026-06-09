@@ -294,14 +294,16 @@ async function handleChat(request, env) {
   }
   // Guardrail determinista ANTES del modelo: ataja intentos de manipulación /
   // jailbreak por patrón, sin depender del LLM (que es débil resistiéndolos) y
-  // sin gastar neurons. El off-topic sutil lo maneja el system prompt.
-  if (looksLikeManipulation(history[history.length - 1].content)) {
+  // sin gastar neurons. El off-topic sutil lo maneja el system prompt. Se revisa
+  // TODO el historial de mensajes del usuario, no solo el último, para cerrar la
+  // inyección indirecta (un turno previo contaminado que reactive el jailbreak).
+  if (history.some((m) => m.role === "user" && looksLikeManipulation(m.content))) {
     return chatJson({ reply: CHAT_REJECTION, blocked: true });
   }
   try {
     const result = await env.AI.run(CHAT_MODEL, {
       messages: [{ role: "system", content: CHAT_SYSTEM }, ...history],
-      max_tokens: 512,
+      max_tokens: 900,
     });
     let reply = (result && result.response) || "";
     reply = ensureReferencia(reply); // anexa "📚 Referencia" si citó y faltaba

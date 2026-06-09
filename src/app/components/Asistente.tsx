@@ -8,6 +8,11 @@ import { apiUrl } from '../lib/ideamApi';
 // partir del LaTeX (no inserta HTML del usuario) y con throwOnError:false nunca
 // rompe la UI aunque el modelo emita LaTeX inválido.
 function Math({ tex, display }: { tex: string; display?: boolean }) {
+  // Cap de longitud: LaTeX patológicamente largo/anidado puede ralentizar el
+  // render de KaTeX. Por encima del límite lo mostramos como código crudo.
+  if (tex.length > 500) {
+    return <code className="rounded bg-muted px-1 py-0.5 text-[0.8em]">{tex}</code>;
+  }
   let html = '';
   try {
     html = katex.renderToString(tex, { throwOnError: false, displayMode: !!display });
@@ -139,20 +144,31 @@ export function Asistente() {
     setMessages(nuevos);
     setInput('');
     setIsLoading(true);
+    // Timeout de red: si el modelo no responde, no dejamos la UI colgada.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
     try {
       const response = await fetch(apiUrl('/api/chat'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ messages: nuevos.slice(-10) }),
+        signal: controller.signal,
       });
-      const data = await response.json();
-      if (!response.ok || !data.reply) {
-        throw new Error(data.error || 'El asistente no pudo responder.');
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data || typeof data.reply !== 'string' || !data.reply.trim()) {
+        throw new Error((data && data.error) || 'El asistente no pudo responder.');
       }
       setMessages((current) => [...current, { role: 'assistant', content: data.reply }]);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'El asistente no está disponible ahora.');
+      const msg =
+        cause instanceof DOMException && cause.name === 'AbortError'
+          ? 'El asistente tardó demasiado en responder. Intenta de nuevo.'
+          : cause instanceof Error
+            ? cause.message
+            : 'El asistente no está disponible ahora.';
+      setError(msg);
     } finally {
+      clearTimeout(timeout);
       setIsLoading(false);
     }
   };

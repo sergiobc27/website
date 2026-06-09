@@ -196,7 +196,7 @@ export function DownloadHistory() {
               {history.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="p-8 text-center text-muted-foreground">
-                    Aun no hay descargas registradas en este navegador.
+                    Aún no hay descargas registradas en este navegador.
                   </td>
                 </tr>
               ) : (

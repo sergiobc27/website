@@ -24,7 +24,7 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
     { id: 'history', icon: Download, label: 'Historial' },
     { id: 'status', icon: Activity, label: 'Estado del Espejo' },
     { id: 'settings', icon: Settings, label: 'Ajustes de API' },
-    { id: 'docs', icon: FileText, label: 'Documentacion' },
+    { id: 'docs', icon: FileText, label: 'Documentación' },
   ];
 
   return (
@@ -34,7 +34,7 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
           <div className="space-y-3">
             <img src={logoVertical} alt="Universidad de la Costa CUC" className="w-full h-auto" />
             <div className="text-center pt-2">
-              <h1 className="text-white font-bold text-sm leading-5">AUTOMATIZACION DE DATOS HIDRICOS DEL IDEAM</h1>
+              <h1 className="text-white font-bold text-sm leading-5">AUTOMATIZACIÓN DE DATOS HÍDRICOS DEL IDEAM</h1>
               <p className="text-white/80 text-xs">Por: Sergio Beltran Coley</p>
             </div>
           </div>

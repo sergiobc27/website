@@ -58,6 +58,8 @@ export function profundidadNormalCircular(Qd: number, D: number, n: number, s: n
   }
   let lo = 1e-6;
   let hi = F_MAX;
+  // 80 iteraciones de bisección → tolerancia ≈ F_MAX·2⁻⁸⁰ (muy por debajo de la
+  // precisión de punto flotante): la solución converge al límite de la máquina.
   for (let i = 0; i < 80; i++) {
     const mid = (lo + hi) / 2;
     if (qAt(mid) < Qd) lo = mid;
@@ -125,7 +127,7 @@ export function chequeoVelocidad(v: number, vMin: number, vMax: number): { estad
 
 // Chequeo de suficiencia: el conducto debe poder transportar el Q de diseño.
 export function chequeoSuficiencia(Qd: number, qCap: number): { estado: Estado; motivo: string } {
-  if (Qd > qCap) return { estado: 'rojo', motivo: `Q de diseño (${Qd.toFixed(3)}) supera la capacidad (${qCap.toFixed(3)} m³/s): sección insuficiente.` };
+  if (Qd > qCap) return { estado: 'rojo', motivo: `Q de diseño (${Qd.toFixed(3)} m³/s) supera la capacidad (${qCap.toFixed(3)} m³/s): sección insuficiente.` };
   if (Qd > qCap * 0.9) return { estado: 'amarillo', motivo: `Q de diseño usa más del 90% de la capacidad: poco margen.` };
   return { estado: 'verde', motivo: `Capacidad suficiente (Q de diseño = ${(qCap > 0 ? (100 * Qd) / qCap : 0).toFixed(0)}% de la capacidad).` };
 }

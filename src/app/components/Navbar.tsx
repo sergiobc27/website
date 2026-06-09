@@ -93,6 +93,7 @@ export function Navbar({ breadcrumbs, runtime, onNavigate }: NavbarProps) {
           onClick={toggleTheme}
           className="rounded-lg p-2 text-muted-foreground transition-all hover:scale-110 hover:bg-muted hover:text-accent"
           title={isDark ? 'Modo claro' : 'Modo oscuro'}
+          aria-label={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
         >
           {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
         </button>
@@ -102,6 +103,7 @@ export function Navbar({ breadcrumbs, runtime, onNavigate }: NavbarProps) {
           onClick={() => onNavigate('docs')}
           className="rounded-lg p-2 text-muted-foreground transition-all hover:scale-110 hover:bg-muted hover:text-accent"
           title="Ayuda"
+          aria-label="Ayuda y documentación"
         >
           <HelpCircle className="h-5 w-5" />
         </button>
@@ -111,6 +113,8 @@ export function Navbar({ breadcrumbs, runtime, onNavigate }: NavbarProps) {
           onClick={() => setIsProfileOpen((current) => !current)}
           className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#A3161A] to-[#C9A227] shadow-[0_0_15px_rgba(201,162,39,0.3)] transition-transform hover:scale-110 hover:shadow-[0_0_25px_rgba(201,162,39,0.5)]"
           title="Perfil"
+          aria-label="Perfil y sesión"
+          aria-expanded={isProfileOpen}
         >
           <User className="h-4 w-4 text-white" />
         </button>
@@ -123,8 +127,8 @@ export function Navbar({ breadcrumbs, runtime, onNavigate }: NavbarProps) {
               <User className="h-5 w-5 text-white" />
             </div>
             <div>
-              <p className="font-bold text-card-foreground">Sesion local</p>
-              <p className="text-xs text-muted-foreground">Sin inicio de sesion requerido</p>
+              <p className="font-bold text-card-foreground">Sesión local</p>
+              <p className="text-xs text-muted-foreground">Sin inicio de sesión requerido</p>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3 py-4 text-sm">

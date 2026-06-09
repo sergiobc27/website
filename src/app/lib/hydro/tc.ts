@@ -32,7 +32,8 @@ export function temez(L: number, S: number): number | null {
   return 0.3 * Math.pow(Lkm / Math.pow(S, 0.25), 0.76) * 60;
 }
 
-// Giandotti: Tc[h] = (4·√A_km² + 1,5·L_km) / (25,3·√(S·L_km)) → ×60 (forma con pendiente).
+// Giandotti: Tc[h] = (4·√A_km² + 1,5·L_km) / (25,3·√(S·L_km)) → ×60 a minutos
+// (forma con pendiente; A en km², L en km, S en m/m adimensional).
 export function giandotti(L: number, S: number, A_ha: number): number | null {
   if (!(L > 0) || !(S > 0) || !(A_ha > 0)) return null;
   const Lkm = L / 1000;

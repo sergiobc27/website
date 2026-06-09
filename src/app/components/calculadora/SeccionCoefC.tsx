@@ -19,6 +19,9 @@ export function SeccionCoefC({
 }) {
   const sup = TIPOS_SUPERFICIE[superficieIdx];
   const cf = factorFrecuencia(tr);
+  const cb = parseFloat(cBase);
+  const [lo, hi] = sup.rango.split('–').map((s) => parseFloat(s.replace(',', '.')));
+  const fueraDeRango = Number.isFinite(cb) && Number.isFinite(lo) && Number.isFinite(hi) && (cb < lo || cb > hi);
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -29,10 +32,20 @@ export function SeccionCoefC({
             options={TIPOS_SUPERFICIE.map((t, i) => ({ value: i, label: `${t.label} (${t.rango})` }))}
           />
         </Field>
-        <Field label={`Coef. C base (rango ${sup.rango})`}>
-          <NumberInput value={cBase} onChange={setCBase} min="0" step="0.05" />
+        <Field
+          label={`Coef. C base (rango ${sup.rango})`}
+          help="Coeficiente de escorrentía: fracción de la lluvia que escurre. Elígelo dentro del rango típico de la superficie; a mayor pendiente o impermeabilidad, valor más alto."
+        >
+          <NumberInput value={cBase} onChange={setCBase} min="0" max="1" step="0.05" />
         </Field>
       </div>
+
+      {fueraDeRango && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+          <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-current" />
+          <span>El C base ({fmt(cb, 2)}) está fuera del rango típico de «{sup.label}» ({sup.rango}); verifica que corresponda a la cobertura real.</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-3">
         <Celda titulo="C base" valor={fmt(parseFloat(cBase), 2)} />

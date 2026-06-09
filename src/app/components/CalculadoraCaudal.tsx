@@ -125,7 +125,7 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
             <>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <Resultado titulo="Tc usado" valor={fmt(tcUsado, 1)} unidad="min" sub={tcMetodo === 'recomendado' ? 'recomendado' : tcMetodo} />
-                <Resultado titulo={`Intensidad (Tr ${tr}a, D = Tc)`} valor={fmt(result.intensidad, 1)} unidad="mm/h" sub="de la curva IDF" />
+                <Resultado titulo={`Intensidad (Tr ${tr}a, D = Tc)`} valor={fmt(result.intensidad, 1)} unidad="mm/h" sub="curva IDF en D = Tc (supuesto del método racional)" />
                 <Resultado
                   titulo="Caudal de diseño Q"
                   valor={fmt(result.q, 3)}

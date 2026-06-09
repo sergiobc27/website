@@ -7,7 +7,7 @@ import { Field, Select } from './SeccionColapsable';
 const METODOS: Array<{ key: MetodoTc; label: string; nota: string }> = [
   { key: 'kirpich', label: 'Kirpich (1940)', nota: 'rural, cauce definido' },
   { key: 'temez', label: 'Témez (1978)', nota: 'L en km' },
-  { key: 'giandotti', label: 'Giandotti', nota: 'usa el área' },
+  { key: 'giandotti', label: 'Giandotti', nota: 'usa el área y la pendiente' },
 ];
 
 export function SeccionTc({

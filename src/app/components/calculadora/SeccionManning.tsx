@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Formula, Sup, V } from '../Formula';
 import { fmt } from '../../lib/format';
 import {
@@ -25,6 +25,13 @@ export function SeccionManning({ q, pendienteCuenca }: { q: number; pendienteCue
   const [vMax, setVMax] = useState(String(MATERIALES[0].vMax));
   const [vMin, setVMin] = useState(String(V_MIN_AUTOLIMPIEZA));
   const [sCond, setSCond] = useState(pendienteCuenca); // %, por defecto la de la cuenca
+  const [sCondTocado, setSCondTocado] = useState(false);
+
+  // Mientras el usuario no edite manualmente la pendiente del conducto, la mantiene
+  // sincronizada con la pendiente de la cuenca (evita que queden inconsistentes).
+  useEffect(() => {
+    if (!sCondTocado) setSCond(pendienteCuenca);
+  }, [pendienteCuenca, sCondTocado]);
 
   const onMaterial = (i: string) => {
     const idx = Number(i);
@@ -35,7 +42,7 @@ export function SeccionManning({ q, pendienteCuenca }: { q: number; pendienteCue
 
   const res = useMemo(() => {
     const n = parseFloat(nMann);
-    const s = parseFloat(sCond) / 100;
+    const s = parseFloat(sCond) / 100; // pendiente: % → m/m (adimensional)
     const vmin = parseFloat(vMin);
     const vmax = parseFloat(vMax);
     if (!(q > 0) || !(n > 0) || !(s > 0)) return null;
@@ -93,7 +100,7 @@ export function SeccionManning({ q, pendienteCuenca }: { q: number; pendienteCue
             <Field label="Ancho de base b (m)">
               <NumberInput value={base} onChange={setBase} step="0.1" />
             </Field>
-            <Field label="Talud z (H:V; 0 = rect.)">
+            <Field label="Talud z (H:V; 0 = rect.)" help="Inclinación de las paredes del canal: z metros en horizontal por cada metro en vertical (H:V). z = 0 es un canal rectangular; z = 1 es 45°.">
               <NumberInput value={talud} onChange={setTalud} step="0.25" />
             </Field>
           </>
@@ -101,16 +108,16 @@ export function SeccionManning({ q, pendienteCuenca }: { q: number; pendienteCue
         <Field label="Material">
           <Select value={materialIdx} onChange={onMaterial} options={MATERIALES.map((m, i) => ({ value: i, label: m.label }))} />
         </Field>
-        <Field label="n de Manning">
-          <NumberInput value={nMann} onChange={setNMann} step="0.001" />
+        <Field label="n de Manning" help="Coeficiente de rugosidad de Manning: cuanto más liso el conducto, menor n y mayor velocidad. Se prefija según el material; ajústalo con la fuente que uses.">
+          <NumberInput value={nMann} onChange={setNMann} min="0.001" step="0.001" />
         </Field>
-        <Field label="Pendiente del conducto (%)">
-          <NumberInput value={sCond} onChange={setSCond} step="0.1" />
+        <Field label="Pendiente del conducto (%)" help="Pendiente longitudinal del conducto. Por defecto sigue la pendiente de la cuenca; al editarla queda fija e independiente.">
+          <NumberInput value={sCond} onChange={(v) => { setSCond(v); setSCondTocado(true); }} step="0.1" />
         </Field>
-        <Field label="Vel. mín. autolimpieza (m/s)">
+        <Field label="Vel. mín. autolimpieza (m/s)" help="Velocidad mínima para que el conducto no sedimente (sea autolimpiante). RAS 0330 (2017) usa ≈ 0,75 m/s.">
           <NumberInput value={vMin} onChange={setVMin} step="0.05" />
         </Field>
-        <Field label="Vel. máx. material (m/s)">
+        <Field label="Vel. máx. material (m/s)" help="Velocidad máxima admisible para no erosionar el material del conducto. Depende del material (p. ej. concreto ≈ 5 m/s).">
           <NumberInput value={vMax} onChange={setVMax} step="0.5" />
         </Field>
       </div>

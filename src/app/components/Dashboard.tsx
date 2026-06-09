@@ -153,7 +153,7 @@ export function Dashboard() {
         <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
           <h3 className="mb-4 font-bold text-card-foreground">Impacto visible</h3>
           <div className="space-y-4 text-sm">
-            <SummaryRow label="Ultima ejecucion" value={history[0]?.timestamp || 'Sin registros'} />
+            <SummaryRow label="Última ejecución" value={history[0]?.timestamp || 'Sin registros'} />
             <SummaryRow label="Tiempo total acumulado" value={formatDuration(totals.timeMs)} />
             <SummaryRow
               label="Mayor volumen descargado"
@@ -176,7 +176,7 @@ export function Dashboard() {
         {isLoading ? (
           <SkeletonLoader rows={3} />
         ) : history.length === 0 ? (
-          <p className="text-muted-foreground">Todavia no hay descargas registradas en este navegador.</p>
+          <p className="text-muted-foreground">Aún no hay descargas registradas en este navegador.</p>
         ) : (
           <div className="space-y-3">
             {history.slice(0, 5).map((item, index) => (
@@ -184,7 +184,7 @@ export function Dashboard() {
                 <div className="min-w-0">
                   <p className="font-semibold text-card-foreground">{item.variable}</p>
                   <p className="break-words text-xs text-muted-foreground">
-                    {item.rowCount.toLocaleString('es-CO')} filas | {item.stationCount} estaciones | {item.municipalityCount} municipios
+                    {item.rowCount.toLocaleString('es-CO')} filas | {Number(item.stationCount || 0).toLocaleString('es-CO')} estaciones | {Number(item.municipalityCount || 0).toLocaleString('es-CO')} municipios
                   </p>
                 </div>
                 <div className="text-xs text-muted-foreground sm:text-right">
