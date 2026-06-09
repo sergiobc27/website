@@ -104,6 +104,8 @@ export function Hidrologia() {
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [nivelFiltro, setNivelFiltro] = useState<FiabilidadNivel | 'todos'>('todos');
+  const [depFiltro, setDepFiltro] = useState('');
+  const [munFiltro, setMunFiltro] = useState('');
   const [station, setStation] = useState<StationLite | null>(null);
 
   // Modo de selección: explorar la lista, o "¿no sabes cuál?" → por municipio.
@@ -165,6 +167,8 @@ export function Hidrologia() {
     const q = query.trim().toUpperCase();
     return catalog.filter((s) => {
       if (nivelFiltro !== 'todos' && s.fiabilidad?.level !== nivelFiltro) return false;
+      if (depFiltro && s.departamento !== depFiltro) return false;
+      if (munFiltro && s.municipio !== munFiltro) return false;
       if (!q) return true;
       return (
         s.codigo.includes(q) ||
@@ -173,7 +177,23 @@ export function Hidrologia() {
         s.departamento.toUpperCase().includes(q)
       );
     });
-  }, [catalog, query, nivelFiltro]);
+  }, [catalog, query, nivelFiltro, depFiltro, munFiltro]);
+
+  // Departamentos disponibles en el catálogo (para el desplegable).
+  const depsDisponibles = useMemo(
+    () => Array.from(new Set(catalog.map((s) => s.departamento))).sort((a, b) => a.localeCompare(b, 'es')),
+    [catalog],
+  );
+  // Municipios del departamento elegido (cascada); si no hay departamento, vacío.
+  const munsDisponibles = useMemo(
+    () =>
+      !depFiltro
+        ? []
+        : Array.from(new Set(catalog.filter((s) => s.departamento === depFiltro).map((s) => s.municipio))).sort((a, b) =>
+            a.localeCompare(b, 'es'),
+          ),
+    [catalog, depFiltro],
+  );
 
   // Conteo por nivel para los chips de filtro.
   const conteoNivel = useMemo(() => {
@@ -439,6 +459,39 @@ export function Hidrologia() {
             </div>
 
             {!catalogLoading && catalog.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={depFiltro}
+                  onChange={(event) => { setDepFiltro(event.target.value); setMunFiltro(''); }}
+                  className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-background px-2 text-sm text-card-foreground outline-none focus:border-accent sm:flex-none"
+                  aria-label="Filtrar por departamento"
+                >
+                  <option value="">Todos los departamentos</option>
+                  {depsDisponibles.map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+                <select
+                  value={munFiltro}
+                  onChange={(event) => setMunFiltro(event.target.value)}
+                  disabled={!depFiltro}
+                  className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-background px-2 text-sm text-card-foreground outline-none focus:border-accent disabled:opacity-50 sm:flex-none"
+                  aria-label="Filtrar por municipio"
+                >
+                  <option value="">{depFiltro ? 'Todos los municipios' : 'Elige departamento'}</option>
+                  {munsDisponibles.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+                {(depFiltro || munFiltro || nivelFiltro !== 'todos' || query) && (
+                  <button
+                    type="button"
+                    onClick={() => { setDepFiltro(''); setMunFiltro(''); setNivelFiltro('todos'); setQuery(''); }}
+                    className="rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-accent/40 hover:text-accent"
+                  >
+                    Limpiar
+                  </button>
+                )}
+              </div>
+            )}
+
+            {!catalogLoading && catalog.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 <NivelChip activo={nivelFiltro === 'todos'} onClick={() => setNivelFiltro('todos')}>
                   Todas ({catalog.length})
@@ -461,7 +514,7 @@ export function Hidrologia() {
             ) : (
               <div className="mt-1 max-h-72 overflow-y-auto rounded-lg border border-border bg-background">
                 {filtered.length === 0 ? (
-                  <p className="px-3 py-3 text-sm">Ninguna estación disponible coincide con «{query}».</p>
+                  <p className="px-3 py-3 text-sm">Ninguna estación disponible coincide con los filtros aplicados.</p>
                 ) : (
                   filtered.slice(0, 200).map((s) => {
                     const active = station?.codigo === s.codigo;
