@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, BarChart4, CheckCircle2, CloudRain, Droplets, MapPin, Navigation, Plus, Search, Waves } from 'lucide-react';
 import {
   Bar,
+  Area,
   BarChart,
   CartesianGrid,
   Cell,
@@ -280,7 +281,11 @@ export function Hidrologia() {
 
   const returnCurve = useMemo(() => {
     if (!returnPeriods?.gumbel) return [];
-    const fitted = returnPeriods.quantiles.map((q) => ({ tr: q.returnPeriod, ajustado: q.value }));
+    const fitted = returnPeriods.quantiles.map((q) => ({
+      tr: q.returnPeriod,
+      ajustado: q.value,
+      banda: q.lower != null && q.upper != null ? [q.lower, q.upper] : undefined,
+    }));
     const observed = returnPeriods.empirical
       .filter((e) => e.returnPeriod >= 1.05)
       .map((e) => ({ tr: e.returnPeriod, observado: e.value }));
@@ -324,6 +329,10 @@ export function Hidrologia() {
         if (!(point.intensityMmH > 0)) continue;
         const row = byDur.get(point.durMin) || { durMin: point.durMin };
         row[`tr${curve.returnPeriod}`] = point.intensityMmH;
+        if (point.lowerMmH != null && point.upperMmH != null) {
+          row[`tr${curve.returnPeriod}_lo`] = point.lowerMmH;
+          row[`tr${curve.returnPeriod}_hi`] = point.upperMmH;
+        }
         byDur.set(point.durMin, row);
       }
     }
@@ -674,7 +683,11 @@ export function Hidrologia() {
                         <tr key={row.durMin} className="border-b border-border/60">
                           <td className="py-2 pr-3 font-mono text-card-foreground">{row.durMin}</td>
                           {(idf.returnPeriods || []).map((tr) => (
-                            <td key={tr} className="py-2 pr-3 text-right font-mono text-card-foreground">
+                            <td
+                              key={tr}
+                              title={row[`tr${tr}_lo`] != null ? `IC 90%: ${fmt(row[`tr${tr}_lo`], 1)}–${fmt(row[`tr${tr}_hi`], 1)} mm/h` : undefined}
+                              className="py-2 pr-3 text-right font-mono text-card-foreground"
+                            >
                               {row[`tr${tr}`] != null ? fmt(row[`tr${tr}`], 1) : '—'}
                             </td>
                           ))}
@@ -706,7 +719,25 @@ export function Hidrologia() {
                   <h3 className="font-bold text-card-foreground">Períodos de retorno · lluvia máxima diaria</h3>
                   <p className="text-sm text-muted-foreground">Gumbel (método de momentos) sobre {returnPeriods?.n ?? 0} máximos anuales</p>
                 </div>
-                <Waves className="h-5 w-5 shrink-0 text-accent" />
+                <div className="flex shrink-0 items-center gap-3">
+                  {returnPeriods?.reliability && (() => {
+                    const r = returnPeriods.reliability;
+                    const cfg = {
+                      verde: { cls: 'border-success/40 bg-success/10 text-success', label: 'Alta' },
+                      amarillo: { cls: 'border-accent/40 bg-accent/10 text-accent', label: 'Media' },
+                      rojo: { cls: 'border-red-500/40 bg-red-500/10 text-red-500', label: 'Baja' },
+                    }[r.level];
+                    return (
+                      <span
+                        title={r.reasons.length ? r.reasons.join(' · ') : 'Registro largo, completo y estacionario.'}
+                        className={`cursor-help rounded-full border px-2.5 py-0.5 text-xs font-semibold ${cfg.cls}`}
+                      >
+                        Fiabilidad: {cfg.label}
+                      </span>
+                    );
+                  })()}
+                  <Waves className="h-5 w-5 text-accent" />
+                </div>
               </div>
               {isLoading ? (
                 <SkeletonLoader rows={4} />
@@ -749,6 +780,9 @@ export function Hidrologia() {
                         <p className="text-xs text-muted-foreground">Tr {q.returnPeriod} años</p>
                         <p className="font-mono text-sm font-bold text-card-foreground">{fmt(q.value, 1)}</p>
                         <p className="text-[10px] text-muted-foreground">mm/día</p>
+                        {q.lower != null && q.upper != null && (
+                          <p className="text-[10px] text-muted-foreground">IC 90%: {fmt(q.lower, 1)}–{fmt(q.upper, 1)}</p>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -769,6 +803,7 @@ export function Hidrologia() {
                         />
                         <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} width={48} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(value: number, name: string) => [`${fmt(value, 1)} mm/día`, name]} labelFormatter={(v) => `Tr ≈ ${v} años`} />
+                        <Area dataKey="banda" name="IC 90%" stroke="none" fill="#C9A227" fillOpacity={0.15} connectNulls isAnimationActive={false} />
                         <Line type="monotone" dataKey="ajustado" name="Gumbel ajustado" stroke="#C9A227" strokeWidth={2} dot={{ r: 3 }} connectNulls isAnimationActive={false} />
                         <Scatter dataKey="observado" name="Observado (Weibull)" fill="#A3161A" isAnimationActive={false} />
                       </ComposedChart>
