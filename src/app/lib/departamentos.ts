@@ -47,5 +47,9 @@ export const DANE_POR_NOMBRE: Record<string, string> = {
 export function daneDeDepartamento(nombre: string | null | undefined): string | null {
   if (!nombre) return null;
   const key = nombre.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
-  return DANE_POR_NOMBRE[key] ?? null;
+  if (DANE_POR_NOMBRE[key]) return DANE_POR_NOMBRE[key];
+  // El catálogo del IDEAM trae el archipiélago en varias grafías (con coma, forma
+  // larga, o con un carácter corrupto en "Andrés"): todas empiezan por "SAN ANDR".
+  if (key.includes('SAN ANDR')) return '88';
+  return null;
 }
