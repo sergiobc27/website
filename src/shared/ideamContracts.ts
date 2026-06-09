@@ -192,6 +192,8 @@ export interface IdfStation {
   municipio: string;
   departamento: string;
   aniosValidos: number;
+  zonaHidrografica?: string | null;
+  corriente?: string | null;
   /** Semáforo precalculado (Lote 2.1); null si aún no se ha calculado. */
   fiabilidad?: Fiabilidad | null;
 }
