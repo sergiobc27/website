@@ -4,6 +4,7 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Layers, MapPin } from 'lucide-react';
 import { apiJson, apiUrl } from '../lib/ideamApi';
+import { daneDeDepartamento } from '../lib/departamentos';
 import type {
   AnalyticsByRegionResponse,
   AnalyticsTimeseriesResponse,
@@ -53,12 +54,6 @@ function normalizeName(value: string) {
   return value.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
 }
 
-// El GeoJSON de límites (DANE vía john-guerra) usa nombres antiguos/largos.
-const GEO_NAME_ALIASES: Record<string, string> = {
-  'SANTAFE DE BOGOTA D.C': 'BOGOTA D.C.',
-  'ARCHIPIELAGO DE SAN ANDRES PROVIDENCIA Y SANTA CATALINA': 'SAN ANDRES Y PROVIDENCIA',
-};
-
 function popupHtml(p: StationProperties) {
   const row = (label: string, value: unknown) =>
     value === null || value === undefined || value === '' ? '' : `<div><span style="opacity:.65">${label}:</span> ${escapeHtml(value)}</div>`;
@@ -69,6 +64,7 @@ function popupHtml(p: StationProperties) {
       ${row('Estado', p.estado)}
       ${row('Categoría', p.categoria)}
       ${row('Municipio', `${p.municipio ?? 'N/D'}, ${p.departamento ?? 'N/D'}`)}
+      ${row('DIVIPOLA (depto.)', daneDeDepartamento(p.departamento))}
       ${row('Altitud', p.altitud != null && String(p.altitud) !== '' ? `${p.altitud} m` : null)}
       ${row('Corriente', p.corriente)}
       <div class="ideam-spark" style="margin-top: 8px; min-height: 64px; opacity: .8;">Cargando serie histórica...</div>
@@ -403,20 +399,23 @@ export default function MapaEstaciones() {
         );
         if (cancelled) return;
 
-        // El cagg puede traer variantes del mismo nombre: se agrupan normalizadas.
-        const obsByDept = new Map<string, number>();
+        // Se une por código DIVIPOLA/DANE (no por nombre): el cagg puede traer
+        // variantes del mismo departamento, pero todas resuelven al mismo código.
+        const obsByDane = new Map<string, number>();
         for (const region of byRegion.regions) {
-          const key = normalizeName(region.department || '');
-          obsByDept.set(key, (obsByDept.get(key) || 0) + region.rowCount);
+          const dane = daneDeDepartamento(region.department);
+          if (!dane) continue;
+          obsByDane.set(dane, (obsByDane.get(dane) || 0) + region.rowCount);
         }
 
         const merged = {
           type: 'FeatureCollection',
           features: (boundariesRef.current.features || []).map((feature) => {
-            const raw = String((feature.properties as Record<string, unknown>)?.NOMBRE_DPT || '');
-            const canonical = GEO_NAME_ALIASES[raw] || raw;
-            const obs = obsByDept.get(normalizeName(canonical)) || 0;
-            return { ...feature, properties: { NOMBRE_DPT: raw, obs } };
+            const props = feature.properties as Record<string, unknown>;
+            const dane = String(props?.DANE || '');
+            const raw = String(props?.NOMBRE_DPT || '');
+            const obs = obsByDane.get(dane) || 0;
+            return { ...feature, properties: { NOMBRE_DPT: raw, DANE: dane, obs } };
           }),
         } as FeatureCollection;
 
