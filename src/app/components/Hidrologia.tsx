@@ -132,7 +132,10 @@ export function Hidrologia() {
   useEffect(() => {
     let cancelled = false;
     setCatalogLoading(true);
-    fetch(apiUrl('/api/analytics/idf-stations'), { headers: { accept: 'application/json' } })
+    // no-store: la lista lleva el semáforo de fiabilidad, que puede cambiar tras el
+    // job mensual; evitamos que el navegador sirva una copia vieja (el edge sigue
+    // cacheando ~30 min, así que el box queda protegido).
+    fetch(apiUrl('/api/analytics/idf-stations'), { headers: { accept: 'application/json' }, cache: 'no-store' })
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error('catálogo'))))
       .then((data: IdfStationsResponse) => {
         if (cancelled) return;
