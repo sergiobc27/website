@@ -1,0 +1,49 @@
+import { describe, it, expect } from 'vitest';
+import { tiemposConcentracion } from './tc';
+
+// Casos calculados a mano con las fórmulas de la literatura (L en m, S en m/m, A en ha).
+// Cuenca de referencia: L=800 m, S=0,02 (2%), A=5 ha.
+describe('tiemposConcentracion — cuenca media (L=800, S=0,02, A=5 ha)', () => {
+  const r = tiemposConcentracion(800, 0.02, 5);
+
+  it('Kirpich ≈ 15,12 min', () => {
+    expect(r.kirpich).toBeCloseTo(15.12, 1);
+  });
+
+  it('Témez ≈ 31,95 min', () => {
+    expect(r.temez).toBeCloseTo(31.95, 1);
+  });
+
+  it('Giandotti ≈ 39,27 min', () => {
+    expect(r.giandotti).toBeCloseTo(39.27, 1);
+  });
+
+  it('recomendado = mediana de los tres (Témez)', () => {
+    expect(r.recomendado).toBeCloseTo(31.95, 1);
+    expect(r.metodoRecomendado).toBe('temez');
+    expect(r.pisoAplicado).toBe(false);
+  });
+});
+
+describe('tiemposConcentracion — piso de diseño 10 min (RAS 0330)', () => {
+  // Cuenca diminuta: la mediana cae por debajo de 10 min → se aplica el piso.
+  const r = tiemposConcentracion(50, 0.05, 0.5);
+
+  it('la mediana cruda es < 10 min', () => {
+    const cruda = [r.kirpich, r.temez, r.giandotti].filter((v): v is number => v != null).sort((a, b) => a - b)[1];
+    expect(cruda).toBeLessThan(10);
+  });
+
+  it('recomendado se eleva a 10 min y marca pisoAplicado', () => {
+    expect(r.recomendado).toBe(10);
+    expect(r.pisoAplicado).toBe(true);
+  });
+});
+
+describe('tiemposConcentracion — entradas inválidas', () => {
+  it('devuelve null en los métodos cuando L o S no son positivos', () => {
+    const r = tiemposConcentracion(0, 0.02, 5);
+    expect(r.kirpich).toBeNull();
+    expect(r.recomendado).toBeNull();
+  });
+});
