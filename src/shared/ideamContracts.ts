@@ -90,6 +90,17 @@ export interface AnalyticsByStationResponse {
 export interface ReturnPeriodQuantile {
   returnPeriod: number;
   value: number;
+  lower?: number; // banda de confianza ~90% (P5 bootstrap)
+  upper?: number; // banda de confianza ~90% (P95 bootstrap)
+}
+
+export interface ReliabilityReport {
+  level: 'verde' | 'amarillo' | 'rojo';
+  n: number;
+  completeness: number;
+  incompleteYears: number;
+  stationary: boolean;
+  reasons: string[];
 }
 
 export interface GoodnessOfFit {
@@ -110,6 +121,7 @@ export interface ReturnPeriodsResponse {
   quantiles: ReturnPeriodQuantile[];
   empirical: ReturnPeriodQuantile[];
   goodnessOfFit?: GoodnessOfFit | null;
+  reliability?: ReliabilityReport;
   warnings: string[];
   method?: string;
 }
@@ -142,6 +154,8 @@ export interface IdfPoint {
   durMin: number;
   depthMm: number;
   intensityMmH: number;
+  lowerMmH?: number;
+  upperMmH?: number;
 }
 
 export interface IdfCurve {
