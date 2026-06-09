@@ -8,6 +8,7 @@ import { EstadoEspejo } from './components/EstadoEspejo';
 import { ComparadorEstaciones } from './components/ComparadorEstaciones';
 import { FichaClimatica } from './components/FichaClimatica';
 import { Hidrologia } from './components/Hidrologia';
+import { BibliotecaReferencias } from './components/BibliotecaReferencias';
 import { Asistente } from './components/Asistente';
 
 // El mapa carga MapLibre (~220KB gzip): lazy para no engordar el bundle inicial.
@@ -240,6 +241,8 @@ function DocumentationView({ onOpenExtractor }: { onOpenExtractor: () => void })
           ]}
         />
       </div>
+
+      <BibliotecaReferencias />
     </div>
   );
 }
