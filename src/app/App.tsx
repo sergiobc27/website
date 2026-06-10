@@ -31,10 +31,13 @@ import type { ExtractorRuntimeState } from './components/DataExtractor';
 import { DownloadHistory } from './components/DownloadHistory';
 import { Toaster } from './components/ui/sonner';
 import { initTheme } from './lib/theme';
+import { viewToPath, pathToView } from './lib/navigation';
 
 export default function App() {
   const [fichaParams, setFichaParams] = useState(parseFichaHash);
-  const [currentView, setCurrentView] = useState(() => (parseFichaHash() ? 'ficha' : 'dashboard'));
+  const [currentView, setCurrentView] = useState(() =>
+    parseFichaHash() ? 'ficha' : pathToView(window.location.pathname),
+  );
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [runtime, setRuntime] = useState<ExtractorRuntimeState>({
     isBusy: false,
@@ -49,28 +52,31 @@ export default function App() {
     return initTheme();
   }, []);
 
-  // Un enlace de ficha pegado/navegado abre la ficha directamente.
+  // Sincroniza la vista con la URL ante atrás/adelante (popstate) y ante un
+  // hash de ficha pegado/navegado (hashchange). La ficha es deep-link por hash;
+  // las demás pestañas son rutas reales (/map, /hydro, ...).
   useEffect(() => {
-    const onHashChange = () => {
+    const sync = () => {
       const params = parseFichaHash();
       if (params) {
         setFichaParams(params);
         setCurrentView('ficha');
       } else {
-        // Back/forward a un hash que ya no es de ficha: salir de la ficha en
-        // vez de quedar con la vista desincronizada (auditoría #4).
-        setCurrentView((current) => (current === 'ficha' ? 'dashboard' : current));
+        setCurrentView(pathToView(window.location.pathname));
       }
     };
-    window.addEventListener('hashchange', onHashChange);
-    return () => window.removeEventListener('hashchange', onHashChange);
+    window.addEventListener('popstate', sync);
+    window.addEventListener('hashchange', sync);
+    return () => {
+      window.removeEventListener('popstate', sync);
+      window.removeEventListener('hashchange', sync);
+    };
   }, []);
 
   const navigate = (view: string) => {
-    if (view !== 'ficha' && window.location.hash.startsWith('#/ficha')) {
-      // Limpia el hash compartible al salir de la ficha.
-      window.history.replaceState(null, '', window.location.pathname);
-    }
+    // pushState a la ruta de la pestaña; fijar un pathname sin hash limpia de
+    // paso el hash de ficha si veníamos de una ficha compartida.
+    window.history.pushState(null, '', viewToPath(view));
     setCurrentView(view);
   };
 
