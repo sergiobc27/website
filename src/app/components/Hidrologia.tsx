@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ChartDownloadButton } from './ChartDownloadButton';
 import { AlertTriangle, BarChart4, CheckCircle2, CloudRain, Droplets, Navigation, Plus, Search, Waves } from 'lucide-react';
 import {
   Bar,
@@ -126,6 +127,7 @@ export function Hidrologia() {
   const [zonaFiltro, setZonaFiltro] = useState('');
   const [corrienteFiltro, setCorrienteFiltro] = useState('');
   const [station, setStation] = useState<StationLite | null>(null);
+  const idfChartRef = useRef<HTMLDivElement>(null);
 
   // Municipios del departamento elegido (TODOS, de /api/municipalities): así, si
   // eliges uno sin estación, podemos sugerir la más cercana. Más la respuesta de
@@ -689,7 +691,17 @@ export function Hidrologia() {
                     : 'Familia de curvas de diseño de drenaje'}
                 </p>
               </div>
-              <CloudRain className="h-5 w-5 shrink-0 text-accent" />
+              <div className="flex shrink-0 items-center gap-3">
+                {idf?.available && (
+                  <ChartDownloadButton
+                    targetRef={idfChartRef}
+                    title="Curva IDF"
+                    subtitle={station?.nombre ?? station?.codigo}
+                    filenameParts={['curva-idf', station?.nombre ?? station?.codigo ?? '']}
+                  />
+                )}
+                <CloudRain className="h-5 w-5 shrink-0 text-accent" />
+              </div>
             </div>
             {isLoading ? (
               <SkeletonLoader rows={5} />
@@ -699,7 +711,7 @@ export function Hidrologia() {
               </p>
             ) : (
               <div className="space-y-4">
-                <div style={{ width: '100%', height: '320px' }}>
+                <div ref={idfChartRef} className="bg-card" style={{ width: '100%', height: '320px' }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={idfChartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
