@@ -133,7 +133,7 @@ export default function App() {
       <Sidebar currentView={currentView} onNavigate={navigate} />
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <Navbar breadcrumbs={getBreadcrumbs()} runtime={runtime} onNavigate={navigate} />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 scrollbar-thin scrollbar-thumb-[#2a2a2a] scrollbar-track-transparent">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 scrollbar-thin scrollbar-track-transparent">
           <div className={currentView === 'extractor' ? 'block' : 'hidden'}>
             <DataExtractor onRuntimeChange={setRuntime} />
           </div>

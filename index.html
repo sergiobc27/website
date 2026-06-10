@@ -1,16 +1,26 @@
-
-  <!DOCTYPE html>
-  <html lang="en">
-    <head>
-      <meta charset="UTF-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title>AUTOMATIZACIÓN DE DATOS HÍDRICOS DEL IDEAM</title>
-      <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
-    </head>
-
-    <body>
-      <div id="root"></div>
-      <script type="module" src="/src/main.tsx"></script>
-    </body>
-  </html>
-  
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AUTOMATIZACIÓN DE DATOS HÍDRICOS DEL IDEAM</title>
+    <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
+    <script>
+      // Anti-FOUC: aplica el tema antes del primer paint. Debe mantenerse en
+      // sincronía con src/app/lib/theme.ts (misma clave 'ideam-theme' y los
+      // tres valores 'light' | 'dark' | 'system').
+      (function () {
+        try {
+          var choice = localStorage.getItem('ideam-theme') || 'system';
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var isDark = choice === 'dark' || (choice === 'system' && prefersDark);
+          if (isDark) document.documentElement.classList.add('dark');
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
