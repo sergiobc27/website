@@ -27,6 +27,8 @@ function parseFichaHash(): { department: string; municipality: string } | null {
 import { DataExtractor } from './components/DataExtractor';
 import type { ExtractorRuntimeState } from './components/DataExtractor';
 import { DownloadHistory } from './components/DownloadHistory';
+import { Toaster } from './components/ui/sonner';
+import { initTheme } from './lib/theme';
 
 export default function App() {
   const [fichaParams, setFichaParams] = useState(parseFichaHash);
@@ -41,9 +43,7 @@ export default function App() {
   });
 
   useEffect(() => {
-    const storedTheme = window.localStorage.getItem('ideam-theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    document.documentElement.classList.toggle('dark', storedTheme ? storedTheme === 'dark' : prefersDark);
+    return initTheme();
   }, []);
 
   // Un enlace de ficha pegado/navegado abre la ficha directamente.
@@ -140,6 +140,7 @@ export default function App() {
           {currentView !== 'extractor' && renderContent()}
         </main>
       </div>
+      <Toaster richColors position="bottom-right" />
     </div>
   );
 }
