@@ -2,7 +2,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import type { FeatureCollection, Point as GeoJsonPoint } from 'geojson';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Layers, MapPin } from 'lucide-react';
+import { Layers, MapPin, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import { apiJson, apiUrl } from '../lib/ideamApi';
 import { daneDeDepartamento } from '../lib/departamentos';
 import type {
@@ -187,6 +187,7 @@ export default function MapaEstaciones() {
   const [sparkDataset, setSparkDataset] = useState('s54a-sgyg');
   const [choroplethOn, setChoroplethOn] = useState(false);
   const [choroplethRange, setChoroplethRange] = useState<{ min: number; max: number } | null>(null);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   // Carga del catálogo de estaciones (cacheado 24h en el borde) + variables.
   useEffect(() => {
@@ -520,7 +521,19 @@ export default function MapaEstaciones() {
             </span>
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="w-full lg:w-auto">
+          <button
+            type="button"
+            onClick={() => setMobileFiltersOpen((open) => !open)}
+            aria-expanded={mobileFiltersOpen}
+            className="mb-1 inline-flex h-9 w-full items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 text-sm font-semibold text-card-foreground lg:hidden"
+          >
+            <span className="inline-flex items-center gap-2"><SlidersHorizontal className="h-4 w-4" />Filtros</span>
+            <ChevronDown className={`h-4 w-4 transition-transform ${mobileFiltersOpen ? 'rotate-180' : ''}`} />
+          </button>
+          <div
+            className={`${mobileFiltersOpen ? 'flex' : 'hidden'} flex-col gap-2 lg:flex lg:flex-row lg:flex-wrap [&>button]:w-full [&>input]:w-full [&>select]:w-full lg:[&>button]:w-auto lg:[&>input]:w-auto lg:[&>select]:w-auto`}
+          >
           <select
             value={estadoFilter}
             onChange={(event) => setEstadoFilter(event.target.value as typeof estadoFilter)}
@@ -616,6 +629,7 @@ export default function MapaEstaciones() {
             <Layers className="h-4 w-4" />
             Coropleta
           </button>
+          </div>
         </div>
       </div>
 
