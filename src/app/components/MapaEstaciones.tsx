@@ -103,6 +103,65 @@ function sparklineSvg(points: Array<{ bucket: string; value: number | null }>, l
     </div>`;
 }
 
+// Alta de la fuente y capas de estaciones. Idempotente: se llama al cargar el
+// mapa y de nuevo tras un setStyle (cambio de tema), que descarta las capas.
+// Los handlers de click/hover se registran aparte una sola vez (persisten al
+// re-crear capas con el mismo id), por eso aquí solo van source + layers.
+function addStationLayers(map: maplibregl.Map) {
+  if (!map.getSource(SOURCE_ID)) {
+    map.addSource(SOURCE_ID, {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+      cluster: true,
+      clusterMaxZoom: 11,
+      clusterRadius: 46,
+    });
+  }
+  if (!map.getLayer('clusters')) {
+    map.addLayer({
+      id: 'clusters',
+      type: 'circle',
+      source: SOURCE_ID,
+      filter: ['has', 'point_count'],
+      paint: {
+        'circle-color': '#C9A227',
+        'circle-opacity': 0.85,
+        'circle-stroke-width': 1.5,
+        'circle-stroke-color': '#8a6f1a',
+        'circle-radius': ['step', ['get', 'point_count'], 14, 50, 20, 250, 27, 1000, 34],
+      },
+    });
+  }
+  if (!map.getLayer('cluster-count')) {
+    map.addLayer({
+      id: 'cluster-count',
+      type: 'symbol',
+      source: SOURCE_ID,
+      filter: ['has', 'point_count'],
+      layout: {
+        'text-field': ['get', 'point_count_abbreviated'],
+        'text-size': 12,
+      },
+      paint: { 'text-color': '#1a1a1a' },
+    });
+  }
+  if (!map.getLayer('station-point')) {
+    map.addLayer({
+      id: 'station-point',
+      type: 'circle',
+      source: SOURCE_ID,
+      filter: ['!', ['has', 'point_count']],
+      paint: {
+        'circle-color': ['match', ['get', 'estadoNorm'], 'activa', '#C9A227', '#A3161A'],
+        'circle-radius': 5,
+        'circle-opacity': 0.9,
+        'circle-stroke-width': 1,
+        'circle-stroke-color': '#ffffff',
+      },
+    });
+  }
+}
+
 export default function MapaEstaciones() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -112,6 +171,9 @@ export default function MapaEstaciones() {
   const [allStations, setAllStations] = useState<StationFeature[]>([]);
   const [datasets, setDatasets] = useState<Array<{ id: string; name: string }>>([]);
   const [isMapReady, setIsMapReady] = useState(false);
+  // Se incrementa tras un cambio de basemap por tema, para re-disparar los
+  // efectos que repueblan datos (estaciones y coropleta) sobre el estilo nuevo.
+  const [styleEpoch, setStyleEpoch] = useState(0);
   const [error, setError] = useState('');
 
   const [estadoFilter, setEstadoFilter] = useState<'todas' | 'activa' | 'otra'>('todas');
@@ -176,51 +238,7 @@ export default function MapaEstaciones() {
     map.addControl(new maplibregl.FullscreenControl(), 'top-right');
 
     map.on('load', () => {
-      map.addSource(SOURCE_ID, {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-        cluster: true,
-        clusterMaxZoom: 11,
-        clusterRadius: 46,
-      });
-
-      map.addLayer({
-        id: 'clusters',
-        type: 'circle',
-        source: SOURCE_ID,
-        filter: ['has', 'point_count'],
-        paint: {
-          'circle-color': '#C9A227',
-          'circle-opacity': 0.85,
-          'circle-stroke-width': 1.5,
-          'circle-stroke-color': '#8a6f1a',
-          'circle-radius': ['step', ['get', 'point_count'], 14, 50, 20, 250, 27, 1000, 34],
-        },
-      });
-      map.addLayer({
-        id: 'cluster-count',
-        type: 'symbol',
-        source: SOURCE_ID,
-        filter: ['has', 'point_count'],
-        layout: {
-          'text-field': ['get', 'point_count_abbreviated'],
-          'text-size': 12,
-        },
-        paint: { 'text-color': '#1a1a1a' },
-      });
-      map.addLayer({
-        id: 'station-point',
-        type: 'circle',
-        source: SOURCE_ID,
-        filter: ['!', ['has', 'point_count']],
-        paint: {
-          'circle-color': ['match', ['get', 'estadoNorm'], 'activa', '#C9A227', '#A3161A'],
-          'circle-radius': 5,
-          'circle-opacity': 0.9,
-          'circle-stroke-width': 1,
-          'circle-stroke-color': '#ffffff',
-        },
-      });
+      addStationLayers(map);
 
       // Click en cluster: acercar hasta expandirlo.
       map.on('click', 'clusters', async (event) => {
@@ -308,6 +326,29 @@ export default function MapaEstaciones() {
     };
   }, []);
 
+  // El basemap se fija solo al iniciar; reaccionar a cambios de tema (la clase
+  // `dark` en <html> la gestiona lib/theme). setStyle descarta las capas, así
+  // que tras cargar el estilo nuevo se re-añaden y se bumpea styleEpoch para
+  // que los efectos de datos vuelvan a poblar estaciones y coropleta.
+  useEffect(() => {
+    const target = document.documentElement;
+    let lastDark = target.classList.contains('dark');
+    const observer = new MutationObserver(() => {
+      const isDark = target.classList.contains('dark');
+      if (isDark === lastDark) return;
+      lastDark = isDark;
+      const map = mapRef.current;
+      if (!map) return;
+      map.setStyle(isDark ? STYLE_DARK : STYLE_LIGHT);
+      map.once('styledata', () => {
+        addStationLayers(map);
+        setStyleEpoch((epoch) => epoch + 1);
+      });
+    });
+    observer.observe(target, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
   const categorias = useMemo(
     () => Array.from(new Set(allStations.map((f) => f.properties.categoria).filter(Boolean))).sort() as string[],
     [allStations]
@@ -360,7 +401,7 @@ export default function MapaEstaciones() {
     if (!isMapReady) return;
     const source = mapRef.current?.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
     source?.setData({ type: 'FeatureCollection', features: visibleStations } as unknown as FeatureCollection);
-  }, [isMapReady, visibleStations]);
+  }, [isMapReady, visibleStations, styleEpoch]);
 
   // Coropleta: límites departamentales estáticos + volumen por departamento
   // (by-region nacional, <1s sobre obs_mensual). Capa debajo de los clusters.
@@ -460,7 +501,7 @@ export default function MapaEstaciones() {
     return () => {
       cancelled = true;
     };
-  }, [isMapReady, choroplethOn, sparkDataset]);
+  }, [isMapReady, choroplethOn, sparkDataset, styleEpoch]);
 
   const sparkDatasetName = datasets.find((d) => d.id === sparkDataset)?.name || 'Precipitacion';
 
