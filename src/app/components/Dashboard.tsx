@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Clock3, Database, Download, MapPin, RefreshCw, Waves } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { SkeletonLoader } from './SkeletonLoader';
+import { ChartDownloadButton } from './ChartDownloadButton';
 import { apiJson } from '../lib/ideamApi';
 import { fmt } from '../lib/format';
 import type { DataFreshness, MetaResponse } from '../../shared/ideamContracts';
@@ -45,6 +46,7 @@ function formatFreshnessRelative(iso: string | null) {
 }
 
 export function Dashboard() {
+  const chartRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [datasets, setDatasets] = useState<Array<{ id: string; name: string }>>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -127,9 +129,12 @@ export function Dashboard() {
               <h3 className="font-bold text-card-foreground">Rendimiento reciente</h3>
               <p className="text-sm text-muted-foreground">Filas y estaciones por ejecucion</p>
             </div>
-            <Waves className="h-5 w-5 shrink-0 text-accent" />
+            <div className="flex shrink-0 items-center gap-3">
+              <ChartDownloadButton targetRef={chartRef} title="Rendimiento reciente" filenameParts={['dashboard', 'rendimiento']} />
+              <Waves className="h-5 w-5 shrink-0 text-accent" />
+            </div>
           </div>
-          <div style={{ width: '100%', height: '260px' }}>
+          <div ref={chartRef} className="bg-card" style={{ width: '100%', height: '260px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData.length ? chartData : [{ label: '-', filas: 0, estaciones: 0 }]}>
                 <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />

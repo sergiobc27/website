@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Building2, Check, Link2, MapPin, CalendarRange, Database } from 'lucide-react';
+import { ChartDownloadButton } from './ChartDownloadButton';
 import { Area, AreaChart, Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { SkeletonLoader } from './SkeletonLoader';
 import { apiJson } from '../lib/ideamApi';
@@ -26,6 +27,7 @@ export function fichaHash(department: string, municipality: string) {
 }
 
 export function FichaClimatica({ initialDepartment = '', initialMunicipality = '' }: { initialDepartment?: string; initialMunicipality?: string }) {
+  const chartRef = useRef<HTMLDivElement>(null);
   const [datasets, setDatasets] = useState<Array<{ id: string; name: string }>>([]);
   const [departments, setDepartments] = useState<string[]>([]);
   const [datasetId, setDatasetId] = useState('s54a-sgyg');
@@ -254,13 +256,23 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
-              <h3 className="mb-6 font-bold text-card-foreground">Climatología mensual{unitSuffix(unidad)}</h3>
+              <div className="mb-6 flex items-center justify-between gap-4">
+                <h3 className="font-bold text-card-foreground">Climatología mensual{unitSuffix(unidad)}</h3>
+                {!isLoading && !climatologyData.every((m) => m.media === null) && (
+                  <ChartDownloadButton
+                    targetRef={chartRef}
+                    title="Climatología mensual"
+                    subtitle={municipality ? `${municipality}, ${department}` : department}
+                    filenameParts={['climatologia', municipality || department]}
+                  />
+                )}
+              </div>
               {isLoading ? (
                 <SkeletonLoader rows={4} />
               ) : climatologyData.every((m) => m.media === null) ? (
                 <p className="text-muted-foreground text-sm">Sin datos de {datasetName} en este municipio.</p>
               ) : (
-                <div style={{ width: '100%', height: '260px' }}>
+                <div ref={chartRef} className="bg-card" style={{ width: '100%', height: '260px' }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={climatologyData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { GitCompareArrows, Plus, Search, X } from 'lucide-react';
+import { ChartDownloadButton } from './ChartDownloadButton';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts';
 import { SkeletonLoader } from './SkeletonLoader';
 import { apiJson, apiUrl } from '../lib/ideamApi';
@@ -43,6 +44,7 @@ function formatValue(value: number | null | undefined) {
 }
 
 export function ComparadorEstaciones() {
+  const chartRef = useRef<HTMLDivElement>(null);
   const [datasets, setDatasets] = useState<Array<{ id: string; name: string }>>([]);
   const [datasetId, setDatasetId] = useState('s54a-sgyg');
   const [catalog, setCatalog] = useState<StationLite[]>([]);
@@ -344,13 +346,23 @@ export function ComparadorEstaciones() {
       ) : (
         <>
           <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
-            <h3 className="mb-6 font-bold text-card-foreground">Promedio anual de {datasetName}{unitSuffix(datasetUnit(datasetId))} · series superpuestas</h3>
+            <div className="mb-6 flex items-center justify-between gap-4">
+              <h3 className="font-bold text-card-foreground">Promedio anual de {datasetName}{unitSuffix(datasetUnit(datasetId))} · series superpuestas</h3>
+              {!isLoading && chartData.length > 0 && (
+                <ChartDownloadButton
+                  targetRef={chartRef}
+                  title={`Comparador · ${datasetName}`}
+                  subtitle={`${selectedCodes.length} estaciones`}
+                  filenameParts={['comparador', datasetName]}
+                />
+              )}
+            </div>
             {isLoading ? (
               <SkeletonLoader rows={4} />
             ) : chartData.length === 0 ? (
               <p className="text-muted-foreground text-sm">Ninguna de las estaciones elegidas tiene datos de {datasetName}.</p>
             ) : (
-              <div style={{ width: '100%', height: '320px' }}>
+              <div ref={chartRef} className="bg-card" style={{ width: '100%', height: '320px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />

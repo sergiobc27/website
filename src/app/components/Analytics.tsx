@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, BarChart3, CalendarRange, Globe2, MapPin, TrendingUp } from 'lucide-react';
+import { ChartDownloadButton } from './ChartDownloadButton';
 import {
   Area,
   AreaChart,
@@ -69,6 +70,7 @@ function formatPeriod(first: string | null, last: string | null) {
 }
 
 export function Analytics() {
+  const chartRef = useRef<HTMLDivElement>(null);
   const [datasetId, setDatasetId] = useState('s54a-sgyg');
   const [department, setDepartment] = useState(''); // '' = todo el país
   const [interval, setInterval] = useState<AnalyticsInterval>('year');
@@ -425,14 +427,19 @@ export function Analytics() {
             </h3>
             <p className="text-sm text-muted-foreground">{scopeLabel}</p>
           </div>
-          <TrendingUp className="h-5 w-5 shrink-0 text-accent" />
+          <div className="flex shrink-0 items-center gap-3">
+            {seriesData.length > 0 && (
+              <ChartDownloadButton targetRef={chartRef} title={`${metricLabel} de ${selectedDataset?.name || datasetId}`} subtitle={scopeLabel} filenameParts={['analitica', selectedDataset?.name || datasetId]} />
+            )}
+            <TrendingUp className="h-5 w-5 shrink-0 text-accent" />
+          </div>
         </div>
         {isLoadingSeries ? (
           <SkeletonLoader rows={4} />
         ) : seriesData.length === 0 ? (
           <p className="text-muted-foreground text-sm">Sin datos para esta combinación de filtros.</p>
         ) : (
-          <div style={{ width: '100%', height: '300px' }}>
+          <div ref={chartRef} className="bg-card" style={{ width: '100%', height: '300px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={seriesData}>
                 <defs>
