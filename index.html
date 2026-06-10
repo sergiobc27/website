@@ -18,6 +18,11 @@
         } catch (e) {}
       })();
     </script>
+    <!-- Cloudflare Web Analytics (sin cookies, sin datos personales). Token
+         público por diseño. SIN integrity: Cloudflare actualiza beacon.min.js
+         y un hash SRI lo rompería (excepción intencional a la regla de SRI). -->
+    <script defer src='https://static.cloudflareinsights.com/beacon.min.js'
+            data-cf-beacon='{"token": "8836b6ec3b264eda9e4abafafb895110"}'></script>
   </head>
   <body>
     <div id="root"></div>
