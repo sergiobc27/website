@@ -30,6 +30,7 @@
     "@radix-ui/react-tooltip": "^1.2.9",
     "@types/katex": "^0.16.8",
     "class-variance-authority": "^0.7.1",
+    "html-to-image": "^1.11.13",
     "jszip": "^3.10.1",
     "katex": "^0.17.0",
     "lucide-react": "0.487.0",
