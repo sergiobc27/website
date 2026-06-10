@@ -1,7 +1,8 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
 import { BookOpen, CheckCircle2, Cloud, Database, FileArchive, KeyRound, ShieldCheck, Terminal } from 'lucide-react';
-import { Sidebar } from './components/Sidebar';
+import { Sidebar, SidebarContent } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
+import { Sheet, SheetContent, SheetTitle } from './components/ui/sheet';
 import { Dashboard } from './components/Dashboard';
 import { FichaClimatica } from './components/FichaClimatica';
 
@@ -34,6 +35,7 @@ import { initTheme } from './lib/theme';
 export default function App() {
   const [fichaParams, setFichaParams] = useState(parseFichaHash);
   const [currentView, setCurrentView] = useState(() => (parseFichaHash() ? 'ficha' : 'dashboard'));
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [runtime, setRuntime] = useState<ExtractorRuntimeState>({
     isBusy: false,
     activeTask: 'Esperando configuración',
@@ -128,8 +130,24 @@ export default function App() {
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar currentView={currentView} onNavigate={navigate} />
+
+      <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+        <SheetContent side="left" className="w-72 border-r border-[#8a1216] bg-[#A3161A] p-0 text-white [&>button]:text-white">
+          <SheetTitle className="sr-only">Navegación</SheetTitle>
+          <div className="flex h-full flex-col">
+            <SidebarContent
+              currentView={currentView}
+              onNavigate={(view) => {
+                navigate(view);
+                setMobileNavOpen(false);
+              }}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
+
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <Navbar breadcrumbs={getBreadcrumbs()} runtime={runtime} onNavigate={navigate} />
+        <Navbar breadcrumbs={getBreadcrumbs()} runtime={runtime} onNavigate={navigate} onOpenMobileNav={() => setMobileNavOpen(true)} />
         <main className="flex-1 overflow-y-auto p-4 md:p-6 scrollbar-thin scrollbar-track-transparent">
           <div className={currentView === 'extractor' ? 'block' : 'hidden'}>
             <DataExtractor onRuntimeChange={setRuntime} />

@@ -9,26 +9,36 @@ interface SidebarProps {
   onNavigate: (view: string) => void;
 }
 
-export function Sidebar({ currentView, onNavigate }: SidebarProps) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+const MENU_ITEMS = [
+  { id: 'dashboard', icon: BarChart3, label: 'Dashboard' },
+  { id: 'analytics', icon: TrendingUp, label: 'Analítica' },
+  { id: 'map', icon: MapPin, label: 'Mapa de Estaciones' },
+  { id: 'compare', icon: GitCompareArrows, label: 'Comparador' },
+  { id: 'ficha', icon: Building2, label: 'Ficha Climática' },
+  { id: 'hydro', icon: Droplets, label: 'Hidrología' },
+  { id: 'asistente', icon: Sparkles, label: 'Asistente' },
+  { id: 'extractor', icon: Database, label: 'Extractor de Datos' },
+  { id: 'history', icon: Download, label: 'Historial' },
+  { id: 'status', icon: Activity, label: 'Estado del Espejo' },
+  { id: 'settings', icon: Settings, label: 'Ajustes de API' },
+  { id: 'docs', icon: FileText, label: 'Documentación' },
+];
 
-  const menuItems = [
-    { id: 'dashboard', icon: BarChart3, label: 'Dashboard' },
-    { id: 'analytics', icon: TrendingUp, label: 'Analítica' },
-    { id: 'map', icon: MapPin, label: 'Mapa de Estaciones' },
-    { id: 'compare', icon: GitCompareArrows, label: 'Comparador' },
-    { id: 'ficha', icon: Building2, label: 'Ficha Climática' },
-    { id: 'hydro', icon: Droplets, label: 'Hidrología' },
-    { id: 'asistente', icon: Sparkles, label: 'Asistente' },
-    { id: 'extractor', icon: Database, label: 'Extractor de Datos' },
-    { id: 'history', icon: Download, label: 'Historial' },
-    { id: 'status', icon: Activity, label: 'Estado del Espejo' },
-    { id: 'settings', icon: Settings, label: 'Ajustes de API' },
-    { id: 'docs', icon: FileText, label: 'Documentación' },
-  ];
-
+// Contenido del sidebar reutilizable: lo usa el sidebar fijo de escritorio y el
+// drawer (Sheet) en móvil. `onToggleCollapse` solo aplica en escritorio.
+export function SidebarContent({
+  currentView,
+  onNavigate,
+  isCollapsed = false,
+  onToggleCollapse,
+}: {
+  currentView: string;
+  onNavigate: (view: string) => void;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
+}) {
   return (
-    <div className={`${isCollapsed ? 'w-20' : 'w-72'} h-screen bg-[#A3161A] border-r border-[#8a1216] flex flex-col flex-shrink-0 transition-all duration-300`}>
+    <>
       <div className="p-6 border-b border-[#8a1216] relative">
         {!isCollapsed ? (
           <div className="space-y-3">
@@ -44,21 +54,23 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
           </div>
         )}
 
-        <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="absolute -right-3 top-8 w-6 h-6 bg-[#C9A227] rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform z-10"
-          title={isCollapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
-        >
-          {isCollapsed ? (
-            <ChevronRight className="w-4 h-4 text-[#0f0f0f]" />
-          ) : (
-            <ChevronLeft className="w-4 h-4 text-[#0f0f0f]" />
-          )}
-        </button>
+        {onToggleCollapse && (
+          <button
+            onClick={onToggleCollapse}
+            className="absolute -right-3 top-8 w-6 h-6 bg-[#C9A227] rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform z-10"
+            title={isCollapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
+          >
+            {isCollapsed ? (
+              <ChevronRight className="w-4 h-4 text-[#0f0f0f]" />
+            ) : (
+              <ChevronLeft className="w-4 h-4 text-[#0f0f0f]" />
+            )}
+          </button>
+        )}
       </div>
 
-      <nav className="flex-1 p-4 space-y-2">
-        {menuItems.map((item) => {
+      <nav className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-thin">
+        {MENU_ITEMS.map((item) => {
           const Icon = item.icon;
           const isActive = currentView === item.id;
 
@@ -92,6 +104,23 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
           </div>
         )}
       </div>
+    </>
+  );
+}
+
+// Sidebar fijo de escritorio. En móvil (<lg) se oculta; la navegación móvil se
+// abre como drawer (Sheet) desde el Navbar (ver App.tsx).
+export function Sidebar({ currentView, onNavigate }: SidebarProps) {
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
+  return (
+    <div className={`${isCollapsed ? 'w-20' : 'w-72'} h-screen bg-[#A3161A] border-r border-[#8a1216] hidden lg:flex flex-col flex-shrink-0 transition-all duration-300`}>
+      <SidebarContent
+        currentView={currentView}
+        onNavigate={onNavigate}
+        isCollapsed={isCollapsed}
+        onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
+      />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { Sun, Moon, Monitor, HelpCircle, User, ChevronRight, History, Trash2 } from 'lucide-react';
+import { Sun, Moon, Monitor, HelpCircle, User, ChevronRight, History, Trash2, Menu } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ExtractorRuntimeState } from './DataExtractor';
 import {
@@ -30,6 +30,7 @@ interface NavbarProps {
   breadcrumbs: string[];
   runtime: ExtractorRuntimeState;
   onNavigate: (view: string) => void;
+  onOpenMobileNav: () => void;
 }
 
 function formatDuration(value: number) {
@@ -57,7 +58,7 @@ function resolveQuickToggle(current: ThemeChoice): ThemeChoice {
   return isDarkNow ? 'light' : 'dark';
 }
 
-export function Navbar({ breadcrumbs, runtime, onNavigate }: NavbarProps) {
+export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMobileNav }: NavbarProps) {
   const [theme, setTheme] = useState<ThemeChoice>(getThemeChoice);
   const [downloadCount, setDownloadCount] = useState(0);
 
@@ -76,6 +77,14 @@ export function Navbar({ breadcrumbs, runtime, onNavigate }: NavbarProps) {
   return (
     <div className="relative flex min-h-16 items-center justify-between gap-3 border-b border-border bg-card px-4 backdrop-blur-sm md:px-6">
       <div className="min-w-0 flex items-center gap-2 overflow-hidden text-sm">
+        <button
+          type="button"
+          onClick={onOpenMobileNav}
+          className="shrink-0 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-accent lg:hidden"
+          aria-label="Abrir menú de navegación"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
         {breadcrumbs.map((crumb, index) => (
           <div key={index} className="flex min-w-0 items-center gap-2">
             {index > 0 && <ChevronRight className="h-4 w-4 shrink-0 text-border" />}
