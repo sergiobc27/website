@@ -3,16 +3,17 @@ import { BookOpen, CheckCircle2, Cloud, Database, FileArchive, KeyRound, ShieldC
 import { Sidebar } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
 import { Dashboard } from './components/Dashboard';
-import { Analytics } from './components/Analytics';
-import { EstadoEspejo } from './components/EstadoEspejo';
-import { ComparadorEstaciones } from './components/ComparadorEstaciones';
 import { FichaClimatica } from './components/FichaClimatica';
-import { Hidrologia } from './components/Hidrologia';
-import { BibliotecaReferencias } from './components/BibliotecaReferencias';
-import { Asistente } from './components/Asistente';
 
-// El mapa carga MapLibre (~220KB gzip): lazy para no engordar el bundle inicial.
+// Vistas no iniciales: lazy para aligerar el bundle inicial (Dashboard y la
+// Ficha —que puede abrirse por hash compartible— se mantienen estáticas).
 const MapaEstaciones = lazy(() => import('./components/MapaEstaciones'));
+const Analytics = lazy(() => import('./components/Analytics').then((m) => ({ default: m.Analytics })));
+const EstadoEspejo = lazy(() => import('./components/EstadoEspejo').then((m) => ({ default: m.EstadoEspejo })));
+const ComparadorEstaciones = lazy(() => import('./components/ComparadorEstaciones').then((m) => ({ default: m.ComparadorEstaciones })));
+const Hidrologia = lazy(() => import('./components/Hidrologia').then((m) => ({ default: m.Hidrologia })));
+const BibliotecaReferencias = lazy(() => import('./components/BibliotecaReferencias').then((m) => ({ default: m.BibliotecaReferencias })));
+const Asistente = lazy(() => import('./components/Asistente').then((m) => ({ default: m.Asistente })));
 
 // La ficha municipal es compartible: #/ficha/DEPARTAMENTO/MUNICIPIO.
 function parseFichaHash(): { department: string; municipality: string } | null {
@@ -96,11 +97,7 @@ export default function App() {
       case 'analytics':
         return <Analytics />;
       case 'map':
-        return (
-          <Suspense fallback={<p className="text-muted-foreground text-sm">Cargando mapa...</p>}>
-            <MapaEstaciones />
-          </Suspense>
-        );
+        return <MapaEstaciones />;
       case 'compare':
         return <ComparadorEstaciones />;
       case 'hydro':
@@ -137,7 +134,11 @@ export default function App() {
           <div className={currentView === 'extractor' ? 'block' : 'hidden'}>
             <DataExtractor onRuntimeChange={setRuntime} />
           </div>
-          {currentView !== 'extractor' && renderContent()}
+          {currentView !== 'extractor' && (
+            <Suspense fallback={<div className="flex h-full items-center justify-center text-muted-foreground text-sm">Cargando…</div>}>
+              {renderContent()}
+            </Suspense>
+          )}
         </main>
       </div>
       <Toaster richColors position="bottom-right" />
