@@ -23,19 +23,34 @@ const RANGO = { verde: 3, amarillo: 2, rojo: 1 };
 // OJO: en el catálogo real `fiabilidad` es un objeto {level, reasons...}, no un string.
 const nivel = (s) => (s.fiabilidad && typeof s.fiabilidad === "object" ? s.fiabilidad.level : s.fiabilidad) || null;
 const cat = await getJson("/api/analytics/idf-stations");
-const candidatas = (cat.stations || []).filter((s) => s.aniosValidos >= 5);
+const candidatas = (cat.stations || [])
+  .filter((s) => s.aniosValidos >= 5)
+  .sort(
+    (a, b) => (RANGO[nivel(b)] || 0) - (RANGO[nivel(a)] || 0)
+      || (b.aniosValidos - a.aniosValidos) || a.codigo.localeCompare(b.codigo),
+  );
 if (!candidatas.length) throw new Error("Catálogo IDF vacío.");
-const est = candidatas.sort(
-  (a, b) => (RANGO[nivel(b)] || 0) - (RANGO[nivel(a)] || 0)
-    || (b.aniosValidos - a.aniosValidos) || a.codigo.localeCompare(b.codigo),
-)[0];
+
+// 2) Curvas: probar candidatas (en orden de mérito) hasta hallar una con curvas
+// RICAS (>=5 duraciones) — con 3 puntos por curva la escena de las curvas no luce.
+let est = null;
+let idf = null;
+for (const cand of candidatas.slice(0, 15)) {
+  const i = await getJson("/api/analytics/idf", porEstacion(cand.codigo));
+  // Cuenta las duraciones que las curvas MATERIALIZAN (durations puede declarar
+  // una grilla mayor a la que los datos soportan).
+  const nDur = i.curves && i.curves[0] ? new Set(i.curves[0].points.map((p) => p.durMin)).size : 0;
+  if (i.available && i.curves?.length && nDur >= 5) {
+    est = cand;
+    idf = i;
+    break;
+  }
+  console.log(`  descartada ${cand.codigo} (${cand.nombre}): ${nDur} duraciones`);
+}
+if (!est) throw new Error("Ninguna candidata del top 15 tiene curvas con >=5 duraciones; revisar a mano.");
 console.log("Fiabilidad de la elegida:", nivel(est) || "sin calcular");
 console.log("Estación demo:", est.codigo, est.nombre, `(${est.municipio}, ${est.departamento})`, est.aniosValidos, "años");
-
-// 2) Análisis de frecuencia + curvas.
 const rp = await getJson("/api/analytics/return-periods", porEstacion(est.codigo));
-const idf = await getJson("/api/analytics/idf", porEstacion(est.codigo));
-if (!idf.available || !idf.curves?.length) throw new Error("La estación no tiene curvas IDF disponibles.");
 if (!rp.stationYears?.length) throw new Error("return-periods sin stationYears.");
 
 // 3) Día de la tormenta: el día de mayor lámina del año con el máximo más alto.
