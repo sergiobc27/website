@@ -1,4 +1,4 @@
-﻿# AGENTS.md - IDEAM Hydrology Data Automator
+# AGENTS.md - IDEAM Hydrology Data Automator
 
 ## Purpose
 
@@ -64,7 +64,6 @@ Do not break these rules without explicit user approval.
 | File | Purpose |
 | --- | --- |
 | `src/worker/index.js` | Main Cloudflare Worker API, Socrata queries, export jobs, ZIP generation, catalog cache handling. |
-| `src/worker/catalogConfig.js` | Dataset configuration, variable metadata, Socrata dataset IDs, field mappings, department normalization. |
 | `src/shared/ideamContracts.ts` | Shared frontend/backend contracts and types. |
 | `src/app/lib/ideamApi.ts` | Frontend API client for the Worker endpoints. |
 | `src/app/components/DataExtractor.tsx` | Main extraction workflow UI. |
@@ -74,7 +73,6 @@ Do not break these rules without explicit user approval.
 | `src/app/components/Sidebar.tsx` | Sidebar navigation. |
 | `wrangler.jsonc` | Cloudflare Worker, R2, Durable Object, vars, and cron configuration. |
 | `.github/workflows/deploy-ideam.yml` | CI/CD workflow for build, deploy, catalog warm, and smoke tests. |
-| `cloudflare/r2-lifecycle.json` | Lifecycle policy for temporary R2 objects. |
 | `scripts/warm-catalog-bundles.mjs` | Script for warming catalog cache. |
 | `tests/worker.test.mjs` | Worker unit tests. |
 | `tests/e2e/ideam-production.spec.ts` | Production smoke/e2e checks. |
@@ -292,7 +290,6 @@ Before editing:
 When editing:
 
 - Follow existing code style.
-- Keep dataset configuration centralized in `catalogConfig.js` where possible.
 - Keep API contracts explicit in `ideamContracts.ts` when shared with frontend.
 - Avoid duplicating normalization logic in frontend and backend.
 - Do not add new dependencies unless they solve a real problem and work in Cloudflare Workers.

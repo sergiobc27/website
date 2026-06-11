@@ -89,6 +89,9 @@ export default {
       const upstream = new URL(url.pathname + url.search, env.API_ORIGIN);
       const headers = new Headers(request.headers);
       headers.set("host", upstream.host);
+      // Nunca dejar pasar un secreto falsificado por el cliente: se elimina
+      // SIEMPRE, incluso si el Worker no tiene el secreto configurado.
+      headers.delete("x-ideam-proxy-secret");
       if (env.IDEAM_PROXY_SECRET) {
         headers.set("x-ideam-proxy-secret", env.IDEAM_PROXY_SECRET);
       }
@@ -371,29 +374,62 @@ async function verifyTurnstile(token, ip, secret) {
   return data.success === true;
 }
 
+// KV admite ~1 escritura/segundo por clave: bajo ráfaga el put rechaza la
+// promesa y sin esto la excepción tumbaba la request con un 500 (hallazgo de
+// auditoría). El rate-limit falla ABIERTO en el conteo, nunca rompe el flujo.
+async function kvPutSafe(env, key, value, expirationTtl) {
+  try {
+    await env.EMAIL_RL.put(key, value, { expirationTtl });
+  } catch {
+    /* contar de menos un hit es aceptable; tumbar la request no */
+  }
+}
+
 // Rate-limit genérico en KV: contador horario por IP (TTL 1h) + tope GLOBAL
 // diario (TTL 24h) como backstop contra rotación de IP. `prefix` aísla los
 // contadores por feature (correo vs chat). Si no hay binding KV, no limita.
-async function kvRateLimited(env, prefix, perHour, perDay, ip) {
+// `commitGlobal: false` solo CHEQUEA el tope global sin consumirlo (el correo
+// lo consume después de validar la estación, vía bumpGlobalDay).
+async function kvRateLimited(env, prefix, perHour, perDay, ip, commitGlobal = true) {
   if (!env.EMAIL_RL) return false;
 
-  const gKey = `${prefix}:global:day`;
-  const gCount = Number((await env.EMAIL_RL.get(gKey)) || "0");
-  if (gCount >= perDay) return true;
+  try {
+    const gKey = `${prefix}:global:day`;
+    const gCount = Number((await env.EMAIL_RL.get(gKey)) || "0");
+    if (gCount >= perDay) return true;
 
-  if (ip) {
-    const key = `${prefix}:ip:${ip}`;
-    const current = Number((await env.EMAIL_RL.get(key)) || "0");
-    if (current >= perHour) return true;
-    await env.EMAIL_RL.put(key, String(current + 1), { expirationTtl: 3600 });
+    if (ip) {
+      const key = `${prefix}:ip:${ip}`;
+      const current = Number((await env.EMAIL_RL.get(key)) || "0");
+      if (current >= perHour) return true;
+      await kvPutSafe(env, key, String(current + 1), 3600);
+    }
+
+    if (commitGlobal) await kvPutSafe(env, gKey, String(gCount + 1), 86400);
+    return false;
+  } catch {
+    // KV indisponible: fallar abierto (el tope duro real son las cuotas free
+    // de Resend/Workers AI; preferimos servir a tumbar el endpoint).
+    return false;
   }
+}
 
-  await env.EMAIL_RL.put(gKey, String(gCount + 1), { expirationTtl: 86400 });
-  return false;
+// Consume 1 unidad del tope global diario (para flujos que validan ANTES de
+// gastar cupo, como el correo: una estación inválida ya no quema los 100/día).
+async function bumpGlobalDay(env, prefix) {
+  if (!env.EMAIL_RL) return;
+  try {
+    const gKey = `${prefix}:global:day`;
+    const gCount = Number((await env.EMAIL_RL.get(gKey)) || "0");
+    await kvPutSafe(env, gKey, String(gCount + 1), 86400);
+  } catch {
+    /* fallar abierto */
+  }
 }
 
 // Correo: tope relajado + backstop global alineado al límite gratis de Resend.
-const emailRateLimited = (env, ip) => kvRateLimited(env, "rl", RL_MAX_PER_HOUR, RL_GLOBAL_PER_DAY, ip);
+// commitGlobal=false: el cupo global se consume tras validar la estación.
+const emailRateLimited = (env, ip) => kvRateLimited(env, "rl", RL_MAX_PER_HOUR, RL_GLOBAL_PER_DAY, ip, false);
 // Chat (Workers AI): protege la cuota diaria de neurons del tier gratis.
 const chatRateLimited = (env, ip) => kvRateLimited(env, "rlc", CHAT_RL_PER_HOUR, CHAT_GLOBAL_PER_DAY, ip);
 
@@ -528,6 +564,9 @@ async function handleEmailIdf(request, env) {
     return emailJson({ error: "No se pudo generar el PDF." }, 500);
   }
   const filename = `curva-idf-${slugCode(station.nombre) || stationCode}.pdf`;
+
+  // Ya pasó todas las validaciones: ahora sí consume cupo global del día.
+  await bumpGlobalDay(env, "rl");
 
   const resp = await fetch("https://api.resend.com/emails", {
     method: "POST",

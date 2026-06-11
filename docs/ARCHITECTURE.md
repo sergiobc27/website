@@ -17,7 +17,6 @@
 ## Main Modules
 
 - `src/worker/index.js`: Worker routes, Socrata queries, export planning, Durable Objects.
-- `src/worker/catalogConfig.js`: dataset, department and catalog-filter definitions.
 - `src/shared/ideamContracts.ts`: shared frontend API response contracts.
 - `src/app/components/DataExtractor.tsx`: current extraction workflow UI.
 - `src/app/lib/ideamApi.ts`: frontend API client and JSON/error handling.
