@@ -189,7 +189,11 @@ async function datoPuntual(env, intent) {
   const serie = (r.points || [])
     .filter((p) => p.value !== null)
     .slice(-10)
-    .map((p) => ({ anio: Number(String(p.bucket).slice(0, 4)), valor: Math.round(p.value * 10) / 10 }));
+    .map((p) => ({
+      anio: Number(String(p.bucket).slice(0, 4)),
+      valor: Math.round(p.value * 10) / 10,
+      observaciones: p.n || 0,
+    }));
   if (!serie.length) {
     return { ok: false, errorTipo: "sin_datos", lugar: lugar.municipio || lugar.departamento || "Colombia" };
   }
@@ -408,7 +412,7 @@ export function promptDeDatos(resultado) {
   if (resultado.ok) {
     return `DATOS REALES DEL ESPEJO DE DATOS (única fuente válida de cifras para esta respuesta; NO uses ningún número que no esté aquí; preséntalos en formato es-CO con coma decimal):
 ${JSON.stringify(resultado.datos)}
-Si el dato pedido no está en este bloque, dilo con franqueza y remite a la pestaña adecuada. Si "fiabilidad.nivel" es "rojo", advierte que la serie es poco confiable y resume los motivos.`;
+Si el dato pedido no está en este bloque, dilo con franqueza y remite a la pestaña adecuada. Si "fiabilidad.nivel" es "rojo", advierte que la serie es poco confiable y resume los motivos. Si "observaciones" de un año luce bajo para la variable (la precipitación se mide cada 10 minutos: un año completo de UNA estación ronda 50.000 observaciones), advierte que la cobertura de ese año es PARCIAL y el total puede subestimar la realidad. RECUERDA: el "💡 Dato curioso" final debe salir SOLO de tu lista verificada de DATOS CURIOSOS — NUNCA inventes cifras climáticas del lugar consultado (contradirías los datos reales de arriba).`;
   }
   const sugerencias = resultado.sugerencias && resultado.sugerencias.length
     ? `; lugares parecidos: ${resultado.sugerencias.join(", ")}`
