@@ -536,8 +536,9 @@ async function handleEmailIdf(request, env) {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      from: "Curvas IDF <noreply@sergiobc.com>",
+      from: "IDEAM · Curvas IDF <contacto@sergiobc.com>",
       to: to.trim(),
+      reply_to: "sergiobeltrancoley@gmail.com",
       subject: `Tus curvas IDF · ${station.nombre} — ideam.sergiobc.com`,
       html: emailHtml(station.nombre, station.codigo, filename),
       attachments: [{ filename, content: u8ToBase64(pdfBytes) }],
