@@ -3,6 +3,7 @@ node_modules/
 .dev.vars
 .env
 .env.local
+.secrets.local
 dist/
 playwright-report/
 test-results/
