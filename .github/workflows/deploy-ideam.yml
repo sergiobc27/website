@@ -51,6 +51,8 @@ jobs:
         run: npm audit --omit=dev
 
       - name: Build frontend
+        env:
+          VITE_TURNSTILE_SITE_KEY: ${{ secrets.TURNSTILE_SITE_KEY }}
         run: npm run build
 
       - name: Validate Worker bundle (dry-run)
@@ -92,6 +94,8 @@ jobs:
 
       - name: Build frontend
         if: steps.cloudflare_secrets.outputs.ready == 'true'
+        env:
+          VITE_TURNSTILE_SITE_KEY: ${{ secrets.TURNSTILE_SITE_KEY }}
         run: npm run build
 
       # El Worker-proxy autentica contra la API propia con este secreto.
@@ -107,6 +111,26 @@ jobs:
             printf '%s' "$PROXY_SECRET" | npx wrangler secret put IDEAM_PROXY_SECRET
           else
             echo "IDEAM_PROXY_SECRET no esta en los secrets del repo; se omite (la API rechazara las llamadas)."
+          fi
+
+      # Secretos del envio de correo (Resend) y del anti-bot (Turnstile). Como
+      # IDEAM_PROXY_SECRET: se sincronizan antes del deploy y sobreviven a este.
+      - name: Sincronizar secretos de correo (Resend + Turnstile)
+        if: steps.cloudflare_secrets.outputs.ready == 'true'
+        shell: bash
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
+        run: |
+          if [[ -n "$RESEND_API_KEY" ]]; then
+            printf '%s' "$RESEND_API_KEY" | npx wrangler secret put RESEND_API_KEY
+          else
+            echo "RESEND_API_KEY no esta en los secrets del repo; el envio de correo respondera 502."
+          fi
+          if [[ -n "$TURNSTILE_SECRET_KEY" ]]; then
+            printf '%s' "$TURNSTILE_SECRET_KEY" | npx wrangler secret put TURNSTILE_SECRET_KEY
+          else
+            echo "TURNSTILE_SECRET_KEY no esta en los secrets del repo; el envio de correo respondera 403."
           fi
 
       - name: Deploy to Cloudflare
