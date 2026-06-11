@@ -4,7 +4,7 @@
 // 'asistente' ya NO es una vista: el Asistente vive en el widget flotante
 // (AsistenteFlotante); la URL vieja /asistente la migra un shim en App.
 export const VIEWS = [
-  'dashboard', 'analytics', 'map', 'compare', 'ficha', 'hydro',
+  'dashboard', 'analytics', 'map', 'compare', 'ficha', 'hydro', 'historia',
   'status', 'extractor', 'history', 'settings', 'docs',
 ] as const;
 

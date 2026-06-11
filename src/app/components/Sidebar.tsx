@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Activity, Building2, Database, Download, Droplets, Settings, FileText, BarChart3, ChevronLeft, ChevronRight, GitCompareArrows, MapPin, Sparkles, TrendingUp } from 'lucide-react';
+import { Activity, BookOpenText, Building2, Database, Download, Droplets, Settings, FileText, BarChart3, ChevronLeft, ChevronRight, GitCompareArrows, MapPin, Sparkles, TrendingUp } from 'lucide-react';
 import logoVertical from "../../imports/Logo_CUC_PNG_letra_blanca_barra_roja_vtcal.png";
 import logoCollapsed from "../../imports/u.png";
 import logoIdeam from "../../imports/Ideam_(Colombia)_logo.png";
@@ -21,6 +21,7 @@ const MENU_SECTIONS = [
       { id: 'compare', icon: GitCompareArrows, label: 'Comparador' },
       { id: 'ficha', icon: Building2, label: 'Ficha Climática' },
       { id: 'hydro', icon: Droplets, label: 'Hidrología' },
+      { id: 'historia', icon: BookOpenText, label: 'La historia del dato' },
     ],
   },
   {

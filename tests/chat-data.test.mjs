@@ -219,6 +219,11 @@ test("SUGERENCIAS_PROMPT existe y menciona el formato", () => {
   assert.equal(SUGERENCIAS_PROMPT.includes(">>>SUGERENCIAS"), true);
 });
 
+test("VISTA_LABELS incluye la vista historia (contexto del asistente)", async () => {
+  const { VISTA_LABELS } = await import("../src/worker/chatData.js");
+  assert.equal(VISTA_LABELS.historia, "La historia del dato");
+});
+
 test("limpiarFugasDeJson elimina líneas que transcriben el bloque interno", async () => {
   const { limpiarFugasDeJson } = await import("../src/worker/chatData.js");
   const sucio = 'La lluvia fue 9 mm.\n\n📚 Referencia: {"tipo":"dato_puntual","serie":[{"anio":2023}]}\n\n💡 Dato curioso: algo.';

@@ -365,6 +365,7 @@ export const VISTA_LABELS = {
   compare: "Comparador",
   ficha: "Ficha Climática",
   hydro: "Hidrología",
+  historia: "La historia del dato",
   status: "Estado del Espejo",
   extractor: "Extractor de Datos",
   history: "Historial",
