@@ -266,6 +266,48 @@ async function estadoPlataforma(env) {
   };
 }
 
+export const SUGERENCIAS_PROMPT = `ÚLTIMA LÍNEA OBLIGATORIA (para la interfaz, invisible al usuario): termina SIEMPRE tu respuesta con una línea EXACTAMENTE así:
+>>>SUGERENCIAS: ["pregunta 1", "pregunta 2", "pregunta 3"]
+con 2 o 3 preguntas de seguimiento cortas (máximo 80 caracteres cada una) que el usuario podría hacerte a continuación, coherentes con la conversación y SIEMPRE dentro de tu alcance (hidrología, los datos del IDEAM o el uso de la plataforma). No menciones, expliques ni comentes esta línea: solo escríbela al final.`;
+
+// Quita la(s) línea(s) ">>>..." del final del reply y devuelve las sugerencias
+// saneadas. Robusto ante un modelo desobediente: sin marker -> [], JSON roto -> [].
+export function extraerSugerencias(raw) {
+  const text = String(raw || "");
+  const lines = text.split("\n");
+  const idx = lines.findIndex((l) => l.trim().startsWith(">>>"));
+  if (idx === -1) return { reply: text.trim(), suggestions: [] };
+  const reply = lines.slice(0, idx).join("\n").trim();
+  let suggestions = [];
+  const m = lines.slice(idx).join("\n").match(/\[[\s\S]*?\]/);
+  if (m) {
+    try {
+      const parsed = JSON.parse(m[0]);
+      if (Array.isArray(parsed)) {
+        suggestions = parsed
+          .filter((s) => typeof s === "string" && s.trim())
+          .map((s) => s.trim().slice(0, 80))
+          .slice(0, 3);
+      }
+    } catch {
+      /* JSON roto -> sin sugerencias; el fallback decide */
+    }
+  }
+  return { reply, suggestions };
+}
+
+const FALLBACKS = {
+  dato_puntual: ["¿Y cómo se compara con el año anterior?", "¿Cuál es la estación más cercana con curvas IDF?", "¿Dónde veo la serie completa en la plataforma?"],
+  idf_tr: ["¿Qué tan confiable es la serie de esa estación?", "¿Cómo uso esa intensidad en el método racional?", "¿Qué advierte la norma RAS sobre el Tr de diseño?"],
+  ranking: ["¿Y el top de estaciones de un departamento?", "¿Por qué llueve tanto en el Pacífico?", "¿Cómo exporto esos datos?"],
+  estado_plataforma: ["¿Cada cuánto se actualizan los datos?", "¿Cuántas estaciones tienen curvas IDF?", "¿De dónde vienen los datos?"],
+  conceptual: ["¿Qué es un período de retorno?", "¿Cómo interpreto una curva IDF?", "¿Cuánto llovió en mi ciudad el año pasado?"],
+};
+
+export function sugerenciasFallback(intent) {
+  return FALLBACKS[(intent && intent.intent) || "conceptual"] || FALLBACKS.conceptual;
+}
+
 // Acepta el resultado del extractor venga como venga (objeto, JSON string o
 // JSON embebido en prosa) y lo reduce a un intent SANEADO o null.
 export function parseIntentJson(raw) {

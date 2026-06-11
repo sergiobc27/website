@@ -10,6 +10,9 @@ import {
   resolverLugar,
   elegirEstacion,
   consultarDatos,
+  extraerSugerencias,
+  sugerenciasFallback,
+  SUGERENCIAS_PROMPT,
 } from "../src/worker/chatData.js";
 
 const CATALOGO = {
@@ -170,6 +173,32 @@ test("consultarDatos ranking nacional usa by-region", async () => {
   const r = await consultarDatos(env, { intent: "ranking", lugar: null, departamento: null, variable: "precipitacion", anioDesde: null, anioHasta: null, tr: null, topN: 2 });
   assert.equal(r.ok, true);
   assert.equal(r.datos.ranking[0].nombre, "CHOCO");
+});
+
+test("extraerSugerencias separa la línea >>> y la elimina del reply", () => {
+  const raw = 'La lluvia fue de 823 mm.\n\n>>>SUGERENCIAS: ["¿Y en 2022?", "¿Top 5 de estaciones?"]';
+  const { reply, suggestions } = extraerSugerencias(raw);
+  assert.equal(reply, "La lluvia fue de 823 mm.");
+  assert.deepEqual(suggestions, ["¿Y en 2022?", "¿Top 5 de estaciones?"]);
+});
+
+test("extraerSugerencias sanea: máx 3, ≤80 chars, solo strings, y tolera basura", () => {
+  const raw = `ok\n>>>SUGERENCIAS: ["a","b","c","d", 5, "${"x".repeat(200)}"]`;
+  const { suggestions } = extraerSugerencias(raw);
+  assert.equal(suggestions.length, 3);
+  const malo = "ok\n>>>SUGERENCIAS: esto no es json";
+  assert.deepEqual(extraerSugerencias(malo), { reply: "ok", suggestions: [] });
+  assert.deepEqual(extraerSugerencias("sin marker"), { reply: "sin marker", suggestions: [] });
+});
+
+test("sugerenciasFallback varía por intent y siempre devuelve 2-3", () => {
+  assert.equal(sugerenciasFallback({ intent: "dato_puntual" }).length >= 2, true);
+  assert.equal(sugerenciasFallback({ intent: "idf_tr" }).length >= 2, true);
+  assert.equal(sugerenciasFallback(null).length >= 2, true);
+});
+
+test("SUGERENCIAS_PROMPT existe y menciona el formato", () => {
+  assert.equal(SUGERENCIAS_PROMPT.includes(">>>SUGERENCIAS"), true);
 });
 
 test("elegirEstacion prefiere fiabilidad verde y más años", () => {
