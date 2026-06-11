@@ -339,6 +339,7 @@ async function handleChat(request, env) {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const RL_MAX_PER_HOUR = 15;                  // tope relajado por IP
+const RL_GLOBAL_PER_DAY = 100;               // backstop global (límite gratis de Resend)
 const MAX_PDF_B64_BYTES = 4 * 1024 * 1024;   // ~4 MB de base64
 
 function emailJson(obj, status) {
@@ -362,14 +363,35 @@ async function verifyTurnstile(token, ip, secret) {
   return data.success === true;
 }
 
-// Rate-limit simple por IP: contador horario en KV con TTL de 1h.
+// Rate-limit en KV: contador horario por IP (TTL 1h) + tope GLOBAL diario
+// (TTL 24h) como backstop contra rotación de IP / phishing-as-a-service. El
+// tope global se alinea con el límite gratuito de Resend (100/día).
 async function emailRateLimited(env, ip) {
-  if (!env.EMAIL_RL || !ip) return false;
-  const key = `rl:ip:${ip}`;
-  const current = Number((await env.EMAIL_RL.get(key)) || "0");
-  if (current >= RL_MAX_PER_HOUR) return true;
-  await env.EMAIL_RL.put(key, String(current + 1), { expirationTtl: 3600 });
+  if (!env.EMAIL_RL) return false;
+
+  // Tope global diario primero (no depende de la IP).
+  const gKey = "rl:global:day";
+  const gCount = Number((await env.EMAIL_RL.get(gKey)) || "0");
+  if (gCount >= RL_GLOBAL_PER_DAY) return true;
+
+  // Tope por IP/hora.
+  if (ip) {
+    const key = `rl:ip:${ip}`;
+    const current = Number((await env.EMAIL_RL.get(key)) || "0");
+    if (current >= RL_MAX_PER_HOUR) return true;
+    await env.EMAIL_RL.put(key, String(current + 1), { expirationTtl: 3600 });
+  }
+
+  await env.EMAIL_RL.put(gKey, String(gCount + 1), { expirationTtl: 86400 });
   return false;
+}
+
+// Escapa HTML para impedir inyección/phishing en el cuerpo del correo: los
+// campos vienen del cliente y el correo sale desde nuestro dominio verificado.
+function escHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
 }
 
 function emailHtml(stationName, stationCode, filename) {
@@ -383,8 +405,8 @@ function emailHtml(stationName, stationCode, filename) {
     <div style="padding:24px">
       <p>Hola,</p>
       <p>Adjunto encontrar&aacute;s el PDF con las curvas Intensidad-Duraci&oacute;n-Frecuencia
-      de la estaci&oacute;n <strong>${stationName}</strong> (${stationCode}), solicitadas en la plataforma.</p>
-      <p style="color:#595959">&#128206; ${filename}</p>
+      de la estaci&oacute;n <strong>${escHtml(stationName)}</strong> (${escHtml(stationCode)}), solicitadas en la plataforma.</p>
+      <p style="color:#595959">&#128206; ${escHtml(filename)}</p>
     </div>
     <div style="border-top:1px solid #e5e5e5;padding:16px 24px;font-size:12px;color:#595959">
       <a href="https://ideam.sergiobc.com" style="color:#A3161A;text-decoration:none">ideam.sergiobc.com</a><br/>
@@ -408,7 +430,22 @@ async function handleEmailIdf(request, env) {
   if (typeof to !== "string" || !EMAIL_RE.test(to.trim())) {
     return emailJson({ error: "Correo inválido." }, 400);
   }
-  if (typeof pdfBase64 !== "string" || pdfBase64.length === 0 || pdfBase64.length > MAX_PDF_B64_BYTES) {
+  if (
+    typeof pdfBase64 !== "string" ||
+    pdfBase64.length === 0 ||
+    pdfBase64.length > MAX_PDF_B64_BYTES ||
+    !/^[A-Za-z0-9+/=]+$/.test(pdfBase64)
+  ) {
+    return emailJson({ error: "Adjunto inválido." }, 400);
+  }
+  // El adjunto debe ser un PDF de verdad: verificamos los magic bytes "%PDF-".
+  let head;
+  try {
+    head = atob(pdfBase64.slice(0, 8));
+  } catch {
+    return emailJson({ error: "Adjunto inválido." }, 400);
+  }
+  if (!head.startsWith("%PDF-")) {
     return emailJson({ error: "Adjunto inválido." }, 400);
   }
   const ip = request.headers.get("cf-connecting-ip");
@@ -421,9 +458,13 @@ async function handleEmailIdf(request, env) {
     return emailJson({ error: "Demasiados envíos. Intenta más tarde." }, 429);
   }
 
-  const safeName = typeof stationName === "string" && stationName ? stationName : "estación";
-  const safeCode = typeof stationCode === "string" ? stationCode : "";
-  const safeFile = typeof filename === "string" && filename.endsWith(".pdf") ? filename : "curva-idf.pdf";
+  // Saneo de los campos del cliente: sin saltos de línea/control (clave para el
+  // subject), longitud acotada; el escapado HTML lo hace emailHtml(). El filename
+  // se restringe a un patrón seguro (sin / ni caracteres de HTML/ruta).
+  const clean = (v, max) => (typeof v === "string" ? v : "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, max);
+  const safeName = clean(stationName, 120) || "estación";
+  const safeCode = clean(stationCode, 40);
+  const safeFile = typeof filename === "string" && /^[\w.\-]+\.pdf$/.test(filename) ? filename : "curva-idf.pdf";
 
   const resp = await fetch("https://api.resend.com/emails", {
     method: "POST",

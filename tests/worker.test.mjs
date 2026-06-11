@@ -424,3 +424,53 @@ test('email-idf aplica rate-limit por IP al superar 15/h (429)', async () => {
     global.fetch = original;
   }
 });
+
+test('email-idf aplica el tope global diario (429) aunque la IP esté limpia', async () => {
+  const original = global.fetch;
+  global.fetch = async (url) => {
+    if (String(url).includes('siteverify')) return new Response(JSON.stringify({ success: true }), { status: 200 });
+    return new Response(JSON.stringify({ id: 'x' }), { status: 200 });
+  };
+  try {
+    const env = emailEnv({ EMAIL_RL: mockKv({ 'rl:global:day': '100' }) });
+    const res = await worker.fetch(emailRequest(VALID_BODY), env);
+    assert.equal(res.status, 429);
+  } finally {
+    global.fetch = original;
+  }
+});
+
+test('email-idf rechaza un adjunto que no es PDF (400)', async () => {
+  const stub = stubFetch();
+  try {
+    // base64 válido de "hello" — no empieza con %PDF-.
+    const res = await worker.fetch(emailRequest({ ...VALID_BODY, pdfBase64: 'aGVsbG8=' }), emailEnv());
+    assert.equal(res.status, 400);
+    assert.equal(stub.calls.length, 0);
+  } finally {
+    stub.restore();
+  }
+});
+
+test('email-idf escapa HTML en el cuerpo (anti inyección/phishing)', async () => {
+  const seen = [];
+  const original = global.fetch;
+  global.fetch = async (url, init) => {
+    seen.push({ url: String(url), init });
+    if (String(url).includes('siteverify')) return new Response(JSON.stringify({ success: true }), { status: 200 });
+    if (String(url).includes('api.resend.com')) return new Response(JSON.stringify({ id: 'eml_1' }), { status: 200 });
+    throw new Error('llamada inesperada: ' + url);
+  };
+  try {
+    const res = await worker.fetch(
+      emailRequest({ ...VALID_BODY, stationName: '<script>alert(1)</script>' }),
+      emailEnv(),
+    );
+    assert.equal(res.status, 200);
+    const payload = JSON.parse(seen.find((c) => c.url.includes('api.resend.com')).init.body);
+    assert.ok(!payload.html.includes('<script>'), 'no debe contener <script> sin escapar');
+    assert.ok(payload.html.includes('&lt;script&gt;'), 'debe escapar los signos < >');
+  } finally {
+    global.fetch = original;
+  }
+});
