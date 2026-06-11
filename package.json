@@ -31,6 +31,8 @@
     "@types/katex": "^0.16.8",
     "class-variance-authority": "^0.7.1",
     "html-to-image": "^1.11.13",
+    "jspdf": "^2.5.2",
+    "jspdf-autotable": "^3.8.4",
     "jszip": "^3.10.1",
     "katex": "^0.17.0",
     "lucide-react": "0.487.0",
