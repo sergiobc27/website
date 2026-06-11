@@ -1,8 +1,10 @@
 // Vistas con ruta propia. 'ficha' tiene ruta base '/ficha' (muestra el selector
 // de departamento/municipio); además acepta el deep-link compartible por hash
 // con parámetros (#/ficha/DEP/MUN), que se conserva tal cual al pegarlo.
+// 'asistente' ya NO es una vista: el Asistente vive en el widget flotante
+// (AsistenteFlotante); la URL vieja /asistente la migra un shim en App.
 export const VIEWS = [
-  'dashboard', 'analytics', 'map', 'compare', 'ficha', 'hydro', 'asistente',
+  'dashboard', 'analytics', 'map', 'compare', 'ficha', 'hydro',
   'status', 'extractor', 'history', 'settings', 'docs',
 ] as const;
 

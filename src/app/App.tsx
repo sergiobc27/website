@@ -14,7 +14,6 @@ const EstadoEspejo = lazy(() => import('./components/EstadoEspejo').then((m) => 
 const ComparadorEstaciones = lazy(() => import('./components/ComparadorEstaciones').then((m) => ({ default: m.ComparadorEstaciones })));
 const Hidrologia = lazy(() => import('./components/Hidrologia').then((m) => ({ default: m.Hidrologia })));
 const BibliotecaReferencias = lazy(() => import('./components/BibliotecaReferencias').then((m) => ({ default: m.BibliotecaReferencias })));
-const Asistente = lazy(() => import('./components/Asistente').then((m) => ({ default: m.Asistente })));
 
 // Compatibilidad hacia atrás: convierte un enlace viejo de ficha por hash
 // (#/ficha/DEP/MUN) a la ruta nueva con query (/ficha?dep=DEP&mun=MUN).
@@ -40,6 +39,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toaster } from './components/ui/sonner';
 import { initTheme } from './lib/theme';
 import { viewToPath, pathToView } from './lib/navigation';
+import { AsistenteFlotante, OPEN_ASISTENTE_EVENT } from './components/AsistenteFlotante';
 
 export default function App() {
   const [currentView, setCurrentView] = useState(() =>
@@ -57,6 +57,15 @@ export default function App() {
 
   useEffect(() => {
     return initTheme();
+  }, []);
+
+  // Shim de URLs viejas: /asistente ya no es vista — abre el panel flotante
+  // sobre el dashboard (mismo espíritu del shim de ficha por hash).
+  useEffect(() => {
+    if (window.location.pathname.replace(/\/+$/, '') === '/asistente') {
+      window.history.replaceState(null, '', '/');
+      window.dispatchEvent(new CustomEvent(OPEN_ASISTENTE_EVENT));
+    }
   }, []);
 
   // Sincroniza la vista con la URL ante atrás/adelante (popstate) y ante un
@@ -80,6 +89,11 @@ export default function App() {
   }, []);
 
   const navigate = (view: string) => {
+    if (view === 'asistente') {
+      // El asistente ya no es una vista: el sidebar/breadcrumbs abren el panel.
+      window.dispatchEvent(new CustomEvent(OPEN_ASISTENTE_EVENT));
+      return;
+    }
     // pushState a la ruta de la pestaña; fijar un pathname sin hash limpia de
     // paso el hash de ficha si veníamos de una ficha compartida.
     window.history.pushState(null, '', viewToPath(view));
@@ -94,7 +108,6 @@ export default function App() {
       compare: ['Inicio', 'Comparador'],
       ficha: ['Inicio', 'Ficha Climática'],
       hydro: ['Inicio', 'Hidrología'],
-      asistente: ['Inicio', 'Asistente'],
       status: ['Inicio', 'Estado del Espejo'],
       extractor: ['Inicio', 'Extractor de Datos'],
       history: ['Inicio', 'Historial de Descargas'],
@@ -119,8 +132,6 @@ export default function App() {
         return <ComparadorEstaciones />;
       case 'hydro':
         return <Hidrologia />;
-      case 'asistente':
-        return <Asistente />;
       case 'ficha':
         // La ficha lee dep/mun de la query (useUrlSync); no necesita props.
         return <FichaClimatica />;
@@ -173,6 +184,7 @@ export default function App() {
           )}
         </main>
       </div>
+      <AsistenteFlotante currentView={currentView} />
       <Toaster richColors position="bottom-right" />
     </div>
   );
