@@ -16,8 +16,11 @@ nuevas, sin llamadas a la API durante el scroll.
 - **Ubicación:** vista nueva `historia` ("La historia del dato") en el sidebar (grupo
   Explorar), ruta compartible `/historia`.
 - **Datos:** estación demo FIJA con datos **embebidos** en un módulo commiteado;
-  la elige un script generador por criterio técnico: fiabilidad 🟢 con más `aniosValidos`
-  (desempate: más observaciones). Cero red durante la narrativa.
+  la elige un script generador por criterio técnico: MEJOR fiabilidad disponible con más
+  `aniosValidos` Y curvas que materialicen ≥5 duraciones. (Nota de implementación: en el
+  espejo actual ninguna estación IDF alcanza 🟢 — la red de 10 min es joven; la elegida
+  fue TIBAITATÁ-AUT 0021206990, Mosquera/Cundinamarca, 17 años, 9 duraciones, y la
+  narrativa cuenta la fiabilidad con honestidad.) Cero red durante la narrativa.
 - **Mecánica:** gráfica sticky que se TRANSFORMA al avanzar el texto (IntersectionObserver
   nativo; estilo NYT). Móvil: gráfica sticky arriba, texto debajo.
 
