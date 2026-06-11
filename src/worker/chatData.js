@@ -325,6 +325,18 @@ export function extraerSugerencias(raw) {
   return { reply, suggestions };
 }
 
+// Red de seguridad determinista: si el modelo transcribe el bloque JSON de
+// datos en su respuesta (visto en producción: lo citaba como "Referencia"),
+// se eliminan esas líneas — el usuario nunca debe ver el JSON interno.
+export function limpiarFugasDeJson(reply) {
+  return String(reply || "")
+    .split("\n")
+    .filter((l) => !/\{\s*"tipo"\s*:/.test(l) && !/referencia\s*:\s*\{/i.test(l))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 const FALLBACKS = {
   dato_puntual: ["¿Y cómo se compara con el año anterior?", "¿Cuál es la estación más cercana con curvas IDF?", "¿Dónde veo la serie completa en la plataforma?"],
   idf_tr: ["¿Qué tan confiable es la serie de esa estación?", "¿Cómo uso esa intensidad en el método racional?", "¿Qué advierte la norma RAS sobre el Tr de diseño?"],
@@ -412,7 +424,7 @@ export function promptDeDatos(resultado) {
   if (resultado.ok) {
     return `DATOS REALES DEL ESPEJO DE DATOS (única fuente válida de cifras para esta respuesta; NO uses ningún número que no esté aquí; preséntalos en formato es-CO con coma decimal):
 ${JSON.stringify(resultado.datos)}
-Si el dato pedido no está en este bloque, dilo con franqueza y remite a la pestaña adecuada. Si "fiabilidad.nivel" es "rojo", advierte que la serie es poco confiable y resume los motivos. Si "observaciones" de un año luce bajo para la variable (la precipitación se mide cada 10 minutos: un año completo de UNA estación ronda 50.000 observaciones), advierte que la cobertura de ese año es PARCIAL y el total puede subestimar la realidad. RECUERDA: el "💡 Dato curioso" final debe salir SOLO de tu lista verificada de DATOS CURIOSOS — NUNCA inventes cifras climáticas del lugar consultado (contradirías los datos reales de arriba).`;
+Si el dato pedido no está en este bloque, dilo con franqueza y remite a la pestaña adecuada. Si "fiabilidad.nivel" es "rojo", advierte que la serie es poco confiable y resume los motivos. Si "observaciones" de un año luce bajo para la variable (la precipitación se mide cada 10 minutos: un año completo de UNA estación ronda 50.000 observaciones), advierte que la cobertura de ese año es PARCIAL y el total puede subestimar la realidad. NO transcribas, muestres ni cites este bloque JSON (tampoco como "📚 Referencia"): redacta SIEMPRE en lenguaje natural; la línea de fuente la añade la interfaz automáticamente. RECUERDA: el "💡 Dato curioso" final debe salir SOLO de tu lista verificada de DATOS CURIOSOS — NUNCA inventes cifras climáticas del lugar consultado (contradirías los datos reales de arriba).`;
   }
   const sugerencias = resultado.sugerencias && resultado.sugerencias.length
     ? `; lugares parecidos: ${resultado.sugerencias.join(", ")}`

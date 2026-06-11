@@ -219,6 +219,17 @@ test("SUGERENCIAS_PROMPT existe y menciona el formato", () => {
   assert.equal(SUGERENCIAS_PROMPT.includes(">>>SUGERENCIAS"), true);
 });
 
+test("limpiarFugasDeJson elimina líneas que transcriben el bloque interno", async () => {
+  const { limpiarFugasDeJson } = await import("../src/worker/chatData.js");
+  const sucio = 'La lluvia fue 9 mm.\n\n📚 Referencia: {"tipo":"dato_puntual","serie":[{"anio":2023}]}\n\n💡 Dato curioso: algo.';
+  const limpio = limpiarFugasDeJson(sucio);
+  assert.equal(limpio.includes('{"tipo"'), false);
+  assert.equal(limpio.includes("La lluvia fue 9 mm."), true);
+  assert.equal(limpio.includes("💡 Dato curioso"), true);
+  // No toca respuestas normales.
+  assert.equal(limpiarFugasDeJson("Texto normal con 📚 Referencia: Gumbel (1958)."), "Texto normal con 📚 Referencia: Gumbel (1958).");
+});
+
 test("elegirEstacion prefiere fiabilidad verde y más años", () => {
   const stations = [
     { codigo: "1", nombre: "AEROPUERTO", municipio: "SOLEDAD", fiabilidad: "rojo", aniosValidos: 30 },

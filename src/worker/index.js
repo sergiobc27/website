@@ -15,6 +15,7 @@ import {
   consultarDatos,
   promptDeDatos,
   extraerSugerencias,
+  limpiarFugasDeJson,
   sugerenciasFallback,
   SUGERENCIAS_PROMPT,
   VISTA_LABELS,
@@ -368,7 +369,8 @@ async function handleChat(request, env) {
       max_tokens: 900,
     });
     const extraido = extraerSugerencias((result && result.response) || "");
-    let reply = ensureReferencia(extraido.reply); // anexa "📚 Referencia" si citó y faltaba
+    let reply = limpiarFugasDeJson(extraido.reply); // el bloque interno de datos jamás se muestra
+    reply = ensureReferencia(reply); // anexa "📚 Referencia" si citó y faltaba
     reply = ensureDatoCurioso(reply); // garantiza "💡 Dato curioso" al final
     const dataUsed = !!(resultadoDatos && resultadoDatos.ok);
     if (dataUsed && !reply.includes("📊 Fuente:")) {
