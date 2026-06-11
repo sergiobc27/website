@@ -8,7 +8,17 @@
  */
 
 import { buildIdfPdf } from "./idfPdfDoc.js";
-import { boxJson } from "./chatData.js";
+import {
+  boxJson,
+  pareceConsultaDatos,
+  extraerIntencion,
+  consultarDatos,
+  promptDeDatos,
+  extraerSugerencias,
+  sugerenciasFallback,
+  SUGERENCIAS_PROMPT,
+  VISTA_LABELS,
+} from "./chatData.js";
 
 // GETs de metadata/catálogo cacheables en el borde. Cloudflare no cachea JSON
 // por defecto (la elegibilidad es por extensión de archivo): cacheEverything
@@ -325,22 +335,54 @@ async function handleChat(request, env) {
   // TODO el historial de mensajes del usuario, no solo el último, para cerrar la
   // inyección indirecta (un turno previo contaminado que reactive el jailbreak).
   if (history.some((m) => m.role === "user" && looksLikeManipulation(m.content))) {
-    return chatJson({ reply: CHAT_REJECTION, blocked: true });
+    return chatJson({ reply: CHAT_REJECTION, blocked: true, suggestions: [] });
   }
   // Rate-limit ANTES de gastar neurons: evita que un script anónimo vacíe la
   // cuota diaria gratis de Workers AI y deje el asistente caído para todos.
   if (await chatRateLimited(env, request.headers.get("cf-connecting-ip"))) {
     return chatJson({ error: "Has alcanzado el límite de mensajes por ahora. Intenta de nuevo en un rato." }, 429);
   }
+  // Contexto "qué pestaña mira el usuario": whitelist (nunca texto libre del cliente).
+  const view = typeof body.view === "string" && VISTA_LABELS[body.view] ? body.view : null;
   try {
+    // Pipeline "pregúntale a tus datos": pre-filtro gratis -> extractor (IA) ->
+    // consulta determinista al box. Cualquier fallo degrada al chat conceptual.
+    let resultadoDatos = null;
+    let intent = null;
+    const ultimo = history[history.length - 1].content;
+    if (pareceConsultaDatos(ultimo)) {
+      intent = await extraerIntencion(env, CHAT_MODEL, history);
+      if (intent && intent.intent !== "ninguno") {
+        resultadoDatos = await consultarDatos(env, intent);
+      }
+    }
+
+    const systemParts = [CHAT_SYSTEM, SUGERENCIAS_PROMPT];
+    if (view) {
+      systemParts.push(`CONTEXTO DE PANTALLA: el usuario está viendo ahora mismo la pestaña "${VISTA_LABELS[view]}".`);
+    }
+    if (resultadoDatos) systemParts.push(promptDeDatos(resultadoDatos));
+
     const result = await env.AI.run(CHAT_MODEL, {
-      messages: [{ role: "system", content: CHAT_SYSTEM }, ...history],
+      messages: [{ role: "system", content: systemParts.join("\n\n") }, ...history],
       max_tokens: 900,
     });
-    let reply = (result && result.response) || "";
-    reply = ensureReferencia(reply); // anexa "📚 Referencia" si citó y faltaba
+    const extraido = extraerSugerencias((result && result.response) || "");
+    let reply = ensureReferencia(extraido.reply); // anexa "📚 Referencia" si citó y faltaba
     reply = ensureDatoCurioso(reply); // garantiza "💡 Dato curioso" al final
-    return chatJson({ reply, usage: (result && result.usage) || null });
+    const dataUsed = !!(resultadoDatos && resultadoDatos.ok);
+    if (dataUsed && !reply.includes("📊 Fuente:")) {
+      // La línea de fuente la pone el CÓDIGO, no el modelo: una respuesta con
+      // datos del espejo siempre declara su origen.
+      reply += "\n\n📊 Fuente: espejo de datos IDEAM (consulta en vivo)";
+    }
+    let suggestions = extraido.suggestions;
+    if (/solo puedo ayudarte con esta plataforma/i.test(reply)) {
+      suggestions = []; // el rechazo va literal, sin chips
+    } else if (!suggestions.length) {
+      suggestions = sugerenciasFallback(intent);
+    }
+    return chatJson({ reply, suggestions, dataUsed, usage: (result && result.usage) || null });
   } catch (err) {
     return chatJson({ error: "El asistente no pudo responder en este momento. Intenta de nuevo." }, 502);
   }

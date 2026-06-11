@@ -308,6 +308,68 @@ export function sugerenciasFallback(intent) {
   return FALLBACKS[(intent && intent.intent) || "conceptual"] || FALLBACKS.conceptual;
 }
 
+// Vistas válidas para el contexto "qué está mirando el usuario" (whitelist:
+// el cliente no puede inyectar texto arbitrario al prompt vía `view`).
+export const VISTA_LABELS = {
+  dashboard: "Dashboard",
+  analytics: "Analítica",
+  map: "Mapa de Estaciones",
+  compare: "Comparador",
+  ficha: "Ficha Climática",
+  hydro: "Hidrología",
+  status: "Estado del Espejo",
+  extractor: "Extractor de Datos",
+  history: "Historial",
+  settings: "Ajustes de API",
+  docs: "Documentación",
+};
+
+const EXTRACTOR_SYSTEM = `Extrae de la ÚLTIMA pregunta del usuario (usa los mensajes previos solo para resolver referencias como "¿y en 2022?") una intención de consulta sobre datos hidrometeorológicos de Colombia. Responde SOLO un objeto JSON, sin texto adicional, con EXACTAMENTE estas claves:
+{"intent":"dato_puntual"|"idf_tr"|"ranking"|"estado_plataforma"|"ninguno","lugar":string|null,"departamento":string|null,"variable":"precipitacion"|"temperatura_maxima"|"temperatura_minima"|"humedad"|"viento"|"presion"|"nivel_rio"|null,"anioDesde":number|null,"anioHasta":number|null,"tr":number|null,"topN":number|null}
+Reglas: "intent":"ninguno" si la pregunta es conceptual, de uso de la plataforma o no pide cifras. "lugar" = ciudad/municipio o nombre de estación tal como lo dijo el usuario. "departamento" solo si menciona un departamento. "temperatura" sin más detalle -> "temperatura_maxima". Un solo año -> anioDesde=anioHasta. "tr" = período de retorno en años si lo menciona. "topN" solo en rankings. No inventes valores: usa null.`;
+
+// Pasada 1: extracción de intención. Devuelve el intent saneado o null.
+// Intenta JSON forzado (response_format); si el binding no lo soporta, cae a
+// parseo robusto del texto (parseIntentJson tolera prosa alrededor del JSON).
+export async function extraerIntencion(env, model, history) {
+  const messages = [{ role: "system", content: EXTRACTOR_SYSTEM }, ...history.slice(-4)];
+  let result = null;
+  try {
+    result = await env.AI.run(model, {
+      messages,
+      max_tokens: 200,
+      response_format: { type: "json_object" },
+    });
+  } catch {
+    try {
+      result = await env.AI.run(model, { messages, max_tokens: 200 });
+    } catch {
+      return null;
+    }
+  }
+  return parseIntentJson((result && result.response) || null);
+}
+
+// Bloque de datos para la pasada 2. JSON compacto + reglas duras: el redactor
+// no puede citar cifras fuera de aquí.
+export function promptDeDatos(resultado) {
+  if (resultado.ok) {
+    return `DATOS REALES DEL ESPEJO DE DATOS (única fuente válida de cifras para esta respuesta; NO uses ningún número que no esté aquí; preséntalos en formato es-CO con coma decimal):
+${JSON.stringify(resultado.datos)}
+Si el dato pedido no está en este bloque, dilo con franqueza y remite a la pestaña adecuada. Si "fiabilidad.nivel" es "rojo", advierte que la serie es poco confiable y resume los motivos.`;
+  }
+  const sugerencias = resultado.sugerencias && resultado.sugerencias.length
+    ? `; lugares parecidos: ${resultado.sugerencias.join(", ")}`
+    : "";
+  const razones = {
+    lugar_no_encontrado: `No se encontró el lugar "${resultado.lugar}" en el catálogo${sugerencias}. Pide al usuario precisar el municipio (NO inventes datos).`,
+    sin_estacion_idf: `No hay estación con curvas IDF que coincida con "${resultado.lugar}". Sugiere buscar la estación en la pestaña Hidrología (que además sugiere la más cercana).`,
+    sin_datos: `El espejo no tiene observaciones para esa combinación de lugar/periodo. Dilo con franqueza y sugiere ajustar el periodo o revisar la cobertura en el Mapa de Estaciones.`,
+    espejo_no_disponible: `No fue posible consultar el espejo de datos en este momento. Dilo con franqueza, sin inventar cifras, y sugiere intentar de nuevo o usar la pestaña correspondiente.`,
+  };
+  return `CONSULTA DE DATOS FALLIDA — ${razones[resultado.errorTipo] || razones.espejo_no_disponible}`;
+}
+
 // Acepta el resultado del extractor venga como venga (objeto, JSON string o
 // JSON embebido en prosa) y lo reduce a un intent SANEADO o null.
 export function parseIntentJson(raw) {

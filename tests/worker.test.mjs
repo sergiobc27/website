@@ -205,10 +205,15 @@ test('POST /api/chat lo maneja el Worker (Workers AI), no se proxea al upstream'
     assert.ok(data.reply.startsWith('Hola, soy el tutor.'));
     assert.match(data.reply, /💡 Dato curioso:/);
     // NO se proxeó al box; se usó el binding AI con el system prompt + el turno.
+    // Desde "pregúntale a tus datos", una pregunta que huele a datos dispara
+    // además la mini-llamada del extractor (aquí devuelve prosa -> intent nulo
+    // -> flujo conceptual). Lo invariante: 0 fetch al box y que la llamada del
+    // REDACTOR (la última) lleve system prompt + el turno del usuario.
     assert.equal(fetchStub.calls.length, 0);
-    assert.equal(aiCalls.length, 1);
-    assert.equal(aiCalls[0].input.messages[0].role, 'system');
-    assert.equal(aiCalls[0].input.messages.at(-1).content, '¿Qué es un período de retorno?');
+    assert.ok(aiCalls.length >= 1 && aiCalls.length <= 2);
+    const redactor = aiCalls.at(-1);
+    assert.equal(redactor.input.messages[0].role, 'system');
+    assert.equal(redactor.input.messages.at(-1).content, '¿Qué es un período de retorno?');
   } finally {
     fetchStub.restore();
   }
