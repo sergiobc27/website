@@ -328,26 +328,53 @@ const EXTRACTOR_SYSTEM = `Extrae de la ÚLTIMA pregunta del usuario (usa los men
 {"intent":"dato_puntual"|"idf_tr"|"ranking"|"estado_plataforma"|"ninguno","lugar":string|null,"departamento":string|null,"variable":"precipitacion"|"temperatura_maxima"|"temperatura_minima"|"humedad"|"viento"|"presion"|"nivel_rio"|null,"anioDesde":number|null,"anioHasta":number|null,"tr":number|null,"topN":number|null}
 Reglas: "intent":"ninguno" si la pregunta es conceptual, de uso de la plataforma o no pide cifras. "lugar" = ciudad/municipio o nombre de estación tal como lo dijo el usuario. "departamento" solo si menciona un departamento. "temperatura" sin más detalle -> "temperatura_maxima". Un solo año -> anioDesde=anioHasta. "tr" = período de retorno en años si lo menciona. "topN" solo en rankings. No inventes valores: usa null.`;
 
+// Esquema del intent para el JSON mode nativo de Workers AI (guided
+// generation: mucho más fiable que pedirle JSON por prompt a un modelo 8B).
+const INTENT_SCHEMA = {
+  type: "object",
+  properties: {
+    intent: { type: "string", enum: ["dato_puntual", "idf_tr", "ranking", "estado_plataforma", "ninguno"] },
+    lugar: { type: ["string", "null"] },
+    departamento: { type: ["string", "null"] },
+    variable: {
+      type: ["string", "null"],
+      enum: ["precipitacion", "temperatura_maxima", "temperatura_minima", "humedad", "viento", "presion", "nivel_rio", null],
+    },
+    anioDesde: { type: ["integer", "null"] },
+    anioHasta: { type: ["integer", "null"] },
+    tr: { type: ["integer", "null"] },
+    topN: { type: ["integer", "null"] },
+  },
+  required: ["intent"],
+};
+
 // Pasada 1: extracción de intención. Devuelve el intent saneado o null.
-// Intenta JSON forzado (response_format); si el binding no lo soporta, cae a
-// parseo robusto del texto (parseIntentJson tolera prosa alrededor del JSON).
+// Intenta JSON mode (response_format json_schema); si el binding no lo soporta
+// O devuelve algo imparseable, reintenta UNA vez en plano y parsea robusto
+// (parseIntentJson tolera prosa alrededor del JSON). Si todo falla -> null
+// (el chat degrada al flujo conceptual, nunca se rompe).
 export async function extraerIntencion(env, model, history) {
   const messages = [{ role: "system", content: EXTRACTOR_SYSTEM }, ...history.slice(-4)];
-  let result = null;
+  let intent = null;
   try {
-    result = await env.AI.run(model, {
+    const r = await env.AI.run(model, {
       messages,
       max_tokens: 200,
-      response_format: { type: "json_object" },
+      response_format: { type: "json_schema", json_schema: INTENT_SCHEMA },
     });
+    intent = parseIntentJson((r && r.response) || null);
   } catch {
+    /* JSON mode no disponible: cae al intento plano */
+  }
+  if (!intent) {
     try {
-      result = await env.AI.run(model, { messages, max_tokens: 200 });
+      const r = await env.AI.run(model, { messages, max_tokens: 200 });
+      intent = parseIntentJson((r && r.response) || null);
     } catch {
       return null;
     }
   }
-  return parseIntentJson((result && result.response) || null);
+  return intent;
 }
 
 // Bloque de datos para la pasada 2. JSON compacto + reglas duras: el redactor
