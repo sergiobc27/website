@@ -22,9 +22,10 @@ interface ChartMeta {
   filenameParts: string[];
 }
 
-// Captura el nodo del gráfico y compone un PNG con encabezado/pie de marca.
-// Respeta el tema (claro/oscuro) leyendo la clase `dark` del <html>.
-export async function exportChartPng(node: HTMLElement, meta: ChartMeta): Promise<void> {
+// Captura el nodo del gráfico y compone un PNG con encabezado/pie de marca,
+// devolviendo el Blob. Respeta el tema (claro/oscuro) leyendo la clase `dark`.
+// Reutilizado por la descarga y por la copia al portapapeles.
+export async function composeChartPng(node: HTMLElement, meta: ChartMeta): Promise<Blob> {
   const isDark = document.documentElement.classList.contains('dark');
   const bg = isDark ? '#1a1a1a' : '#ffffff';
   const fg = isDark ? '#f3f4f6' : '#1a1a1a';
@@ -74,9 +75,26 @@ export async function exportChartPng(node: HTMLElement, meta: ChartMeta): Promis
 
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
   if (!blob) throw new Error('No blob');
+  return blob;
+}
+
+// Descarga el PNG compuesto como archivo.
+export async function exportChartPng(node: HTMLElement, meta: ChartMeta): Promise<void> {
+  const blob = await composeChartPng(node, meta);
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
   link.download = buildFilename(meta.filenameParts, new Date());
   link.click();
   URL.revokeObjectURL(link.href);
+}
+
+// Copia el PNG compuesto al portapapeles (para pegarlo como imagen).
+// Pasa una Promise<Blob> al ClipboardItem: así la composición async sigue
+// dentro del gesto del usuario (lo exige Safari) y funciona en Chrome/Firefox.
+export async function copyChartPng(node: HTMLElement, meta: ChartMeta): Promise<void> {
+  if (typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) {
+    throw new Error('Portapapeles de imágenes no soportado');
+  }
+  const item = new ClipboardItem({ 'image/png': composeChartPng(node, meta) });
+  await navigator.clipboard.write([item]);
 }
