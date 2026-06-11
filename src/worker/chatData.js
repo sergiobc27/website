@@ -78,8 +78,20 @@ export function postJson(body) {
   return { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
 }
 
+function matchLista(lista, objetivo) {
+  const norm = lista.map((m) => ({ m, n: normalizarTexto(m) }));
+  const hit =
+    norm.find((x) => x.n === objetivo) ||
+    norm.find((x) => x.n.startsWith(objetivo)) ||
+    norm.find((x) => x.n.includes(objetivo));
+  return hit ? hit.m : null;
+}
+
 // Resuelve el lugar dicho por el usuario contra los catálogos del espejo.
-// Orden: match exacto -> empieza-por -> contiene. Departamento aparte.
+// OJO: /api/municipalities EXIGE department (sin él responde 400), así que el
+// camino exacto necesita el departamento (lo da el usuario o lo infiere el
+// extractor por geografía general). Fallback nacional: el catálogo de
+// estaciones IDF (GET cacheado, ~770 filas) trae municipio+departamento.
 export async function resolverLugar(env, { lugar, departamento }) {
   const out = { municipio: null, departamento: null };
   if (departamento) {
@@ -88,22 +100,35 @@ export async function resolverLugar(env, { lugar, departamento }) {
     out.departamento = ((meta && meta.departments) || []).find((d) => normalizarTexto(d) === dep) || null;
   }
   if (!lugar) return out;
-  const cat = await boxJson(env, "/api/municipalities");
-  const lista = (cat && cat.municipalities) || [];
   const objetivo = normalizarTexto(lugar);
-  const norm = lista.map((m) => ({ m, n: normalizarTexto(m) }));
-  const hit =
-    norm.find((x) => x.n === objetivo) ||
-    norm.find((x) => x.n.startsWith(objetivo)) ||
-    norm.find((x) => x.n.includes(objetivo));
-  if (hit) {
-    out.municipio = hit.m;
+  // 1) Con departamento conocido, el catálogo de municipios es exacto y completo.
+  if (out.departamento) {
+    const cat = await boxJson(env, `/api/municipalities?department=${encodeURIComponent(out.departamento)}`);
+    const hit = matchLista((cat && cat.municipalities) || [], objetivo);
+    if (hit) {
+      out.municipio = hit;
+      return out;
+    }
+  }
+  // 2) Fallback nacional: municipios del catálogo IDF (cubre las cabeceras con
+  //    estaciones de lluvia, que es donde de verdad hay datos que mostrar).
+  const idf = await boxJson(env, "/api/analytics/idf-stations");
+  const stations = (idf && idf.stations) || [];
+  const porMunicipio = stations.find((s) => {
+    const n = normalizarTexto(s.municipio);
+    return n === objetivo || n.startsWith(objetivo);
+  });
+  if (porMunicipio) {
+    out.municipio = porMunicipio.municipio;
+    out.departamento = out.departamento || porMunicipio.departamento || null;
     return out;
   }
-  // No encontrado: sugiere por prefijo compartido (4 letras) — barato y útil.
+  // 3) No encontrado: sugerencias por prefijo compartido (4 letras).
   const pref = objetivo.slice(0, 4);
   out.noEncontrado = lugar;
-  out.sugerencias = norm.filter((x) => x.n.startsWith(pref)).slice(0, 3).map((x) => x.m);
+  out.sugerencias = [...new Set(
+    stations.map((s) => s.municipio).filter((m) => normalizarTexto(m).startsWith(pref)),
+  )].slice(0, 3);
   return out;
 }
 
@@ -326,7 +351,7 @@ export const VISTA_LABELS = {
 
 const EXTRACTOR_SYSTEM = `Extrae de la ÚLTIMA pregunta del usuario (usa los mensajes previos solo para resolver referencias como "¿y en 2022?") una intención de consulta sobre datos hidrometeorológicos de Colombia. Responde SOLO un objeto JSON, sin texto adicional, con EXACTAMENTE estas claves:
 {"intent":"dato_puntual"|"idf_tr"|"ranking"|"estado_plataforma"|"ninguno","lugar":string|null,"departamento":string|null,"variable":"precipitacion"|"temperatura_maxima"|"temperatura_minima"|"humedad"|"viento"|"presion"|"nivel_rio"|null,"anioDesde":number|null,"anioHasta":number|null,"tr":number|null,"topN":number|null}
-Reglas: "intent":"ninguno" si la pregunta es conceptual, de uso de la plataforma o no pide cifras. "lugar" = ciudad/municipio o nombre de estación tal como lo dijo el usuario. "departamento" solo si menciona un departamento. "temperatura" sin más detalle -> "temperatura_maxima". Un solo año -> anioDesde=anioHasta. "tr" = período de retorno en años si lo menciona. "topN" solo en rankings. No inventes valores: usa null.`;
+Reglas: "intent":"ninguno" si la pregunta es conceptual, de uso de la plataforma o no pide cifras. "lugar" = ciudad/municipio o nombre de estación tal como lo dijo el usuario. "departamento" = el departamento colombiano del lugar si lo sabes con certeza por geografía general (p. ej. Barranquilla -> Atlántico, Medellín -> Antioquia) o si el usuario lo menciona; null si no estás seguro. "temperatura" sin más detalle -> "temperatura_maxima". Un solo año -> anioDesde=anioHasta. "tr" = período de retorno en años si lo menciona. "topN" solo en rankings. No inventes valores: usa null.`;
 
 // Esquema del intent para el JSON mode nativo de Workers AI (guided
 // generation: mucho más fiable que pedirle JSON por prompt a un modelo 8B).

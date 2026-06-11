@@ -19,7 +19,15 @@ import {
 const CATALOGO = {
   municipalities: ["BARRANQUILLA", "MEDELLIN", "BOGOTA, D.C.", "SOLEDAD", "SABANALARGA"],
 };
-const META = { departments: ["ATLANTICO", "ANTIOQUIA", "CHOCO"] };
+const META = { departments: ["ATLANTICO", "ANTIOQUIA", "CHOCO", "CUNDINAMARCA"] };
+const IDF_CAT = {
+  stations: [
+    { codigo: "10", nombre: "AEROPUERTO EC", municipio: "BARRANQUILLA", departamento: "ATLANTICO", aniosValidos: 20, fiabilidad: "verde" },
+    { codigo: "11", nombre: "OLAYA", municipio: "MEDELLIN", departamento: "ANTIOQUIA", aniosValidos: 15, fiabilidad: "amarillo" },
+    { codigo: "12", nombre: "EL DORADO", municipio: "BOGOTA, D.C.", departamento: "CUNDINAMARCA", aniosValidos: 25, fiabilidad: "verde" },
+    { codigo: "13", nombre: "LA YE", municipio: "SABANALARGA", departamento: "ATLANTICO", aniosValidos: 9, fiabilidad: "rojo" },
+  ],
+};
 
 function fetchMock(rutas) {
   return async (url) => {
@@ -74,20 +82,26 @@ test("normalizarTexto quita tildes y sube a mayúsculas", () => {
   assert.equal(normalizarTexto("  Chocó "), "CHOCO");
 });
 
-test("resolverLugar encuentra municipio con tildes y match parcial", async () => {
+test("resolverLugar con departamento usa el catálogo exacto de municipios", async () => {
   const env = { API_ORIGIN: "https://box" };
-  globalThis.fetch = fetchMock({ "/api/municipalities": CATALOGO, "/api/meta": META });
-  const r1 = await resolverLugar(env, { lugar: "Medellín", departamento: null });
-  assert.deepEqual(r1, { municipio: "MEDELLIN", departamento: null });
-  const r2 = await resolverLugar(env, { lugar: "Bogotá", departamento: null });
-  assert.equal(r2.municipio, "BOGOTA, D.C.");
+  globalThis.fetch = fetchMock({ "/api/municipalities": CATALOGO, "/api/meta": META, "/api/analytics/idf-stations": IDF_CAT });
+  const r1 = await resolverLugar(env, { lugar: "Medellín", departamento: "Antioquia" });
+  assert.deepEqual(r1, { municipio: "MEDELLIN", departamento: "ANTIOQUIA" });
   const r3 = await resolverLugar(env, { lugar: null, departamento: "Chocó" });
   assert.deepEqual(r3, { municipio: null, departamento: "CHOCO" });
 });
 
+test("resolverLugar sin departamento cae al catálogo IDF y recupera el departamento", async () => {
+  const env = { API_ORIGIN: "https://box" };
+  globalThis.fetch = fetchMock({ "/api/meta": META, "/api/analytics/idf-stations": IDF_CAT });
+  const r = await resolverLugar(env, { lugar: "Bogotá", departamento: null });
+  assert.equal(r.municipio, "BOGOTA, D.C.");
+  assert.equal(r.departamento, "CUNDINAMARCA");
+});
+
 test("resolverLugar no encontrado devuelve sugerencias parecidas", async () => {
   const env = { API_ORIGIN: "https://box" };
-  globalThis.fetch = fetchMock({ "/api/municipalities": CATALOGO, "/api/meta": META });
+  globalThis.fetch = fetchMock({ "/api/municipalities": CATALOGO, "/api/meta": META, "/api/analytics/idf-stations": IDF_CAT });
   const r = await resolverLugar(env, { lugar: "Sabanagrande", departamento: null });
   assert.equal(r.municipio, null);
   assert.equal(r.noEncontrado, "Sabanagrande");
@@ -100,6 +114,8 @@ test("consultarDatos dato_puntual arma timeseries y resume por año", async () =
   globalThis.fetch = async (url, init) => {
     const path = new URL(url, "https://x").pathname;
     if (path === "/api/municipalities") return new Response(JSON.stringify(CATALOGO));
+    if (path === "/api/meta") return new Response(JSON.stringify(META));
+    if (path === "/api/analytics/idf-stations") return new Response(JSON.stringify(IDF_CAT));
     if (path === "/api/analytics/timeseries") {
       captured = JSON.parse(init.body);
       return new Response(JSON.stringify({ points: [{ bucket: "2023-01-01", value: 823.4, n: 50000 }] }));
@@ -107,12 +123,13 @@ test("consultarDatos dato_puntual arma timeseries y resume por año", async () =
     return new Response("{}", { status: 404 });
   };
   const r = await consultarDatos(env, {
-    intent: "dato_puntual", lugar: "Barranquilla", departamento: null,
+    intent: "dato_puntual", lugar: "Barranquilla", departamento: "Atlántico",
     variable: "precipitacion", anioDesde: 2023, anioHasta: 2023, tr: null, topN: null,
   });
   assert.equal(r.ok, true);
   assert.equal(captured.datasetId, "s54a-sgyg");
   assert.equal(captured.metric, "sum");
+  assert.deepEqual(captured.departments, ["ATLANTICO"]);
   assert.deepEqual(captured.catalogFilters, { municipalities: ["BARRANQUILLA"] });
   assert.equal(captured.startDate, "2023-01-01");
   assert.equal(captured.endDate, "2023-12-31");
@@ -122,7 +139,7 @@ test("consultarDatos dato_puntual arma timeseries y resume por año", async () =
 
 test("consultarDatos lugar no encontrado degrada con sugerencias", async () => {
   const env = { API_ORIGIN: "https://box" };
-  globalThis.fetch = fetchMock({ "/api/municipalities": CATALOGO, "/api/meta": META });
+  globalThis.fetch = fetchMock({ "/api/municipalities": CATALOGO, "/api/meta": META, "/api/analytics/idf-stations": IDF_CAT });
   const r = await consultarDatos(env, { intent: "dato_puntual", lugar: "Atlantis", departamento: null, variable: null, anioDesde: null, anioHasta: null, tr: null, topN: null });
   assert.equal(r.ok, false);
   assert.equal(r.errorTipo, "lugar_no_encontrado");
@@ -252,6 +269,8 @@ test("chat de datos: dos llamadas IA, datos del espejo y línea de fuente", asyn
   globalThis.fetch = async (url) => {
     const path = new URL(url, "https://x").pathname;
     if (path === "/api/municipalities") return new Response(JSON.stringify({ municipalities: ["BARRANQUILLA"] }));
+    if (path === "/api/meta") return new Response(JSON.stringify(META));
+    if (path === "/api/analytics/idf-stations") return new Response(JSON.stringify(IDF_CAT));
     if (path === "/api/analytics/timeseries") return new Response(JSON.stringify({ points: [{ bucket: "2023-01-01", value: 823.4, n: 1 }] }));
     return new Response("{}", { status: 404 });
   };
