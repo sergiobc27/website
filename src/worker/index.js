@@ -8,6 +8,7 @@
  */
 
 import { buildIdfPdf } from "./idfPdfDoc.js";
+import { boxJson } from "./chatData.js";
 
 // GETs de metadata/catálogo cacheables en el borde. Cloudflare no cachea JSON
 // por defecto (la elegibilidad es por extensión de archivo): cacheEverything
@@ -463,18 +464,7 @@ function emailHtml(stationName, stationCode, filename) {
 </body></html>`;
 }
 
-// Llama al box (API propia) con el secreto del proxy. Devuelve null si falla.
-async function boxJson(env, path, init) {
-  const headers = { accept: "application/json", ...(init && init.headers) };
-  if (env.IDEAM_PROXY_SECRET) headers["x-ideam-proxy-secret"] = env.IDEAM_PROXY_SECRET;
-  try {
-    const r = await fetch(new URL(path, env.API_ORIGIN), { ...init, headers });
-    if (!r.ok) return null;
-    return await r.json();
-  } catch {
-    return null;
-  }
-}
+// boxJson (llamadas al box con el secreto del proxy) vive en chatData.js.
 
 function u8ToBase64(u8) {
   let s = "";

@@ -60,6 +60,73 @@ function intOrNull(v, min, max) {
   return Math.max(min, Math.min(max, Math.round(n)));
 }
 
+// Llama al box (API propia) con el secreto del proxy. Devuelve null si falla.
+// (Vive aquí para compartirlo entre el correo IDF y el chat de datos.)
+export async function boxJson(env, path, init) {
+  const headers = { accept: "application/json", ...(init && init.headers) };
+  if (env.IDEAM_PROXY_SECRET) headers["x-ideam-proxy-secret"] = env.IDEAM_PROXY_SECRET;
+  try {
+    const r = await fetch(new URL(path, env.API_ORIGIN), { ...init, headers });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
+}
+
+export function postJson(body) {
+  return { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
+}
+
+// Resuelve el lugar dicho por el usuario contra los catálogos del espejo.
+// Orden: match exacto -> empieza-por -> contiene. Departamento aparte.
+export async function resolverLugar(env, { lugar, departamento }) {
+  const out = { municipio: null, departamento: null };
+  if (departamento) {
+    const meta = await boxJson(env, "/api/meta");
+    const dep = normalizarTexto(departamento);
+    out.departamento = ((meta && meta.departments) || []).find((d) => normalizarTexto(d) === dep) || null;
+  }
+  if (!lugar) return out;
+  const cat = await boxJson(env, "/api/municipalities");
+  const lista = (cat && cat.municipalities) || [];
+  const objetivo = normalizarTexto(lugar);
+  const norm = lista.map((m) => ({ m, n: normalizarTexto(m) }));
+  const hit =
+    norm.find((x) => x.n === objetivo) ||
+    norm.find((x) => x.n.startsWith(objetivo)) ||
+    norm.find((x) => x.n.includes(objetivo));
+  if (hit) {
+    out.municipio = hit.m;
+    return out;
+  }
+  // No encontrado: sugiere por prefijo compartido (4 letras) — barato y útil.
+  const pref = objetivo.slice(0, 4);
+  out.noEncontrado = lugar;
+  out.sugerencias = norm.filter((x) => x.n.startsWith(pref)).slice(0, 3).map((x) => x.m);
+  return out;
+}
+
+const RANGO_FIABILIDAD = { verde: 3, amarillo: 2, rojo: 1 };
+
+// Estación IDF para un lugar: match por NOMBRE de estación primero (más
+// específico), luego por municipio. Desempata por fiabilidad y años válidos.
+export function elegirEstacion(stations, lugar) {
+  const objetivo = normalizarTexto(lugar);
+  if (!objetivo) return null;
+  const porNombre = stations.filter((s) => normalizarTexto(s.nombre).includes(objetivo));
+  const porMunicipio = stations.filter(
+    (s) => normalizarTexto(s.municipio) === objetivo || normalizarTexto(s.municipio).startsWith(objetivo),
+  );
+  const candidatas = porNombre.length ? porNombre : porMunicipio;
+  if (!candidatas.length) return null;
+  return [...candidatas].sort(
+    (a, b) =>
+      (RANGO_FIABILIDAD[b.fiabilidad] || 0) - (RANGO_FIABILIDAD[a.fiabilidad] || 0) ||
+      (b.aniosValidos || 0) - (a.aniosValidos || 0),
+  )[0];
+}
+
 // Acepta el resultado del extractor venga como venga (objeto, JSON string o
 // JSON embebido en prosa) y lo reduce a un intent SANEADO o null.
 export function parseIntentJson(raw) {
