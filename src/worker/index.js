@@ -71,6 +71,12 @@ export default {
       return handleChat(request, env);
     }
 
+    // Envío del PDF de curvas IDF por correo (Resend) — manejado EN EL EDGE, no
+    // se proxea al box. Anti-abuso: Turnstile + rate-limit por IP en KV.
+    if (url.pathname === "/api/email-idf") {
+      return handleEmailIdf(request, env);
+    }
+
     if (url.pathname === "/api" || url.pathname.startsWith("/api/")) {
       if (!isPublicApiPath(url.pathname)) {
         return new Response(JSON.stringify({ error: "Ruta no disponible." }), {
@@ -327,4 +333,115 @@ async function handleChat(request, env) {
   } catch (err) {
     return chatJson({ error: "El asistente no pudo responder en este momento. Intenta de nuevo." }, 502);
   }
+}
+
+// --- Envío de curvas IDF por correo (Resend) ---------------------------------
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const RL_MAX_PER_HOUR = 15;                  // tope relajado por IP
+const MAX_PDF_B64_BYTES = 4 * 1024 * 1024;   // ~4 MB de base64
+
+function emailJson(obj, status) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { "content-type": "application/json", "cache-control": "no-store" },
+  });
+}
+
+async function verifyTurnstile(token, ip, secret) {
+  if (!secret) return false;
+  const body = new URLSearchParams();
+  body.set("secret", secret);
+  body.set("response", token || "");
+  if (ip) body.set("remoteip", ip);
+  const r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+    method: "POST",
+    body,
+  });
+  const data = await r.json().catch(() => ({ success: false }));
+  return data.success === true;
+}
+
+// Rate-limit simple por IP: contador horario en KV con TTL de 1h.
+async function emailRateLimited(env, ip) {
+  if (!env.EMAIL_RL || !ip) return false;
+  const key = `rl:ip:${ip}`;
+  const current = Number((await env.EMAIL_RL.get(key)) || "0");
+  if (current >= RL_MAX_PER_HOUR) return true;
+  await env.EMAIL_RL.put(key, String(current + 1), { expirationTtl: 3600 });
+  return false;
+}
+
+function emailHtml(stationName, stationCode, filename) {
+  return `<!doctype html><html><body style="margin:0;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff">
+    <div style="background:#A3161A;padding:20px 24px;color:#ffffff">
+      <div style="font-size:20px;font-weight:bold">Curvas IDF</div>
+      <div style="font-size:12px;opacity:.9">Intensidad-Duracion-Frecuencia</div>
+    </div>
+    <div style="height:4px;background:#C9A227"></div>
+    <div style="padding:24px">
+      <p>Hola,</p>
+      <p>Adjunto encontrar&aacute;s el PDF con las curvas Intensidad-Duraci&oacute;n-Frecuencia
+      de la estaci&oacute;n <strong>${stationName}</strong> (${stationCode}), solicitadas en la plataforma.</p>
+      <p style="color:#595959">&#128206; ${filename}</p>
+    </div>
+    <div style="border-top:1px solid #e5e5e5;padding:16px 24px;font-size:12px;color:#595959">
+      <a href="https://ideam.sergiobc.com" style="color:#A3161A;text-decoration:none">ideam.sergiobc.com</a><br/>
+      Ing. Civil Sergio Beltr&aacute;n Coley &middot; Universidad de la Costa (CUC)
+    </div>
+  </div>
+</body></html>`;
+}
+
+async function handleEmailIdf(request, env) {
+  if (request.method !== "POST") {
+    return emailJson({ error: "Método no permitido." }, 405);
+  }
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return emailJson({ error: "JSON inválido." }, 400);
+  }
+  const { to, turnstileToken, pdfBase64, filename, stationName, stationCode } = body || {};
+  if (typeof to !== "string" || !EMAIL_RE.test(to.trim())) {
+    return emailJson({ error: "Correo inválido." }, 400);
+  }
+  if (typeof pdfBase64 !== "string" || pdfBase64.length === 0 || pdfBase64.length > MAX_PDF_B64_BYTES) {
+    return emailJson({ error: "Adjunto inválido." }, 400);
+  }
+  const ip = request.headers.get("cf-connecting-ip");
+
+  const ok = await verifyTurnstile(turnstileToken, ip, env.TURNSTILE_SECRET_KEY);
+  if (!ok) {
+    return emailJson({ error: "Verificación anti-robot fallida." }, 403);
+  }
+  if (await emailRateLimited(env, ip)) {
+    return emailJson({ error: "Demasiados envíos. Intenta más tarde." }, 429);
+  }
+
+  const safeName = typeof stationName === "string" && stationName ? stationName : "estación";
+  const safeCode = typeof stationCode === "string" ? stationCode : "";
+  const safeFile = typeof filename === "string" && filename.endsWith(".pdf") ? filename : "curva-idf.pdf";
+
+  const resp = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      from: "Curvas IDF <noreply@sergiobc.com>",
+      to: to.trim(),
+      subject: `Tus curvas IDF · ${safeName} — ideam.sergiobc.com`,
+      html: emailHtml(safeName, safeCode, safeFile),
+      attachments: [{ filename: safeFile, content: pdfBase64 }],
+    }),
+  });
+
+  if (!resp.ok) {
+    return emailJson({ error: "No se pudo enviar el correo." }, 502);
+  }
+  return emailJson({ ok: true }, 200);
 }
