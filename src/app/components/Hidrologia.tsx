@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { toPng } from 'html-to-image';
+import { toast } from 'sonner';
 import { ChartDownloadButton } from './ChartDownloadButton';
-import { AlertTriangle, BarChart4, CheckCircle2, CloudRain, Droplets, Navigation, Plus, Search, Waves } from 'lucide-react';
+import { EnviarPorCorreo } from './EnviarPorCorreo';
+import { buildIdfPdfModel, renderIdfPdf } from '../lib/pdf/idfPdf';
+import { loadImageDataUrl } from '../lib/pdf/loadImage';
+import logoCucUrl from '../../imports/Logo_CUC_PNG_letra_blanca_barra_roja_vtcal.png';
+import logoIdeamUrl from '../../imports/Ideam_(Colombia)_logo.png';
+import { AlertTriangle, BarChart4, CheckCircle2, CloudRain, Droplets, FileDown, Mail, Navigation, Plus, Search, Waves } from 'lucide-react';
 import {
   Bar,
   Area,
@@ -145,6 +152,8 @@ export function Hidrologia() {
   const [hyetograph, setHyetograph] = useState<AnalyticsTimeseriesResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [correoOpen, setCorreoOpen] = useState(false);
 
   // Solo las estaciones con IDF ya precomputado y usable (>=5 años): el resto
   // daría "no disponible". Mostrarlas directamente evita que el usuario adivine
@@ -436,6 +445,50 @@ export function Hidrologia() {
     return Array.from(byDur.values()).sort((a, b) => a.durMin - b.durMin);
   }, [idf]);
 
+  // Captura la gráfica IDF en alta resolución y arma el PDF de marca CUC.
+  // Reutilizado por la descarga y por el envío por correo.
+  const generarPdf = async () => {
+    if (!idf?.available || !station) throw new Error('Sin curvas IDF');
+    const node = idfChartRef.current;
+    if (!node) throw new Error('Gráfica no disponible');
+    // Fondo blanco siempre: el PDF es para imprimir.
+    const chartDataUrl = await toPng(node, { pixelRatio: 3, cacheBust: true, backgroundColor: '#ffffff' });
+    const [logoCuc, logoIdeam] = await Promise.all([
+      loadImageDataUrl(logoCucUrl),
+      loadImageDataUrl(logoIdeamUrl),
+    ]);
+    const model = buildIdfPdfModel(
+      idf,
+      { nombre: station.nombre, codigo: station.codigo, municipio: station.municipio, departamento: station.departamento },
+      returnPeriods?.reliability?.level ?? station.fiabilidad?.level ?? null,
+      new Date(),
+    );
+    return { doc: renderIdfPdf(model, { chartDataUrl, logoCuc, logoIdeam }), filename: model.filename };
+  };
+
+  const descargarPdf = async () => {
+    if (pdfBusy) return;
+    setPdfBusy(true);
+    try {
+      const { doc, filename } = await generarPdf();
+      doc.save(filename);
+      toast.success('PDF descargado');
+    } catch {
+      toast.error('No se pudo generar el PDF');
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
+  // Genera el PDF on-demand y lo devuelve como base64 (sin el prefijo dataURL),
+  // para subirlo al Worker en el flujo de correo.
+  const generarPdfBase64 = async () => {
+    const { doc, filename } = await generarPdf();
+    const dataUri = doc.output('datauristring');
+    const base64 = dataUri.slice(dataUri.indexOf(',') + 1);
+    return { base64, filename };
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -693,12 +746,33 @@ export function Hidrologia() {
               </div>
               <div className="flex shrink-0 items-center gap-3">
                 {idf?.available && (
-                  <ChartDownloadButton
-                    targetRef={idfChartRef}
-                    title="Curva IDF"
-                    subtitle={station?.nombre ?? station?.codigo}
-                    filenameParts={['curva-idf', station?.nombre ?? station?.codigo ?? '']}
-                  />
+                  <>
+                    <ChartDownloadButton
+                      targetRef={idfChartRef}
+                      title="Curva IDF"
+                      subtitle={station?.nombre ?? station?.codigo}
+                      filenameParts={['curva-idf', station?.nombre ?? station?.codigo ?? '']}
+                    />
+                    <button
+                      type="button"
+                      onClick={descargarPdf}
+                      disabled={pdfBusy}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-accent/40 hover:text-accent disabled:opacity-50"
+                      title="Descargar informe PDF"
+                    >
+                      <FileDown className="h-4 w-4" />
+                      {pdfBusy ? 'Generando…' : 'PDF'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCorreoOpen(true)}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-accent/40 hover:text-accent"
+                      title="Enviar el PDF por correo"
+                    >
+                      <Mail className="h-4 w-4" />
+                      Correo
+                    </button>
+                  </>
                 )}
                 <CloudRain className="h-5 w-5 shrink-0 text-accent" />
               </div>
@@ -1046,6 +1120,16 @@ export function Hidrologia() {
             no-paramétrico por percentiles empíricos (variante de la guía OMM). Estos análisis son orientativos: para diseño
             definitivo valida con los datos crudos y la normativa aplicable.
           </p>
+
+          {idf?.available && (
+            <EnviarPorCorreo
+              open={correoOpen}
+              onOpenChange={setCorreoOpen}
+              stationName={station.nombre}
+              stationCode={station.codigo}
+              generarPdfBase64={generarPdfBase64}
+            />
+          )}
         </>
       )}
     </div>
