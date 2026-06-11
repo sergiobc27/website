@@ -125,11 +125,19 @@ const SUGERENCIAS = [
   '¿Para qué sirve el coeficiente de escorrentía?',
 ];
 
-export function Asistente() {
+interface AsistenteProps {
+  /** Vista actual de la app (contexto "qué estoy viendo"); se envía al Worker. */
+  view?: string;
+  /** Dentro del panel flotante: layout compacto que llena el alto del panel. */
+  compact?: boolean;
+}
+
+export function Asistente({ view, compact }: AsistenteProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -140,6 +148,7 @@ export function Asistente() {
     const pregunta = text.trim();
     if (!pregunta || isLoading) return;
     setError('');
+    setSuggestions([]);
     const nuevos: ChatMessage[] = [...messages, { role: 'user', content: pregunta }];
     setMessages(nuevos);
     setInput('');
@@ -151,7 +160,7 @@ export function Asistente() {
       const response = await fetch(apiUrl('/api/chat'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ messages: nuevos.slice(-10) }),
+        body: JSON.stringify({ messages: nuevos.slice(-10), ...(view ? { view } : {}) }),
         signal: controller.signal,
       });
       const data = await response.json().catch(() => null);
@@ -159,6 +168,11 @@ export function Asistente() {
         throw new Error((data && data.error) || 'El asistente no pudo responder.');
       }
       setMessages((current) => [...current, { role: 'assistant', content: data.reply }]);
+      setSuggestions(
+        Array.isArray(data.suggestions)
+          ? data.suggestions.filter((s: unknown): s is string => typeof s === 'string').slice(0, 3)
+          : [],
+      );
     } catch (cause) {
       const msg =
         cause instanceof DOMException && cause.name === 'AbortError'
@@ -174,16 +188,18 @@ export function Asistente() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-180px)] min-h-[480px] flex-col">
-      <div className="mb-3">
-        <h2 className="flex items-center gap-2 text-2xl font-bold text-card-foreground">
-          <Sparkles className="h-6 w-6 text-accent" /> Asistente hidrológico
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Ayuda con conceptos de hidrología y el uso de la plataforma — y solo con eso. Es orientativa: no inventa
-          datos ni reemplaza el criterio de diseño.
-        </p>
-      </div>
+    <div className={compact ? 'flex h-full min-h-0 flex-col' : 'flex h-[calc(100vh-180px)] min-h-[480px] flex-col'}>
+      {!compact && (
+        <div className="mb-3">
+          <h2 className="flex items-center gap-2 text-2xl font-bold text-card-foreground">
+            <Sparkles className="h-6 w-6 text-accent" /> Asistente hidrológico
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Ayuda con conceptos de hidrología y el uso de la plataforma — y solo con eso. Es orientativa: no inventa
+            datos ni reemplaza el criterio de diseño.
+          </p>
+        </div>
+      )}
 
       <div
         ref={scrollRef}
@@ -237,6 +253,21 @@ export function Asistente() {
                 <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent" style={{ animationDelay: '300ms' }} />
               </span>
             </div>
+          </div>
+        )}
+
+        {!isLoading && suggestions.length > 0 && messages.length > 0 && (
+          <div className="flex flex-wrap gap-2 pl-11">
+            {suggestions.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => void send(s)}
+                className="rounded-full border border-accent/40 bg-accent/5 px-3 py-1.5 text-xs text-card-foreground transition-colors hover:border-accent hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+              >
+                {s}
+              </button>
+            ))}
           </div>
         )}
       </div>

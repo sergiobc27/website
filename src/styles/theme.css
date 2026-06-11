@@ -312,3 +312,15 @@
     }
   }
 }
+
+/* Pulso del boton flotante del Asistente: anillo dorado suave. El bloque
+   global de prefers-reduced-motion (arriba) ya lo neutraliza para usuarios
+   con sensibilidad vestibular. */
+@keyframes asistente-pulso {
+  0% { box-shadow: 0 0 0 0 rgba(201, 162, 39, 0.45); }
+  70% { box-shadow: 0 0 0 14px rgba(201, 162, 39, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(201, 162, 39, 0); }
+}
+.asistente-flotante {
+  animation: asistente-pulso 2.6s ease-out infinite;
+}
