@@ -26,56 +26,66 @@ interface ChartMeta {
 // devolviendo el Blob. Respeta el tema (claro/oscuro) leyendo la clase `dark`.
 // Reutilizado por la descarga y por la copia al portapapeles.
 export async function composeChartPng(node: HTMLElement, meta: ChartMeta): Promise<Blob> {
-  const isDark = document.documentElement.classList.contains('dark');
-  const bg = isDark ? '#1a1a1a' : '#ffffff';
-  const fg = isDark ? '#f3f4f6' : '#1a1a1a';
-  const muted = isDark ? '#cccccc' : '#595959';
-  const accent = '#C9A227';
+  // Exportar SIEMPRE en claro: un PNG con fondo oscuro es inservible para pegar
+  // en un informe impreso. Quitamos .dark durante la captura (html-to-image
+  // inlina los colores computados en el clon) y lo restauramos al terminar.
+  const root = document.documentElement;
+  const wasDark = root.classList.contains('dark');
+  if (wasDark) root.classList.remove('dark');
 
-  const dataUrl = await toPng(node, { pixelRatio: 2, cacheBust: true, backgroundColor: bg });
-  const chart = new Image();
-  await new Promise<void>((resolve, reject) => {
-    chart.onload = () => resolve();
-    chart.onerror = reject;
-    chart.src = dataUrl;
-  });
+  try {
+    const bg = '#ffffff';
+    const fg = '#1a1a1a';
+    const muted = '#595959';
+    const accent = '#C9A227';
 
-  const pad = 48;
-  const headerH = meta.subtitle ? 150 : 108;
-  const footerH = 72;
-  const canvas = document.createElement('canvas');
-  canvas.width = chart.width + pad * 2;
-  canvas.height = headerH + chart.height + footerH;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('No canvas context');
+    const dataUrl = await toPng(node, { pixelRatio: 2, cacheBust: true, backgroundColor: bg });
+    const chart = new Image();
+    await new Promise<void>((resolve, reject) => {
+      chart.onload = () => resolve();
+      chart.onerror = reject;
+      chart.src = dataUrl;
+    });
 
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const pad = 48;
+    const headerH = meta.subtitle ? 150 : 108;
+    const footerH = 72;
+    const canvas = document.createElement('canvas');
+    canvas.width = chart.width + pad * 2;
+    canvas.height = headerH + chart.height + footerH;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('No canvas context');
 
-  ctx.textBaseline = 'top';
-  ctx.fillStyle = fg;
-  ctx.font = '700 40px system-ui, -apple-system, sans-serif';
-  ctx.fillText(meta.title, pad, 40);
-  if (meta.subtitle) {
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = fg;
+    ctx.font = '700 40px system-ui, -apple-system, sans-serif';
+    ctx.fillText(meta.title, pad, 40);
+    if (meta.subtitle) {
+      ctx.fillStyle = muted;
+      ctx.font = '400 28px system-ui, -apple-system, sans-serif';
+      ctx.fillText(meta.subtitle, pad, 94);
+    }
+    ctx.fillStyle = accent;
+    ctx.fillRect(pad, headerH - 18, canvas.width - pad * 2, 3);
+
+    ctx.drawImage(chart, pad, headerH);
+
     ctx.fillStyle = muted;
-    ctx.font = '400 28px system-ui, -apple-system, sans-serif';
-    ctx.fillText(meta.subtitle, pad, 94);
+    ctx.font = '400 24px system-ui, -apple-system, sans-serif';
+    ctx.fillText(`Generado ${new Date().toLocaleDateString('es-CO')}`, pad, headerH + chart.height + 24);
+    const url = 'ideam.sergiobc.com';
+    const w = ctx.measureText(url).width;
+    ctx.fillText(url, canvas.width - pad - w, headerH + chart.height + 24);
+
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) throw new Error('No blob');
+    return blob;
+  } finally {
+    if (wasDark) root.classList.add('dark');
   }
-  ctx.fillStyle = accent;
-  ctx.fillRect(pad, headerH - 18, canvas.width - pad * 2, 3);
-
-  ctx.drawImage(chart, pad, headerH);
-
-  ctx.fillStyle = muted;
-  ctx.font = '400 24px system-ui, -apple-system, sans-serif';
-  ctx.fillText(`Generado ${new Date().toLocaleDateString('es-CO')}`, pad, headerH + chart.height + 24);
-  const url = 'ideam.sergiobc.com';
-  const w = ctx.measureText(url).width;
-  ctx.fillText(url, canvas.width - pad - w, headerH + chart.height + 24);
-
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-  if (!blob) throw new Error('No blob');
-  return blob;
 }
 
 // Descarga el PNG compuesto como archivo.

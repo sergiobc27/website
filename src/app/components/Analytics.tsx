@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, BarChart3, CalendarRange, Globe2, MapPin, TrendingUp } from 'lucide-react';
 import { ChartDownloadButton } from './ChartDownloadButton';
+import { useUrlSync } from '../lib/urlState';
 import {
   Area,
   AreaChart,
@@ -91,6 +92,30 @@ export function Analytics() {
   const [isLoadingSeries, setIsLoadingSeries] = useState(true);
   const [isLoadingPanels, setIsLoadingPanels] = useState(true);
   const [error, setError] = useState('');
+
+  // Estado en la URL: ?var=<dataset>&dep=<depto>&int=year&metric=avg&years=2000-2020.
+  useUrlSync({
+    params: {
+      var: datasetId === 's54a-sgyg' ? undefined : datasetId,
+      dep: department || undefined,
+      int: interval === 'year' ? undefined : interval,
+      metric: metric === 'avg' ? undefined : metric,
+      // Solo si el usuario lo cambió: el rango auto-inicializado (límites del
+      // dataset) es el default y no debe ensuciar la URL.
+      years: yearTouched && yearRange ? `${yearRange[0]}-${yearRange[1]}` : undefined,
+    },
+    onRestore: (p) => {
+      if (p.var) setDatasetId(p.var);
+      if (p.dep) setDepartment(p.dep);
+      if (p.int === 'day' || p.int === 'month' || p.int === 'year') setInterval(p.int);
+      if (['avg', 'sum', 'min', 'max', 'count'].includes(p.metric)) setMetric(p.metric as AnalyticsMetric);
+      const m = p.years?.match(/^(\d{4})-(\d{4})$/);
+      if (m) {
+        setYearRange([Number(m[1]), Number(m[2])]);
+        setYearTouched(true);
+      }
+    },
+  });
 
   // Límites de años disponibles del dataset elegido (del overview).
   const datasetBounds = useMemo(() => {
@@ -419,7 +444,7 @@ export function Analytics() {
         </div>
       )}
 
-      <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+      <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
         <div className="mb-6 flex items-center justify-between gap-4">
           <div>
             <h3 className="font-bold text-card-foreground">
@@ -458,7 +483,7 @@ export function Analytics() {
                     metricLabel,
                   ]}
                 />
-                <Area type="monotone" dataKey="valor" stroke="var(--accent)" strokeWidth={2} fill="url(#serieGradient)" isAnimationActive={false} />
+                <Area type="monotone" dataKey="valor" stroke="var(--accent)" strokeWidth={2} fill="url(#serieGradient)" isAnimationActive animationDuration={550} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -466,7 +491,7 @@ export function Analytics() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
           <div className="mb-6 flex items-center justify-between gap-4">
             <div>
               <h3 className="font-bold text-card-foreground">Climatología mensual{unitSuffix(varUnit)}</h3>
@@ -484,16 +509,16 @@ export function Analytics() {
                   <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} />
                   <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} tickFormatter={(v: number) => formatValue(v)} width={70} label={{ value: varUnit, angle: -90, position: 'insideLeft', style: { fontSize: 10, textAnchor: 'middle' } }} />
                   <Tooltip contentStyle={tooltipStyle} formatter={(value: number, name: string) => [`${formatValue(value)}${varUnit ? ' ' + varUnit : ''}`, name]} />
-                  <Bar dataKey="media" fill="var(--accent)" radius={[6, 6, 0, 0]} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="máximo" stroke="var(--primary)" strokeWidth={1.5} dot={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="mínimo" stroke="currentColor" className="text-muted-foreground" strokeWidth={1.5} dot={false} isAnimationActive={false} />
+                  <Bar dataKey="media" fill="var(--accent)" radius={[6, 6, 0, 0]} isAnimationActive animationDuration={550} />
+                  <Line type="monotone" dataKey="máximo" stroke="var(--primary)" strokeWidth={1.5} dot={false} isAnimationActive animationDuration={550} />
+                  <Line type="monotone" dataKey="mínimo" stroke="currentColor" className="text-muted-foreground" strokeWidth={1.5} dot={false} isAnimationActive animationDuration={550} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
           )}
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
           <div className="mb-6 flex items-center justify-between gap-4">
             <div>
               <h3 className="font-bold text-card-foreground">Top 10 departamentos</h3>
@@ -519,7 +544,7 @@ export function Analytics() {
                       item.payload?.label ?? '',
                     ]}
                   />
-                  <Bar dataKey="observaciones" fill="var(--primary)" radius={[0, 6, 6, 0]} isAnimationActive={false} />
+                  <Bar dataKey="observaciones" fill="var(--primary)" radius={[0, 6, 6, 0]} isAnimationActive animationDuration={550} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -528,7 +553,7 @@ export function Analytics() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
           <div className="mb-6 flex items-center justify-between gap-4">
             <div>
               <h3 className="font-bold text-card-foreground">Anomalías mensuales (últimos 24 meses)</h3>
@@ -552,7 +577,7 @@ export function Analytics() {
                   <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} minTickGap={20} />
                   <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} tickFormatter={(v: number) => `${v}%`} width={56} />
                   <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`${value > 0 ? '+' : ''}${formatValue(value)}% vs lo normal`, 'Anomalía']} />
-                  <Bar dataKey="anomalia" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                  <Bar dataKey="anomalia" radius={[4, 4, 0, 0]} isAnimationActive animationDuration={550}>
                     {anomalyData.map((entry) => (
                       <Cell key={entry.label} fill={entry.anomalia >= 0 ? '#2563eb' : '#A3161A'} />
                     ))}
@@ -563,7 +588,7 @@ export function Analytics() {
           )}
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
           <div className="mb-4 flex items-center justify-between gap-4">
             <div>
               <h3 className="font-bold text-card-foreground">Top 10 estaciones</h3>
@@ -600,7 +625,7 @@ export function Analytics() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+      <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
         <div className="mb-4 flex items-center justify-between gap-4">
           <div>
             <h3 className="font-bold text-card-foreground">Cobertura del espejo por variable</h3>

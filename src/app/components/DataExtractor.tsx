@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   Calendar,
   CheckCircle2,
@@ -10,6 +10,7 @@ import {
   FileArchive,
   FileSearch,
   Filter,
+  Info,
   Layers,
   LoaderCircle,
   MapPin,
@@ -18,6 +19,7 @@ import {
   ShieldCheck,
   TimerReset,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { EmptyState } from './EmptyState';
 import { ApiError, apiJson, apiUrl } from '../lib/ideamApi';
 import { fmt } from '../lib/format';
@@ -957,35 +959,40 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       if (error instanceof ApiError && error.status === 429) {
         const wait = error.retryAfterSeconds ? ` en ~${Math.ceil(error.retryAfterSeconds / 60)} minuto(s)` : ' en unos minutos';
         setActiveTask('Servidor ocupado');
-        appendLog('ERROR', `${error.message} Intenta de nuevo${wait}.`);
+        const msg = `${error.message} Intenta de nuevo${wait}.`;
+        appendLog('ERROR', msg);
+        toast.error('Servidor ocupado', { description: msg });
       } else if (error instanceof ApiError && error.status === 413) {
         setActiveTask('Seleccion demasiado grande');
         appendLog('ERROR', error.message);
+        toast.error('Seleccion demasiado grande', { description: error.message });
       } else {
         setActiveTask('Error en descarga');
-        appendLog('ERROR', error instanceof Error ? error.message : 'Error durante la descarga.');
+        const msg = error instanceof Error ? error.message : 'Error durante la descarga.';
+        appendLog('ERROR', msg);
+        toast.error('Error en la descarga', { description: msg });
       }
     }
   };
 
+  // Requisito faltante del paso actual: si hay uno, el boton Siguiente se
+  // deshabilita y se muestra el motivo inline (no en el log lejano).
+  const stepRequirement =
+    step === 'consent' && !acceptedTerms
+      ? 'Acepta el aviso legal para continuar.'
+      : step === 'variable' && !datasetId
+        ? 'Selecciona una variable para continuar.'
+        : step === 'territory' && !selectedDepartments.length
+          ? 'Selecciona al menos un departamento.'
+          : step === 'time' && (!startDate || !endDate || startDate > endDate)
+            ? 'Configura un rango temporal valido.'
+            : null;
+  const isLastStep = selectedStepIndex === steps.length - 1;
+  const canAdvance = !stepRequirement && !isLastStep;
+
   const goNext = () => {
-    try {
-      if (step === 'consent' && !acceptedTerms) {
-        throw new Error('Debes aceptar el aviso legal para iniciar.');
-      }
-      if (step === 'variable' && !datasetId) {
-        throw new Error('Selecciona una variable para continuar.');
-      }
-      if (step === 'territory' && !selectedDepartments.length) {
-        throw new Error('Selecciona al menos un departamento.');
-      }
-      if (step === 'time' && (!startDate || !endDate || startDate > endDate)) {
-        throw new Error('Configura un rango temporal valido.');
-      }
-      setStep(steps[Math.min(selectedStepIndex + 1, steps.length - 1)].id);
-    } catch (error) {
-      appendLog('ERROR', error instanceof Error ? error.message : 'No fue posible continuar.');
-    }
+    if (stepRequirement || isLastStep) return;
+    setStep(steps[Math.min(selectedStepIndex + 1, steps.length - 1)].id);
   };
 
   const goBack = () => {
@@ -1030,7 +1037,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-12 min-h-[calc(100vh-7rem)]">
       <div className="space-y-6 xl:col-span-4 xl:sticky xl:top-6 self-start">
-        <div className="bg-card border border-border rounded-xl p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+        <div className="bg-card border border-border rounded-xl p-6 shadow-glow">
           <div className="mb-5 flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Paso {selectedStepIndex + 1} de {steps.length}</p>
@@ -1079,12 +1086,19 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
             isBusy={isBusy}
           />
 
+          {stepRequirement && !isLastStep && (
+            <p id="step-requirement" role="status" className="mt-4 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <Info className="h-3.5 w-3.5 shrink-0 text-accent" />
+              {stepRequirement}
+            </p>
+          )}
+
           <div className="mt-6 flex items-center justify-between gap-3">
             <button
               type="button"
               onClick={goBack}
               disabled={selectedStepIndex === 0}
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold text-card-foreground transition-all hover:border-accent/40 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold text-card-foreground transition-all hover:border-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
             >
               <ChevronLeft className="h-4 w-4" />
               Atras
@@ -1092,8 +1106,10 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
             <button
               type="button"
               onClick={goNext}
-              disabled={selectedStepIndex === steps.length - 1}
-              className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary to-accent px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:shadow-[0_0_24px] hover:shadow-accent/40 disabled:opacity-50"
+              disabled={!canAdvance}
+              title={stepRequirement ?? undefined}
+              aria-describedby={stepRequirement ? 'step-requirement' : undefined}
+              className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary to-accent px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:shadow-[0_0_24px] hover:shadow-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
             >
               Siguiente
               <ChevronRight className="h-4 w-4" />
@@ -1101,7 +1117,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           </div>
         </div>
 
-        <div className="bg-card border border-border rounded-xl p-4 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+        <div className="bg-card border border-border rounded-xl p-4 shadow-glow">
           <h2 className="text-card-foreground text-sm font-bold mb-3">Navegacion del flujo</h2>
           <div className="grid grid-cols-2 gap-2">
             {steps.map((item, index) => {
@@ -1140,12 +1156,19 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       </div>
 
       <div className="xl:col-span-8 space-y-6">
-        <div className="bg-card border border-border rounded-xl p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+        <div className="bg-card border border-border rounded-xl p-6 shadow-glow">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-card-foreground font-bold">Estado de ejecucion</h3>
             <span className="text-sm font-mono text-accent">{progressLabel(progress)}</span>
           </div>
-          <div className="relative overflow-hidden rounded-full bg-muted h-4 mb-5">
+          <div
+            className="relative overflow-hidden rounded-full bg-muted h-4 mb-5"
+            role="progressbar"
+            aria-label="Progreso de la descarga"
+            aria-valuenow={Math.round(progress)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
             <div
               className="h-full bg-gradient-to-r from-primary to-accent transition-all duration-300 shadow-[0_0_20px] shadow-accent/60"
               style={{ width: `${progress}%` }}
@@ -1168,7 +1191,14 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
                 <p className="font-mono text-accent">{runtimeRate}</p>
               </div>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-2 overflow-hidden rounded-full bg-muted"
+              role="progressbar"
+              aria-label="Filas procesadas"
+              aria-valuenow={Math.round(runtimeTotalRows ? Math.min(100, (runtimeRows / runtimeTotalRows) * 100) : progress)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
               <div
                 className="h-full rounded-full bg-accent transition-all duration-500"
                 style={{ width: `${runtimeTotalRows ? Math.min(100, (runtimeRows / runtimeTotalRows) * 100) : progress}%` }}
@@ -1230,7 +1260,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         )}
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <div className="bg-card border border-border rounded-xl p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+          <div className="bg-card border border-border rounded-xl p-6 shadow-glow">
             <h3 className="text-card-foreground font-bold mb-4">Resumen configurado</h3>
             <div className="space-y-3 text-sm">
               <SummaryRow label="Variable" value={selectedDataset?.name || 'Sin seleccion'} />
@@ -1248,7 +1278,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
             </div>
           </div>
 
-          <div className="bg-card border border-border rounded-xl p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+          <div className="bg-card border border-border rounded-xl p-6 shadow-glow">
             <h3 className="text-card-foreground font-bold mb-4">Salida esperada</h3>
             <div className="space-y-3 text-sm">
               <SummaryRow label="Entrega" value="ZIP unico organizado por carpetas" />
@@ -1261,13 +1291,18 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           </div>
         </div>
 
-        <div className="bg-card border border-border rounded-xl overflow-hidden shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+        <div className="bg-card border border-border rounded-xl overflow-hidden shadow-glow">
           <div className="px-6 py-4 border-b border-border">
             <h3 className="text-card-foreground font-bold">Registro operativo</h3>
           </div>
           <div className="p-6">
             {logs.length === 0 ? (
-              <EmptyState />
+              <EmptyState
+                icon={FileSearch}
+                title="Sin operaciones registradas"
+                description="Ejecuta una vista previa o una descarga para ver aquí el registro paso a paso."
+                hint=""
+              />
             ) : (
               <div
                 className="bg-black rounded-lg p-4 h-[240px] overflow-y-auto font-mono text-sm"
@@ -1292,7 +1327,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           </div>
         </div>
 
-        <div className="bg-card border border-border rounded-xl overflow-hidden shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+        <div className="bg-card border border-border rounded-xl overflow-hidden shadow-glow">
           <div className="flex items-center justify-between px-6 py-4 border-b border-border">
             <h3 className="text-card-foreground font-bold">Vista previa de resultados</h3>
             <span className="text-muted-foreground text-sm font-mono">
@@ -1301,7 +1336,12 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           </div>
           <div className="p-6">
             {!preview?.rows?.length ? (
-              <EmptyState />
+              <EmptyState
+                icon={Search}
+                title="Sin vista previa"
+                description="Genera una vista previa para inspeccionar las primeras filas antes de descargar."
+                hint="Genera una vista previa"
+              />
             ) : (
               <>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -1339,14 +1379,19 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           </div>
         </div>
 
-        <div className="bg-card border border-border rounded-xl overflow-hidden shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+        <div className="bg-card border border-border rounded-xl overflow-hidden shadow-glow">
           <div className="flex items-center justify-between px-6 py-4 border-b border-border">
             <h3 className="text-card-foreground font-bold">Metricas de descarga</h3>
             <span className="text-muted-foreground text-sm font-mono">{downloadMetrics?.fileName || 'Sin ejecucion final'}</span>
           </div>
           <div className="p-6">
             {!downloadMetrics ? (
-              <EmptyState />
+              <EmptyState
+                icon={Layers}
+                title="Sin métricas todavía"
+                description="Al completar una descarga verás filas, estaciones, municipios, peso y tiempo."
+                hint=""
+              />
             ) : (
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard title="Filas" value={downloadMetrics.rowCount.toLocaleString('es-CO')} icon={Database} />
@@ -1543,7 +1588,7 @@ function StepPanel({
                 onChange={(event) => setFilterSearch((current) => ({ ...current, [definition.key]: event.target.value }))}
                 placeholder={`Buscar ${definition.label.toLowerCase()}`}
                 disabled={status !== 'ready'}
-                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-card-foreground focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 disabled:opacity-60"
+                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-card-foreground focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
               />
               <div className="max-h-48 overflow-y-auto rounded-lg border border-border bg-background p-3">
                 {status === 'idle' ? (
@@ -1572,20 +1617,24 @@ function StepPanel({
                       </div>
                     )}
                     <div className="flex flex-wrap gap-2">
-                      {options.slice(0, 80).map((option) => (
-                        <button
-                          key={`${definition.key}-${option.value}`}
-                          type="button"
-                          onClick={() => onToggleCatalogValue(definition.key, option.value)}
-                          className={`rounded-full border px-3 py-2 text-xs font-semibold transition-all ${
-                            (catalogFilters[definition.key] || []).includes(option.value)
-                              ? 'border-accent bg-accent/15 text-accent'
-                              : 'border-border bg-card text-muted-foreground hover:border-accent/40'
-                          }`}
-                        >
-                          {option.label || option.value} ({option.total})
-                        </button>
-                      ))}
+                      {options.slice(0, 80).map((option) => {
+                        const selected = (catalogFilters[definition.key] || []).includes(option.value);
+                        return (
+                          <button
+                            key={`${definition.key}-${option.value}`}
+                            type="button"
+                            onClick={() => onToggleCatalogValue(definition.key, option.value)}
+                            aria-pressed={selected}
+                            className={`rounded-full border px-3 py-2 text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                              selected
+                                ? 'border-accent bg-accent/15 text-accent'
+                                : 'border-border bg-card text-muted-foreground hover:border-accent/40'
+                            }`}
+                          >
+                            {option.label || option.value} ({option.total})
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -1600,7 +1649,7 @@ function StepPanel({
             onChange={(event) => onStationCodesTextChange(event.target.value)}
             rows={4}
             placeholder="Ej: 21205790, 29045180"
-            className="w-full rounded-lg border border-border bg-input px-4 py-3 text-card-foreground focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+            className="w-full rounded-lg border border-border bg-input px-4 py-3 text-card-foreground focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           />
           <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
             <span className="text-xs text-muted-foreground">
@@ -1656,8 +1705,8 @@ function StepPanel({
         </div>
         {timeMode === 'custom' ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <InputField label="Fecha inicio" type="date" value={startDate} onChange={onStartDateChange} />
-            <InputField label="Fecha fin" type="date" value={endDate} onChange={onEndDateChange} />
+            <InputField label="Fecha inicio" type="date" value={startDate} onChange={onStartDateChange} min={dateRange?.startDate ?? undefined} max={dateRange?.endDate ?? undefined} />
+            <InputField label="Fecha fin" type="date" value={endDate} onChange={onEndDateChange} min={dateRange?.startDate ?? undefined} max={dateRange?.endDate ?? undefined} />
           </div>
         ) : (
           <div className="rounded-lg border border-success/30 bg-success/10 p-4 text-sm text-success">
@@ -1796,22 +1845,30 @@ function InputField({
   onChange,
   placeholder,
   type = 'text',
+  min,
+  max,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   type?: string;
+  min?: string;
+  max?: string;
 }) {
+  const id = useId();
   return (
     <div>
-      <label className="text-muted-foreground text-sm mb-2 flex items-center gap-2 font-semibold">{label}</label>
+      <label htmlFor={id} className="text-muted-foreground text-sm mb-2 flex items-center gap-2 font-semibold">{label}</label>
       <input
+        id={id}
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="w-full bg-input text-card-foreground px-4 py-2 rounded-lg border border-border focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 transition-all"
+        min={min}
+        max={max}
+        className="w-full bg-input text-card-foreground px-4 py-2 rounded-lg border border-border focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all"
       />
     </div>
   );
@@ -1828,13 +1885,15 @@ function SelectInput({
   onChange: (value: string) => void;
   children: React.ReactNode;
 }) {
+  const id = useId();
   return (
     <div>
-      <label className="text-muted-foreground text-sm mb-2 flex items-center gap-2 font-semibold">{label}</label>
+      <label htmlFor={id} className="text-muted-foreground text-sm mb-2 flex items-center gap-2 font-semibold">{label}</label>
       <select
+        id={id}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full bg-input text-card-foreground px-4 py-2 rounded-lg border border-border focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 transition-all"
+        className="w-full bg-input text-card-foreground px-4 py-2 rounded-lg border border-border focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all"
       >
         {children}
       </select>

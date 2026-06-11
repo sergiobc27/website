@@ -3,6 +3,7 @@ import { Building2, Check, Link2, MapPin, CalendarRange, Database } from 'lucide
 import { ChartDownloadButton } from './ChartDownloadButton';
 import { Area, AreaChart, Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { SkeletonLoader } from './SkeletonLoader';
+import { useUrlSync } from '../lib/urlState';
 import { apiJson } from '../lib/ideamApi';
 import { datasetUnit, unitSuffix } from '../lib/units';
 import type {
@@ -20,10 +21,6 @@ function formatValue(value: number | null | undefined) {
   if (abs >= 100) return value.toLocaleString('es-CO', { maximumFractionDigits: 1 });
   if (abs >= 1) return value.toLocaleString('es-CO', { maximumFractionDigits: 2 });
   return value.toLocaleString('es-CO', { maximumFractionDigits: 4 });
-}
-
-export function fichaHash(department: string, municipality: string) {
-  return `#/ficha/${encodeURIComponent(department)}/${encodeURIComponent(municipality)}`;
 }
 
 export function FichaClimatica({ initialDepartment = '', initialMunicipality = '' }: { initialDepartment?: string; initialMunicipality?: string }) {
@@ -81,12 +78,17 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
     };
   }, [department]);
 
-  // La ficha es compartible: la selección viaja en el hash de la URL.
-  useEffect(() => {
-    if (department && municipality) {
-      window.history.replaceState(null, '', fichaHash(department, municipality));
-    }
-  }, [department, municipality]);
+  // Estado en la URL: /ficha?dep=<depto>&mun=<municipio> (compartible y restaurable).
+  useUrlSync({
+    params: {
+      dep: department || undefined,
+      mun: municipality || undefined,
+    },
+    onRestore: (p) => {
+      if (p.dep) setDepartment(p.dep);
+      if (p.mun) setMunicipality(p.mun);
+    },
+  });
 
   useEffect(() => {
     if (!department || !municipality) {
@@ -156,7 +158,7 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
 
   const copyLink = async () => {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/${fichaHash(department, municipality)}`);
+      await navigator.clipboard.writeText(window.location.href);
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch {
@@ -255,7 +257,7 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
           </div>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+            <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
               <div className="mb-6 flex items-center justify-between gap-4">
                 <h3 className="font-bold text-card-foreground">Climatología mensual{unitSuffix(unidad)}</h3>
                 {!isLoading && !climatologyData.every((m) => m.media === null) && (
@@ -279,16 +281,16 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
                       <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} />
                       <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} tickFormatter={(v: number) => formatValue(v)} width={64} />
                       <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => formatValue(value)} />
-                      <Bar dataKey="media" fill="var(--accent)" radius={[6, 6, 0, 0]} isAnimationActive={false} />
-                      <Line type="monotone" dataKey="máximo" stroke="var(--primary)" strokeWidth={1.5} dot={false} isAnimationActive={false} />
-                      <Line type="monotone" dataKey="mínimo" stroke="currentColor" className="text-muted-foreground" strokeWidth={1.5} dot={false} isAnimationActive={false} />
+                      <Bar dataKey="media" fill="var(--accent)" radius={[6, 6, 0, 0]} isAnimationActive animationDuration={550} />
+                      <Line type="monotone" dataKey="máximo" stroke="var(--primary)" strokeWidth={1.5} dot={false} isAnimationActive animationDuration={550} />
+                      <Line type="monotone" dataKey="mínimo" stroke="currentColor" className="text-muted-foreground" strokeWidth={1.5} dot={false} isAnimationActive animationDuration={550} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
               )}
             </div>
 
-            <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+            <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
               <h3 className="mb-6 font-bold text-card-foreground">Promedio anual{unitSuffix(unidad)}</h3>
               {isLoading ? (
                 <SkeletonLoader rows={4} />
@@ -308,7 +310,7 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
                       <XAxis dataKey="year" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} minTickGap={24} />
                       <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} tickFormatter={(v: number) => formatValue(v)} width={64} />
                       <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [formatValue(value), 'Promedio']} />
-                      <Area type="monotone" dataKey="valor" stroke="var(--accent)" strokeWidth={2} fill="url(#fichaGradient)" isAnimationActive={false} />
+                      <Area type="monotone" dataKey="valor" stroke="var(--accent)" strokeWidth={2} fill="url(#fichaGradient)" isAnimationActive animationDuration={550} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -316,7 +318,7 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+          <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
             <h3 className="mb-4 font-bold text-card-foreground">Estaciones del municipio</h3>
             {isLoading ? (
               <SkeletonLoader rows={3} />

@@ -176,7 +176,7 @@ export function DownloadHistory() {
         </div>
       )}
 
-      <div className="hidden overflow-hidden rounded-xl border border-border bg-card shadow-[0_0_40px_rgba(201,162,39,0.1)] md:block">
+      <div className="hidden overflow-hidden rounded-xl border border-border bg-card shadow-glow md:block">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="border-b border-border bg-background">

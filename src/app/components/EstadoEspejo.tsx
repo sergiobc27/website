@@ -96,7 +96,7 @@ export function EstadoEspejo() {
         <StatCard icon={RefreshCw} title="Estaciones con datos" value={totalStations.toLocaleString('es-CO')} />
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+      <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
         <h3 className="mb-4 font-bold text-card-foreground">Detalle por variable</h3>
         {isLoading ? (
           <SkeletonLoader rows={5} />

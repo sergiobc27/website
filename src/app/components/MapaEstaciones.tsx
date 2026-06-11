@@ -4,6 +4,7 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Layers, MapPin, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import { apiJson, apiUrl } from '../lib/ideamApi';
+import { useUrlSync } from '../lib/urlState';
 import { daneDeDepartamento } from '../lib/departamentos';
 import type {
   AnalyticsByRegionResponse,
@@ -188,6 +189,30 @@ export default function MapaEstaciones() {
   const [choroplethOn, setChoroplethOn] = useState(false);
   const [choroplethRange, setChoroplethRange] = useState<{ min: number; max: number } | null>(null);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
+  // Estado en la URL: filtros del mapa + dataset del sparkline + choropleth.
+  useUrlSync({
+    params: {
+      var: sparkDataset === 's54a-sgyg' ? undefined : sparkDataset,
+      estado: estadoFilter === 'todas' ? undefined : estadoFilter,
+      cat: categoriaFilter || undefined,
+      dep: departamentoFilter || undefined,
+      zona: zonaFilter || undefined,
+      corriente: corrienteFilter || undefined,
+      altmax: altitudMax === null ? undefined : String(altitudMax),
+      choro: choroplethOn ? '1' : undefined,
+    },
+    onRestore: (p) => {
+      if (p.var) setSparkDataset(p.var);
+      if (p.estado === 'todas' || p.estado === 'activa' || p.estado === 'otra') setEstadoFilter(p.estado);
+      if (p.cat) setCategoriaFilter(p.cat);
+      if (p.dep) setDepartamentoFilter(p.dep);
+      if (p.zona) setZonaFilter(p.zona);
+      if (p.corriente) setCorrienteFilter(p.corriente);
+      if (p.altmax && Number.isFinite(Number(p.altmax))) setAltitudMax(Number(p.altmax));
+      if (p.choro === '1') setChoroplethOn(true);
+    },
+  });
 
   // Carga del catálogo de estaciones (cacheado 24h en el borde) + variables.
   useEffect(() => {
@@ -637,7 +662,7 @@ export default function MapaEstaciones() {
         <div role="alert" className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div>
       )}
 
-      <div className="relative overflow-hidden rounded-xl border border-border shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+      <div className="relative overflow-hidden rounded-xl border border-border shadow-glow">
         <div ref={containerRef} style={{ height: 'calc(100vh - 230px)', minHeight: '420px' }} />
         {(!isMapReady || !allStations.length) && !error && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/70 text-sm text-muted-foreground">

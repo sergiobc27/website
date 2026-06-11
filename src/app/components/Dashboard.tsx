@@ -116,14 +116,14 @@ export function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard icon={Database} title="Datasets disponibles" value={String(datasets.length)} subtitle="Catalogo operativo" />
-        <MetricCard icon={Download} title="Filas descargadas" value={totals.rows.toLocaleString('es-CO')} subtitle={`${history.length} ejecuciones`} />
-        <MetricCard icon={MapPin} title="Estaciones procesadas" value={totals.stations.toLocaleString('es-CO')} subtitle="Suma del historial local" />
-        <MetricCard icon={Clock3} title="Tiempo medio" value={formatDuration(totals.avgTimeMs)} subtitle="Promedio por descarga" />
+        <MetricCard icon={Database} title="Datasets disponibles" value={String(datasets.length)} subtitle="Catalogo operativo" index={0} />
+        <MetricCard icon={Download} title="Filas descargadas" value={totals.rows.toLocaleString('es-CO')} subtitle={`${history.length} ejecuciones`} index={1} />
+        <MetricCard icon={MapPin} title="Estaciones procesadas" value={totals.stations.toLocaleString('es-CO')} subtitle="Suma del historial local" index={2} />
+        <MetricCard icon={Clock3} title="Tiempo medio" value={formatDuration(totals.avgTimeMs)} subtitle="Promedio por descarga" index={3} />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
           <div className="mb-6 flex items-center justify-between gap-4">
             <div>
               <h3 className="font-bold text-card-foreground">Rendimiento reciente</h3>
@@ -148,14 +148,14 @@ export function Dashboard() {
                     color: 'var(--foreground)',
                   }}
                 />
-                <Bar dataKey="filas" fill="var(--primary)" radius={[8, 8, 0, 0]} isAnimationActive={false} />
-                <Bar dataKey="estaciones" fill="var(--accent)" radius={[8, 8, 0, 0]} isAnimationActive={false} />
+                <Bar dataKey="filas" fill="var(--primary)" radius={[8, 8, 0, 0]} isAnimationActive animationDuration={550} />
+                <Bar dataKey="estaciones" fill="var(--accent)" radius={[8, 8, 0, 0]} isAnimationActive animationDuration={550} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
           <h3 className="mb-4 font-bold text-card-foreground">Impacto visible</h3>
           <div className="space-y-4 text-sm">
             <SummaryRow label="Última ejecución" value={history[0]?.timestamp || 'Sin registros'} />
@@ -176,7 +176,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+      <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
         <h3 className="mb-4 font-bold text-card-foreground">Descargas recientes</h3>
         {isLoading ? (
           <SkeletonLoader rows={3} />
@@ -210,14 +210,19 @@ function MetricCard({
   title,
   value,
   subtitle,
+  index = 0,
 }: {
   icon: React.ElementType;
   title: string;
   value: string;
   subtitle: string;
+  index?: number;
 }) {
   return (
-    <div className="min-h-[150px] rounded-xl border border-border bg-card p-6 shadow-[0_0_20px] shadow-accent/10">
+    <div
+      className="min-h-[150px] rounded-xl border border-border bg-card p-6 shadow-[0_0_20px] shadow-accent/10 animate-fade-in-up transition-all duration-200 hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-glow"
+      style={{ animationDelay: `${index * 60}ms` }}
+    >
       <div className="mb-4 flex items-start justify-between">
         <Icon className="h-7 w-7 text-accent" />
       </div>

@@ -5,6 +5,7 @@ import { ChartDownloadButton } from './ChartDownloadButton';
 import { EnviarPorCorreo } from './EnviarPorCorreo';
 import { buildIdfPdfModel, renderIdfPdf } from '../lib/pdf/idfPdf';
 import { loadImageDataUrl } from '../lib/pdf/loadImage';
+import { useUrlSync } from '../lib/urlState';
 import logoCucUrl from '../../imports/Logo_CUC_PNG_letra_blanca_barra_roja_vtcal.png';
 import logoIdeamUrl from '../../imports/Ideam_(Colombia)_logo.png';
 import { AlertTriangle, BarChart4, CheckCircle2, CloudRain, Droplets, FileDown, Mail, Navigation, Plus, Search, Waves } from 'lucide-react';
@@ -154,6 +155,35 @@ export function Hidrologia() {
   const [error, setError] = useState('');
   const [pdfBusy, setPdfBusy] = useState(false);
   const [correoOpen, setCorreoOpen] = useState(false);
+
+  // Código de estación pendiente de restaurar desde la URL (la estación solo
+  // puede seleccionarse una vez cargado el catálogo).
+  const pendingStationCode = useRef<string | null>(null);
+
+  // Estado en la URL: ?est=<codigo>&spi=12&anio=2020 (defaults omitidos).
+  useUrlSync({
+    params: {
+      est: station?.codigo || undefined,
+      spi: spiScale === 12 ? undefined : String(spiScale),
+      anio: hyetographYear || undefined,
+    },
+    onRestore: (p) => {
+      pendingStationCode.current = p.est || null;
+      if (p.spi === '3' || p.spi === '6' || p.spi === '12') setSpiScale(Number(p.spi) as 3 | 6 | 12);
+      if (p.anio) setHyetographYear(p.anio);
+    },
+  });
+
+  // Cuando el catálogo está disponible, selecciona la estación pendiente por
+  // código. Si no existe, avisa suave y deja el selector.
+  useEffect(() => {
+    const code = pendingStationCode.current;
+    if (!code || !catalog.length) return;
+    pendingStationCode.current = null;
+    const found = catalog.find((s) => s.codigo === code);
+    if (found) setStation(found);
+    else toast.error(`No se encontró la estación ${code}; elige otra del listado.`);
+  }, [catalog]);
 
   // Solo las estaciones con IDF ya precomputado y usable (>=5 años): el resto
   // daría "no disponible". Mostrarlas directamente evita que el usuario adivine
@@ -725,7 +755,7 @@ export function Hidrologia() {
           )}
 
           {/* CURVAS IDF — pieza estrella, ancho completo */}
-          <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+          <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
             <div className="mb-4 flex items-center justify-between gap-4">
               <div>
                 <h3 className="font-bold text-card-foreground">Curvas IDF · Intensidad–Duración–Frecuencia</h3>
@@ -815,7 +845,7 @@ export function Hidrologia() {
                           strokeWidth={2}
                           dot={{ r: 2 }}
                           connectNulls
-                          isAnimationActive={false}
+                          isAnimationActive animationDuration={550}
                         />
                       ))}
                     </LineChart>
@@ -883,7 +913,7 @@ export function Hidrologia() {
           )}
 
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+            <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
               <div className="mb-4 flex items-center justify-between gap-4">
                 <div>
                   <h3 className="font-bold text-card-foreground">Períodos de retorno · lluvia máxima diaria</h3>
@@ -973,9 +1003,9 @@ export function Hidrologia() {
                         />
                         <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} width={48} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(value: number, name: string) => [`${fmt(value, 1)} mm/día`, name]} labelFormatter={(v) => `Tr ≈ ${v} años`} />
-                        <Area dataKey="banda" name="IC 90%" stroke="none" fill="#C9A227" fillOpacity={0.15} connectNulls isAnimationActive={false} />
-                        <Line type="monotone" dataKey="ajustado" name="Gumbel ajustado" stroke="#C9A227" strokeWidth={2} dot={{ r: 3 }} connectNulls isAnimationActive={false} />
-                        <Scatter dataKey="observado" name="Observado (Weibull)" fill="#A3161A" isAnimationActive={false} />
+                        <Area dataKey="banda" name="IC 90%" stroke="none" fill="#C9A227" fillOpacity={0.15} connectNulls isAnimationActive animationDuration={550} />
+                        <Line type="monotone" dataKey="ajustado" name="Gumbel ajustado" stroke="#C9A227" strokeWidth={2} dot={{ r: 3 }} connectNulls isAnimationActive animationDuration={550} />
+                        <Scatter dataKey="observado" name="Observado (Weibull)" fill="#A3161A" isAnimationActive animationDuration={550} />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
@@ -983,7 +1013,7 @@ export function Hidrologia() {
               )}
             </div>
 
-            <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+            <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
               <div className="mb-4 flex items-center justify-between gap-4">
                 <div>
                   <h3 className="font-bold text-card-foreground">Monitor de sequía · SPI-{spiScale}</h3>
@@ -1029,7 +1059,7 @@ export function Hidrologia() {
                         <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '10px' }} minTickGap={28} />
                         <YAxis domain={[-3, 3]} stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} width={32} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(value: number, name, item: { payload?: SpiPointLike }) => [`${fmt(value, 2)} (${item.payload?.category || ''})`, 'SPI']} />
-                        <Bar dataKey="spi" isAnimationActive={false}>
+                        <Bar dataKey="spi" isAnimationActive animationDuration={550}>
                           {spiData.map((p) => (
                             <Cell key={p.month} fill={spiColor(p.spi)} />
                           ))}
@@ -1041,7 +1071,7 @@ export function Hidrologia() {
               )}
             </div>
 
-            <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+            <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
               <div className="mb-4 flex items-center justify-between gap-4">
                 <div>
                   <h3 className="font-bold text-card-foreground">Hietograma mensual</h3>
@@ -1068,14 +1098,14 @@ export function Hidrologia() {
                       <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} />
                       <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} width={48} />
                       <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`${fmt(value, 0)} mm`, 'Acumulado']} />
-                      <Bar dataKey="total" fill="#2563eb" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+                      <Bar dataKey="total" fill="#2563eb" radius={[4, 4, 0, 0]} isAnimationActive animationDuration={550} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               )}
             </div>
 
-            <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+            <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
               <div className="mb-4 flex items-center justify-between gap-4">
                 <div>
                   <h3 className="font-bold text-card-foreground">Histograma de acumulados diarios</h3>
@@ -1097,7 +1127,7 @@ export function Hidrologia() {
                       <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '10px' }} minTickGap={16} label={{ value: 'mm/día', position: 'insideBottom', offset: -2, fontSize: 10 }} />
                       <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} width={48} />
                       <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`${value.toLocaleString('es-CO')} días`, 'Frecuencia']} labelFormatter={(v) => `${v} mm`} />
-                      <Bar dataKey="dias" fill="var(--accent)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+                      <Bar dataKey="dias" fill="var(--accent)" radius={[4, 4, 0, 0]} isAnimationActive animationDuration={550} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

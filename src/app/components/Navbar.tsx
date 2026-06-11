@@ -25,9 +25,10 @@ import {
 import { toast } from 'sonner';
 import { getThemeChoice, applyTheme, type ThemeChoice } from '../lib/theme';
 import { clearLocalData } from '../lib/localData';
+import { CopyLinkButton } from './CopyLinkButton';
 
 interface NavbarProps {
-  breadcrumbs: string[];
+  breadcrumbs: Array<{ label: string; view?: string }>;
   runtime: ExtractorRuntimeState;
   onNavigate: (view: string) => void;
   onOpenMobileNav: () => void;
@@ -85,18 +86,28 @@ export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMobileNav }: Na
         >
           <Menu className="h-5 w-5" />
         </button>
-        {breadcrumbs.map((crumb, index) => (
-          <div key={index} className="flex min-w-0 items-center gap-2">
-            {index > 0 && <ChevronRight className="h-4 w-4 shrink-0 text-border" />}
-            <span
-              className={`truncate transition-colors ${
-                index === breadcrumbs.length - 1 ? 'font-semibold text-accent' : 'cursor-pointer text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {crumb}
-            </span>
-          </div>
-        ))}
+        {breadcrumbs.map((crumb, index) => {
+          const isLast = index === breadcrumbs.length - 1;
+          const clickable = !isLast && crumb.view;
+          return (
+            <div key={index} className="flex min-w-0 items-center gap-2">
+              {index > 0 && <ChevronRight className="h-4 w-4 shrink-0 text-border" />}
+              {clickable ? (
+                <button
+                  type="button"
+                  onClick={() => onNavigate(crumb.view!)}
+                  className="truncate rounded text-muted-foreground transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  {crumb.label}
+                </button>
+              ) : (
+                <span className={`truncate transition-colors ${isLast ? 'font-semibold text-accent' : 'text-muted-foreground'}`}>
+                  {crumb.label}
+                </span>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       <div className="flex shrink-0 items-center gap-2 md:gap-3">
@@ -144,6 +155,8 @@ export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMobileNav }: Na
         >
           {resolveQuickToggle(theme) === 'light' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
         </button>
+
+        <CopyLinkButton />
 
         <button
           type="button"

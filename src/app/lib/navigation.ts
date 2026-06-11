@@ -1,7 +1,8 @@
-// Vistas con ruta propia. 'ficha' NO está aquí: es un deep-link por hash con
-// parámetros (#/ficha/DEP/MUN) que se conserva tal cual.
+// Vistas con ruta propia. 'ficha' tiene ruta base '/ficha' (muestra el selector
+// de departamento/municipio); además acepta el deep-link compartible por hash
+// con parámetros (#/ficha/DEP/MUN), que se conserva tal cual al pegarlo.
 export const VIEWS = [
-  'dashboard', 'analytics', 'map', 'compare', 'hydro', 'asistente',
+  'dashboard', 'analytics', 'map', 'compare', 'ficha', 'hydro', 'asistente',
   'status', 'extractor', 'history', 'settings', 'docs',
 ] as const;
 

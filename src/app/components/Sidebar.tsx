@@ -9,20 +9,47 @@ interface SidebarProps {
   onNavigate: (view: string) => void;
 }
 
-const MENU_ITEMS = [
-  { id: 'dashboard', icon: BarChart3, label: 'Dashboard' },
-  { id: 'analytics', icon: TrendingUp, label: 'Analítica' },
-  { id: 'map', icon: MapPin, label: 'Mapa de Estaciones' },
-  { id: 'compare', icon: GitCompareArrows, label: 'Comparador' },
-  { id: 'ficha', icon: Building2, label: 'Ficha Climática' },
-  { id: 'hydro', icon: Droplets, label: 'Hidrología' },
-  { id: 'asistente', icon: Sparkles, label: 'Asistente' },
-  { id: 'extractor', icon: Database, label: 'Extractor de Datos' },
-  { id: 'history', icon: Download, label: 'Historial' },
-  { id: 'status', icon: Activity, label: 'Estado del Espejo' },
-  { id: 'settings', icon: Settings, label: 'Ajustes de API' },
-  { id: 'docs', icon: FileText, label: 'Documentación' },
+// Items agrupados por intención de uso: 12 ítems planos superan el límite de
+// escaneo (7±2). Tres secciones dan jerarquía sin esconder nada.
+const MENU_SECTIONS = [
+  {
+    title: 'Explorar',
+    items: [
+      { id: 'dashboard', icon: BarChart3, label: 'Dashboard' },
+      { id: 'analytics', icon: TrendingUp, label: 'Analítica' },
+      { id: 'map', icon: MapPin, label: 'Mapa de Estaciones' },
+      { id: 'compare', icon: GitCompareArrows, label: 'Comparador' },
+      { id: 'ficha', icon: Building2, label: 'Ficha Climática' },
+      { id: 'hydro', icon: Droplets, label: 'Hidrología' },
+    ],
+  },
+  {
+    title: 'Herramientas',
+    items: [
+      { id: 'asistente', icon: Sparkles, label: 'Asistente' },
+      { id: 'extractor', icon: Database, label: 'Extractor de Datos' },
+      { id: 'history', icon: Download, label: 'Historial' },
+    ],
+  },
+  {
+    title: 'Sistema',
+    items: [
+      { id: 'status', icon: Activity, label: 'Estado del Espejo' },
+      { id: 'settings', icon: Settings, label: 'Ajustes de API' },
+      { id: 'docs', icon: FileText, label: 'Documentación' },
+    ],
+  },
 ];
+
+const COLLAPSE_KEY = 'ideam-sidebar-collapsed';
+
+function readCollapsed(): boolean {
+  try {
+    return localStorage.getItem(COLLAPSE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 // Contenido del sidebar reutilizable: lo usa el sidebar fijo de escritorio y el
 // drawer (Sheet) en móvil. `onToggleCollapse` solo aplica en escritorio.
@@ -57,8 +84,9 @@ export function SidebarContent({
         {onToggleCollapse && (
           <button
             onClick={onToggleCollapse}
-            className="absolute -right-3 top-8 w-6 h-6 bg-[#C9A227] rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform z-10"
+            className="absolute -right-3 top-8 w-6 h-6 bg-[#C9A227] rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
             title={isCollapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
+            aria-label={isCollapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
           >
             {isCollapsed ? (
               <ChevronRight className="w-4 h-4 text-[#0f0f0f]" />
@@ -69,27 +97,37 @@ export function SidebarContent({
         )}
       </div>
 
-      <nav className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-thin">
-        {MENU_ITEMS.map((item) => {
-          const Icon = item.icon;
-          const isActive = currentView === item.id;
+      <nav className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
+        {MENU_SECTIONS.map((section, sectionIndex) => (
+          <div key={section.title} className="space-y-2">
+            {!isCollapsed ? (
+              <p className="px-4 pt-1 text-[0.65rem] font-semibold uppercase tracking-wider text-white/50">{section.title}</p>
+            ) : (
+              sectionIndex > 0 && <div className="mx-auto my-2 h-px w-8 bg-[#8a1216]" aria-hidden="true" />
+            )}
+            {section.items.map((item) => {
+              const Icon = item.icon;
+              const isActive = currentView === item.id;
 
-          return (
-            <button
-              key={item.id}
-              onClick={() => onNavigate(item.id)}
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 justify-start'} px-4 py-3 rounded-lg transition-all duration-200 ${
-                isActive
-                  ? 'bg-[#C9A227] text-[#0f0f0f] font-semibold shadow-[0_0_20px_rgba(201,162,39,0.4)]'
-                  : 'text-white/80 hover:bg-[#8a1216] hover:text-white'
-              }`}
-              title={isCollapsed ? item.label : ''}
-            >
-              <Icon className="w-5 h-5 flex-shrink-0" />
-              {!isCollapsed && <span className="text-sm truncate">{item.label}</span>}
-            </button>
-          );
-        })}
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => onNavigate(item.id)}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 justify-start'} px-4 py-3 rounded-lg transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A227] ${
+                    isActive
+                      ? 'bg-[#C9A227] text-[#0f0f0f] font-semibold shadow-[0_0_20px_rgba(201,162,39,0.4)]'
+                      : 'text-white/80 hover:bg-[#8a1216] hover:text-white'
+                  }`}
+                  title={isCollapsed ? item.label : ''}
+                >
+                  <Icon className="w-5 h-5 flex-shrink-0" />
+                  {!isCollapsed && <span className="text-sm truncate">{item.label}</span>}
+                </button>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
       <div className="p-4 border-t border-[#8a1216]">
@@ -109,9 +147,21 @@ export function SidebarContent({
 }
 
 // Sidebar fijo de escritorio. En móvil (<lg) se oculta; la navegación móvil se
-// abre como drawer (Sheet) desde el Navbar (ver App.tsx).
+// abre como drawer (Sheet) desde el Navbar (ver App.tsx). El estado de colapso
+// persiste en localStorage, igual que el tema y el historial.
 export function Sidebar({ currentView, onNavigate }: SidebarProps) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(readCollapsed);
+
+  const toggleCollapse = () =>
+    setIsCollapsed((collapsed) => {
+      const next = !collapsed;
+      try {
+        localStorage.setItem(COLLAPSE_KEY, next ? '1' : '0');
+      } catch {
+        // localStorage no disponible (modo privado): el colapso sigue funcionando en memoria.
+      }
+      return next;
+    });
 
   return (
     <div className={`${isCollapsed ? 'w-20' : 'w-72'} h-screen bg-[#A3161A] border-r border-[#8a1216] hidden lg:flex flex-col flex-shrink-0 transition-all duration-300`}>
@@ -119,7 +169,7 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
         currentView={currentView}
         onNavigate={onNavigate}
         isCollapsed={isCollapsed}
-        onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
+        onToggleCollapse={toggleCollapse}
       />
     </div>
   );

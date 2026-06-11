@@ -10,11 +10,14 @@
   --popover-foreground: #1a1a1a;
   --primary: #A3161A;
   --primary-foreground: #ffffff;
-  --secondary: #C9A227;
+  /* Oro accesible para modo claro: el #C9A227 brillante falla contraste AA
+     sobre blanco (2.4:1). #7A5E0A pasa AA como texto (6.1:1) y como fondo con
+     texto blanco. El oro brillante se conserva en modo oscuro (.dark). */
+  --secondary: #7A5E0A;
   --secondary-foreground: #ffffff;
   --muted: #f5f5f5;
   --muted-foreground: #595959;
-  --accent: #C9A227;
+  --accent: #7A5E0A;
   --accent-foreground: #ffffff;
   --destructive: #A3161A;
   --destructive-foreground: #ffffff;
@@ -26,7 +29,7 @@
   --switch-background: #CCCCCC;
   --font-weight-medium: 600;
   --font-weight-normal: 400;
-  --ring: #C9A227;
+  --ring: #7A5E0A;
   --chart-1: #A3161A;
   --chart-2: #C9A227;
   --chart-3: #078930;
@@ -117,6 +120,9 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  /* Glow dorado de tarjeta: fuente unica de verdad. Antes estaba duplicado
+     como shadow-[0_0_40px_rgba(201,162,39,0.1)] en 33 sitios. Usar shadow-glow. */
+  --shadow-glow: 0 0 40px rgba(201, 162, 39, 0.1);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -251,6 +257,23 @@
     animation: float 3s ease-in-out infinite;
   }
 
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Entrada sutil para tarjetas; el delay escalonado se pasa inline. La regla
+     global de prefers-reduced-motion la neutraliza automaticamente. */
+  .animate-fade-in-up {
+    animation: fade-in-up 0.4s ease-out both;
+  }
+
   .scrollbar-thin::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -273,5 +296,19 @@
     background: rgba(17, 24, 39, 0.6);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
+  }
+
+  /* Accesibilidad (WCAG 2.3.3): respeta la preferencia del SO de reducir
+     movimiento. Neutraliza animaciones infinitas (skeleton, glow, float,
+     ping) y transiciones para usuarios con sensibilidad vestibular. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }

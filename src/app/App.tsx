@@ -16,27 +16,34 @@ const Hidrologia = lazy(() => import('./components/Hidrologia').then((m) => ({ d
 const BibliotecaReferencias = lazy(() => import('./components/BibliotecaReferencias').then((m) => ({ default: m.BibliotecaReferencias })));
 const Asistente = lazy(() => import('./components/Asistente').then((m) => ({ default: m.Asistente })));
 
-// La ficha municipal es compartible: #/ficha/DEPARTAMENTO/MUNICIPIO.
-function parseFichaHash(): { department: string; municipality: string } | null {
+// Compatibilidad hacia atrás: convierte un enlace viejo de ficha por hash
+// (#/ficha/DEP/MUN) a la ruta nueva con query (/ficha?dep=DEP&mun=MUN).
+// Devuelve true si hizo la conversión. La ficha lee su estado de la query
+// mediante useUrlSync (ver FichaClimatica).
+function migrateLegacyFichaHash(): boolean {
   const match = window.location.hash.match(/^#\/ficha\/([^/]+)\/([^/]+)/);
-  if (!match) return null;
+  if (!match) return false;
   try {
-    return { department: decodeURIComponent(match[1]), municipality: decodeURIComponent(match[2]) };
+    const dep = decodeURIComponent(match[1]);
+    const mun = decodeURIComponent(match[2]);
+    const search = new URLSearchParams({ dep, mun }).toString();
+    window.history.replaceState(null, '', `/ficha?${search}`);
+    return true;
   } catch {
-    return null;
+    return false;
   }
 }
 import { DataExtractor } from './components/DataExtractor';
 import type { ExtractorRuntimeState } from './components/DataExtractor';
 import { DownloadHistory } from './components/DownloadHistory';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toaster } from './components/ui/sonner';
 import { initTheme } from './lib/theme';
 import { viewToPath, pathToView } from './lib/navigation';
 
 export default function App() {
-  const [fichaParams, setFichaParams] = useState(parseFichaHash);
   const [currentView, setCurrentView] = useState(() =>
-    parseFichaHash() ? 'ficha' : pathToView(window.location.pathname),
+    migrateLegacyFichaHash() ? 'ficha' : pathToView(window.location.pathname),
   );
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [runtime, setRuntime] = useState<ExtractorRuntimeState>({
@@ -53,13 +60,12 @@ export default function App() {
   }, []);
 
   // Sincroniza la vista con la URL ante atrás/adelante (popstate) y ante un
-  // hash de ficha pegado/navegado (hashchange). La ficha es deep-link por hash;
-  // las demás pestañas son rutas reales (/map, /hydro, ...).
+  // hash viejo de ficha pegado/navegado (hashchange). Todas las pestañas son
+  // rutas reales (/map, /hydro, /ficha…); cada vista lee su propio estado de la
+  // query con useUrlSync. El hash viejo de ficha se migra a la ruta con query.
   useEffect(() => {
     const sync = () => {
-      const params = parseFichaHash();
-      if (params) {
-        setFichaParams(params);
+      if (migrateLegacyFichaHash()) {
         setCurrentView('ficha');
       } else {
         setCurrentView(pathToView(window.location.pathname));
@@ -80,7 +86,7 @@ export default function App() {
     setCurrentView(view);
   };
 
-  const getBreadcrumbs = () => {
+  const getBreadcrumbs = (): Array<{ label: string; view?: string }> => {
     const breadcrumbMap: Record<string, string[]> = {
       dashboard: ['Inicio', 'Dashboard'],
       analytics: ['Inicio', 'Analítica'],
@@ -95,7 +101,10 @@ export default function App() {
       settings: ['Inicio', 'Ajustes de API'],
       docs: ['Inicio', 'Documentación'],
     };
-    return breadcrumbMap[currentView] || ['Inicio'];
+    const labels = breadcrumbMap[currentView] || ['Inicio'];
+    // El primer crumb ('Inicio') navega al dashboard; el último es la vista
+    // actual y no es clicable. Antes todos parecían clicables pero ninguno lo era.
+    return labels.map((label, i) => (i === 0 ? { label, view: 'dashboard' } : { label }));
   };
 
   const renderContent = () => {
@@ -113,13 +122,8 @@ export default function App() {
       case 'asistente':
         return <Asistente />;
       case 'ficha':
-        return (
-          <FichaClimatica
-            key={`${fichaParams?.department || ''}|${fichaParams?.municipality || ''}`}
-            initialDepartment={fichaParams?.department}
-            initialMunicipality={fichaParams?.municipality}
-          />
-        );
+        // La ficha lee dep/mun de la query (useUrlSync); no necesita props.
+        return <FichaClimatica />;
       case 'status':
         return <EstadoEspejo />;
       case 'history':
@@ -127,7 +131,7 @@ export default function App() {
       case 'settings':
         return <SettingsView />;
       case 'docs':
-        return <DocumentationView onOpenExtractor={() => setCurrentView('extractor')} />;
+        return <DocumentationView onOpenExtractor={() => navigate('extractor')} />;
       default:
         return <Dashboard />;
     }
@@ -159,9 +163,13 @@ export default function App() {
             <DataExtractor onRuntimeChange={setRuntime} />
           </div>
           {currentView !== 'extractor' && (
-            <Suspense fallback={<div className="flex h-full items-center justify-center text-muted-foreground text-sm">Cargando…</div>}>
-              {renderContent()}
-            </Suspense>
+            // key={currentView}: al navegar se remonta el boundary y se limpia
+            // un error previo, así un fallo en una vista no bloquea las demás.
+            <ErrorBoundary key={currentView}>
+              <Suspense fallback={<div className="flex h-full items-center justify-center text-muted-foreground text-sm">Cargando…</div>}>
+                {renderContent()}
+              </Suspense>
+            </ErrorBoundary>
           )}
         </main>
       </div>
@@ -184,7 +192,7 @@ function SettingsView() {
         <InfoCard icon={FileArchive} title="Salida" value="ZIP paginado" detail="CSV, JSON y Parquet opcional" />
       </div>
 
-      <div className="bg-card border border-border rounded-xl p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+      <div className="bg-card border border-border rounded-xl p-6 shadow-glow">
         <h3 className="text-card-foreground font-bold mb-4">Variables de entorno esperadas</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
           <ConfigRow name="SOCRATA_DOMAIN" value="https://www.datos.gov.co" />
@@ -196,7 +204,7 @@ function SettingsView() {
         </div>
       </div>
 
-      <div className="bg-card border border-border rounded-xl p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+      <div className="bg-card border border-border rounded-xl p-6 shadow-glow">
         <h3 className="text-card-foreground font-bold mb-4">Controles de seguridad</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <ChecklistItem text="No se exponen tokens de Socrata o Cloudflare al navegador." />
@@ -304,7 +312,7 @@ function ChecklistItem({ text }: { text: string }) {
 
 function DocCard({ icon: Icon, title, items }: { icon: React.ElementType; title: string; items: string[] }) {
   return (
-    <div className="bg-card border border-border rounded-xl p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+    <div className="bg-card border border-border rounded-xl p-6 shadow-glow">
       <div className="flex items-center gap-3 mb-4">
         <Icon className="h-5 w-5 text-accent" />
         <h3 className="text-card-foreground font-bold">{title}</h3>

@@ -67,7 +67,7 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
   };
 
   return (
-    <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+    <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
       <div className="mb-4 flex items-center justify-between gap-4">
         <div>
           <h3 className="font-bold text-card-foreground">Calculadora de caudal de diseño (método racional)</h3>

@@ -42,7 +42,7 @@ export function BibliotecaReferencias() {
   const nColombia = REFERENCIAS.filter((r) => r.pais === 'Colombia').length;
 
   return (
-    <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+    <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <h3 className="flex items-center gap-2 font-bold text-card-foreground">

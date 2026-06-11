@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { GitCompareArrows, Plus, Search, X } from 'lucide-react';
 import { ChartDownloadButton } from './ChartDownloadButton';
+import { useUrlSync } from '../lib/urlState';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts';
 import { SkeletonLoader } from './SkeletonLoader';
 import { apiJson, apiUrl } from '../lib/ideamApi';
@@ -45,6 +46,7 @@ function formatValue(value: number | null | undefined) {
 
 export function ComparadorEstaciones() {
   const chartRef = useRef<HTMLDivElement>(null);
+  const idfChartRef = useRef<HTMLDivElement>(null);
   const [datasets, setDatasets] = useState<Array<{ id: string; name: string }>>([]);
   const [datasetId, setDatasetId] = useState('s54a-sgyg');
   const [catalog, setCatalog] = useState<StationLite[]>([]);
@@ -56,6 +58,21 @@ export function ComparadorEstaciones() {
   const [idfTr, setIdfTr] = useState(10); // período de retorno para comparar curvas IDF
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Estado en la URL: ?var=<dataset>&est=COD1,COD2&tr=10 (defaults omitidos).
+  useUrlSync({
+    params: {
+      var: datasetId === 's54a-sgyg' ? undefined : datasetId,
+      est: selectedCodes.length ? selectedCodes.join(',') : undefined,
+      tr: idfTr === 10 ? undefined : String(idfTr),
+    },
+    onRestore: (p) => {
+      if (p.var) setDatasetId(p.var);
+      // La URL tiene prioridad sobre los códigos guardados en localStorage.
+      if (p.est) setSelectedCodes(p.est.split(',').filter(Boolean));
+      if (p.tr && Number.isFinite(Number(p.tr))) setIdfTr(Number(p.tr));
+    },
+  });
 
   // Catálogo ligero para el buscador (stations.geojson ya viene cacheado 24h).
   useEffect(() => {
@@ -345,7 +362,7 @@ export function ComparadorEstaciones() {
         </div>
       ) : (
         <>
-          <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+          <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
             <div className="mb-6 flex items-center justify-between gap-4">
               <h3 className="font-bold text-card-foreground">Promedio anual de {datasetName}{unitSuffix(datasetUnit(datasetId))} · series superpuestas</h3>
               {!isLoading && chartData.length > 0 && (
@@ -382,7 +399,7 @@ export function ComparadorEstaciones() {
                         strokeWidth={2}
                         dot={false}
                         connectNulls
-                        isAnimationActive={false}
+                        isAnimationActive animationDuration={550}
                       />
                     ))}
                   </LineChart>
@@ -392,26 +409,36 @@ export function ComparadorEstaciones() {
           </div>
 
           {datasetId === PRECIP_DATASET && (
-            <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+            <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
               <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h3 className="font-bold text-card-foreground">Curvas IDF comparadas</h3>
                   <p className="text-sm text-muted-foreground">Intensidad (mm/h) vs duración para Tr = {idfTr} años · solo estaciones pluviográficas</p>
                 </div>
-                <div className="flex gap-1">
-                  {idfReturnPeriods.map((tr) => (
-                    <button
-                      key={tr}
-                      type="button"
-                      onClick={() => setIdfTr(tr)}
-                      aria-pressed={idfTr === tr}
-                      className={`rounded-md border px-2 py-1 text-xs font-semibold ${
-                        idfTr === tr ? 'border-accent bg-accent/15 text-accent' : 'border-border text-muted-foreground'
-                      }`}
-                    >
-                      {tr}a
-                    </button>
-                  ))}
+                <div className="flex flex-wrap items-center gap-2">
+                  {hasIdf && (
+                    <ChartDownloadButton
+                      targetRef={idfChartRef}
+                      title="Curvas IDF comparadas"
+                      subtitle={`Tr = ${idfTr} años`}
+                      filenameParts={['idf-comparadas', `tr-${idfTr}a`]}
+                    />
+                  )}
+                  <div className="flex gap-1">
+                    {idfReturnPeriods.map((tr) => (
+                      <button
+                        key={tr}
+                        type="button"
+                        onClick={() => setIdfTr(tr)}
+                        aria-pressed={idfTr === tr}
+                        className={`rounded-md border px-2 py-1 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                          idfTr === tr ? 'border-accent bg-accent/15 text-accent' : 'border-border text-muted-foreground'
+                        }`}
+                      >
+                        {tr}a
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
               {isLoading ? (
@@ -421,7 +448,7 @@ export function ComparadorEstaciones() {
                   Ninguna de las estaciones elegidas tiene curvas IDF precomputadas todavía (deben ser pluviográficas).
                 </p>
               ) : (
-                <div style={{ width: '100%', height: '300px' }}>
+                <div ref={idfChartRef} className="bg-card" style={{ width: '100%', height: '300px' }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={idfChartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
@@ -444,7 +471,7 @@ export function ComparadorEstaciones() {
                       />
                       <Legend formatter={(value: string) => stationLabel(value)} />
                       {selectedCodes.map((code, index) => (
-                        <Line key={code} type="monotone" dataKey={code} stroke={SERIES_COLORS[index]} strokeWidth={2} dot={{ r: 2 }} connectNulls isAnimationActive={false} />
+                        <Line key={code} type="monotone" dataKey={code} stroke={SERIES_COLORS[index]} strokeWidth={2} dot={{ r: 2 }} connectNulls isAnimationActive animationDuration={550} />
                       ))}
                     </LineChart>
                   </ResponsiveContainer>
@@ -453,7 +480,7 @@ export function ComparadorEstaciones() {
             </div>
           )}
 
-          <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_40px_rgba(201,162,39,0.1)]">
+          <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
             <h3 className="mb-4 font-bold text-card-foreground">Estadísticos comparados</h3>
             {isLoading ? (
               <SkeletonLoader rows={3} />
