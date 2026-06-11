@@ -127,6 +127,145 @@ export function elegirEstacion(stations, lugar) {
   )[0];
 }
 
+// Ejecuta la consulta del intent contra el box y devuelve un RESUMEN COMPACTO
+// (claves en español) que la pasada 2 inyecta como única fuente numérica.
+// {ok:false, errorTipo} alimenta la respuesta honesta del redactor.
+export async function consultarDatos(env, intent) {
+  try {
+    switch (intent.intent) {
+      case "dato_puntual": return await datoPuntual(env, intent);
+      case "idf_tr": return await idfTr(env, intent);
+      case "ranking": return await ranking(env, intent);
+      case "estado_plataforma": return await estadoPlataforma(env);
+      default: return null;
+    }
+  } catch {
+    return { ok: false, errorTipo: "espejo_no_disponible" };
+  }
+}
+
+async function datoPuntual(env, intent) {
+  const lugar = await resolverLugar(env, intent);
+  if (intent.lugar && !lugar.municipio) {
+    return { ok: false, errorTipo: "lugar_no_encontrado", lugar: intent.lugar, sugerencias: lugar.sugerencias || [] };
+  }
+  const v = VARIABLES[intent.variable || "precipitacion"];
+  const body = {
+    datasetId: v.id,
+    departments: lugar.departamento ? [lugar.departamento] : [],
+    interval: "year",
+    metric: v.metrica,
+  };
+  if (lugar.municipio) body.catalogFilters = { municipalities: [lugar.municipio] };
+  if (intent.anioDesde) body.startDate = `${intent.anioDesde}-01-01`;
+  if (intent.anioHasta) body.endDate = `${intent.anioHasta}-12-31`;
+  const r = await boxJson(env, "/api/analytics/timeseries", postJson(body));
+  if (!r) return { ok: false, errorTipo: "espejo_no_disponible" };
+  const serie = (r.points || [])
+    .filter((p) => p.value !== null)
+    .slice(-10)
+    .map((p) => ({ anio: Number(String(p.bucket).slice(0, 4)), valor: Math.round(p.value * 10) / 10 }));
+  if (!serie.length) {
+    return { ok: false, errorTipo: "sin_datos", lugar: lugar.municipio || lugar.departamento || "Colombia" };
+  }
+  return {
+    ok: true,
+    datos: {
+      tipo: "dato_puntual",
+      variable: v.etiqueta,
+      agregacion: v.metrica === "sum" ? "total anual" : "promedio anual",
+      unidad: v.unidad,
+      lugar: lugar.municipio || lugar.departamento || "Colombia (nacional)",
+      serie,
+    },
+  };
+}
+
+async function idfTr(env, intent) {
+  const cat = await boxJson(env, "/api/analytics/idf-stations");
+  if (!cat) return { ok: false, errorTipo: "espejo_no_disponible" };
+  const estacion = elegirEstacion(cat.stations || [], intent.lugar || "");
+  if (!estacion) return { ok: false, errorTipo: "sin_estacion_idf", lugar: intent.lugar || "" };
+  const body = postJson({ datasetId: "s54a-sgyg", departments: [], catalogFilters: { stations: [estacion.codigo] } });
+  const [idf, rp] = await Promise.all([
+    boxJson(env, "/api/analytics/idf", body),
+    boxJson(env, "/api/analytics/return-periods", body),
+  ]);
+  if (!idf || !idf.available) return { ok: false, errorTipo: "sin_estacion_idf", lugar: intent.lugar || "" };
+  const tr = intent.tr || 25;
+  // Curva y cuantil del Tr pedido (o los más cercanos disponibles).
+  const masCercano = (lista) =>
+    (lista || []).reduce(
+      (mejor, x) => (!mejor || Math.abs(x.returnPeriod - tr) < Math.abs(mejor.returnPeriod - tr) ? x : mejor),
+      null,
+    );
+  const curva = masCercano(idf.curves);
+  const quantil = masCercano(rp && rp.quantiles);
+  return {
+    ok: true,
+    datos: {
+      tipo: "idf_tr",
+      estacion: { codigo: estacion.codigo, nombre: estacion.nombre, municipio: estacion.municipio, departamento: estacion.departamento },
+      aniosDeSerie: idf.nYears || estacion.aniosValidos,
+      fiabilidad: rp && rp.reliability ? { nivel: rp.reliability.level, motivos: (rp.reliability.reasons || []).slice(0, 3) } : null,
+      trPedido: intent.tr,
+      trUsado: curva ? curva.returnPeriod : null,
+      idf: curva ? curva.points.map((p) => ({ duracionMin: p.durMin, intensidadMmH: Math.round(p.intensityMmH * 10) / 10 })) : [],
+      [`tr${curva ? curva.returnPeriod : tr}`]: quantil
+        ? { lluviaDiariaMm: quantil.value, ic90: quantil.lower !== undefined ? [quantil.lower, quantil.upper] : null }
+        : null,
+    },
+  };
+}
+
+async function ranking(env, intent) {
+  const v = VARIABLES[intent.variable || "precipitacion"];
+  const topN = intent.topN || 5;
+  if (intent.departamento || intent.lugar) {
+    const lugar = await resolverLugar(env, intent);
+    const dep = lugar.departamento || null;
+    if (!dep) {
+      return { ok: false, errorTipo: "lugar_no_encontrado", lugar: intent.departamento || intent.lugar, sugerencias: lugar.sugerencias || [] };
+    }
+    const r = await boxJson(env, "/api/analytics/by-station", postJson({ datasetId: v.id, departments: [dep] }));
+    if (!r) return { ok: false, errorTipo: "espejo_no_disponible" };
+    const filas = (r.stations || [])
+      .filter((s) => s.mean !== null)
+      .sort((a, b) => b.mean - a.mean)
+      .slice(0, topN)
+      .map((s) => ({ nombre: `${s.code} (${s.municipality || "N/D"})`, promedio: Math.round(s.mean * 10) / 10 }));
+    if (!filas.length) return { ok: false, errorTipo: "sin_datos", lugar: dep };
+    return { ok: true, datos: { tipo: "ranking", alcance: dep, variable: v.etiqueta, unidad: v.unidad, ranking: filas } };
+  }
+  const r = await boxJson(env, "/api/analytics/by-region", postJson({ datasetId: v.id, departments: [] }));
+  if (!r) return { ok: false, errorTipo: "espejo_no_disponible" };
+  const filas = (r.regions || [])
+    .filter((x) => x.mean !== null)
+    .sort((a, b) => b.mean - a.mean)
+    .slice(0, topN)
+    .map((x) => ({ nombre: x.department, promedio: Math.round(x.mean * 10) / 10, estaciones: x.stationCount }));
+  return {
+    ok: true,
+    datos: { tipo: "ranking", alcance: "nacional (por departamento)", variable: v.etiqueta, unidad: `${v.unidad} (promedio por observación)`, ranking: filas },
+  };
+}
+
+async function estadoPlataforma(env) {
+  const meta = await boxJson(env, "/api/meta");
+  if (!meta) return { ok: false, errorTipo: "espejo_no_disponible" };
+  return {
+    ok: true,
+    datos: {
+      tipo: "estado_plataforma",
+      datasetsDisponibles: (meta.datasets || []).length,
+      departamentosCubiertos: (meta.departments || []).length,
+      ultimaObservacion: (meta.dataFreshness && meta.dataFreshness.latestObservation) || null,
+      ultimaSincronizacion: (meta.dataFreshness && meta.dataFreshness.lastSync) || null,
+      totalObservacionesAprox: "más de 760 millones",
+    },
+  };
+}
+
 // Acepta el resultado del extractor venga como venga (objeto, JSON string o
 // JSON embebido en prosa) y lo reduce a un intent SANEADO o null.
 export function parseIntentJson(raw) {
