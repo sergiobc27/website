@@ -134,6 +134,13 @@ export async function resolverLugar(env, { lugar, departamento }) {
 
 const RANGO_FIABILIDAD = { verde: 3, amarillo: 2, rojo: 1 };
 
+// En el catálogo real `fiabilidad` puede ser un objeto {level, reasons...}
+// (Lote 2.1) o un string en datos antiguos/tests: aceptar ambos.
+function nivelFiabilidad(s) {
+  const f = s && s.fiabilidad;
+  return (f && typeof f === "object" ? f.level : f) || null;
+}
+
 // Estación IDF para un lugar: match por NOMBRE de estación primero (más
 // específico), luego por municipio. Desempata por fiabilidad y años válidos.
 export function elegirEstacion(stations, lugar) {
@@ -147,7 +154,7 @@ export function elegirEstacion(stations, lugar) {
   if (!candidatas.length) return null;
   return [...candidatas].sort(
     (a, b) =>
-      (RANGO_FIABILIDAD[b.fiabilidad] || 0) - (RANGO_FIABILIDAD[a.fiabilidad] || 0) ||
+      (RANGO_FIABILIDAD[nivelFiabilidad(b)] || 0) - (RANGO_FIABILIDAD[nivelFiabilidad(a)] || 0) ||
       (b.aniosValidos || 0) - (a.aniosValidos || 0),
   )[0];
 }
