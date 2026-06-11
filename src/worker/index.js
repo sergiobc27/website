@@ -323,6 +323,11 @@ async function handleChat(request, env) {
   if (history.some((m) => m.role === "user" && looksLikeManipulation(m.content))) {
     return chatJson({ reply: CHAT_REJECTION, blocked: true });
   }
+  // Rate-limit ANTES de gastar neurons: evita que un script anónimo vacíe la
+  // cuota diaria gratis de Workers AI y deje el asistente caído para todos.
+  if (await chatRateLimited(env, request.headers.get("cf-connecting-ip"))) {
+    return chatJson({ error: "Has alcanzado el límite de mensajes por ahora. Intenta de nuevo en un rato." }, 429);
+  }
   try {
     const result = await env.AI.run(CHAT_MODEL, {
       messages: [{ role: "system", content: CHAT_SYSTEM }, ...history],
@@ -340,8 +345,10 @@ async function handleChat(request, env) {
 // --- Envío de curvas IDF por correo (Resend) ---------------------------------
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const RL_MAX_PER_HOUR = 15;                  // tope relajado por IP
+const RL_MAX_PER_HOUR = 15;                  // tope relajado por IP (correo)
 const RL_GLOBAL_PER_DAY = 100;               // backstop global (límite gratis de Resend)
+const CHAT_RL_PER_HOUR = 30;                 // mensajes/hora por IP (chat)
+const CHAT_GLOBAL_PER_DAY = 250;             // backstop global ~ cuota diaria de neurons
 
 function emailJson(obj, status) {
   return new Response(JSON.stringify(obj), {
@@ -364,28 +371,31 @@ async function verifyTurnstile(token, ip, secret) {
   return data.success === true;
 }
 
-// Rate-limit en KV: contador horario por IP (TTL 1h) + tope GLOBAL diario
-// (TTL 24h) como backstop contra rotación de IP / phishing-as-a-service. El
-// tope global se alinea con el límite gratuito de Resend (100/día).
-async function emailRateLimited(env, ip) {
+// Rate-limit genérico en KV: contador horario por IP (TTL 1h) + tope GLOBAL
+// diario (TTL 24h) como backstop contra rotación de IP. `prefix` aísla los
+// contadores por feature (correo vs chat). Si no hay binding KV, no limita.
+async function kvRateLimited(env, prefix, perHour, perDay, ip) {
   if (!env.EMAIL_RL) return false;
 
-  // Tope global diario primero (no depende de la IP).
-  const gKey = "rl:global:day";
+  const gKey = `${prefix}:global:day`;
   const gCount = Number((await env.EMAIL_RL.get(gKey)) || "0");
-  if (gCount >= RL_GLOBAL_PER_DAY) return true;
+  if (gCount >= perDay) return true;
 
-  // Tope por IP/hora.
   if (ip) {
-    const key = `rl:ip:${ip}`;
+    const key = `${prefix}:ip:${ip}`;
     const current = Number((await env.EMAIL_RL.get(key)) || "0");
-    if (current >= RL_MAX_PER_HOUR) return true;
+    if (current >= perHour) return true;
     await env.EMAIL_RL.put(key, String(current + 1), { expirationTtl: 3600 });
   }
 
   await env.EMAIL_RL.put(gKey, String(gCount + 1), { expirationTtl: 86400 });
   return false;
 }
+
+// Correo: tope relajado + backstop global alineado al límite gratis de Resend.
+const emailRateLimited = (env, ip) => kvRateLimited(env, "rl", RL_MAX_PER_HOUR, RL_GLOBAL_PER_DAY, ip);
+// Chat (Workers AI): protege la cuota diaria de neurons del tier gratis.
+const chatRateLimited = (env, ip) => kvRateLimited(env, "rlc", CHAT_RL_PER_HOUR, CHAT_GLOBAL_PER_DAY, ip);
 
 // Escapa HTML para impedir inyección/phishing en el cuerpo del correo: los
 // campos vienen del cliente y el correo sale desde nuestro dominio verificado.

@@ -315,6 +315,28 @@ test('una ruta que solo empieza con texto similar a api pero no /api va a ASSETS
   }
 });
 
+test('chat: aplica rate-limit por IP y NO gasta neurons (429)', async () => {
+  const aiCalls = [];
+  function kv(initial = {}) {
+    const store = new Map(Object.entries(initial));
+    return { async get(k) { return store.has(k) ? store.get(k) : null; }, async put(k, v) { store.set(k, String(v)); } };
+  }
+  const env = {
+    API_ORIGIN,
+    ASSETS: createAssetsStub(),
+    EMAIL_RL: kv({ 'rlc:ip:203.0.113.50': '30' }),
+    AI: { run: async () => { aiCalls.push(1); return { response: 'no debería' }; } },
+  };
+  const req = new Request('https://ideam.test/api/chat', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'cf-connecting-ip': '203.0.113.50' },
+    body: JSON.stringify({ messages: [{ role: 'user', content: 'Hola, explícame las curvas IDF' }] }),
+  });
+  const res = await worker.fetch(req, env);
+  assert.equal(res.status, 429);
+  assert.equal(aiCalls.length, 0, 'no debe llamar a la IA si está rate-limited');
+});
+
 // --- /api/email-idf (PDF generado en el Worker desde datos del box) ---------
 
 function mockKv(initial = {}) {
