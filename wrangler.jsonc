@@ -15,6 +15,11 @@
     // Origen de la API propia (Oracle, vía Cloudflare Tunnel).
     "API_ORIGIN": "https://ideam-api.sergiobc.com"
   },
+  // KV para el rate-limit del envío de correos IDF (contador horario por IP).
+  // Crear con: npx wrangler kv namespace create EMAIL_RL  (y pegar el id real).
+  "kv_namespaces": [
+    { "binding": "EMAIL_RL", "id": "<RELLENAR_CON_ID_REAL>" }
+  ],
   // Workers AI: asistente/tutor en el edge (tier gratis 10.000 neurons/día, sin
   // tarjeta). Aislado: corre en Cloudflare, no toca el box ni la API propia.
   "ai": {
