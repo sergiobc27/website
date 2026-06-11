@@ -12,11 +12,9 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   stationName: string;
   stationCode: string;
-  // Genera el PDF on-demand y lo devuelve como base64 (sin prefijo dataURL) + filename.
-  generarPdfBase64: () => Promise<{ base64: string; filename: string }>;
 }
 
-export function EnviarPorCorreo({ open, onOpenChange, stationName, stationCode, generarPdfBase64 }: Props) {
+export function EnviarPorCorreo({ open, onOpenChange, stationName, stationCode }: Props) {
   const [email, setEmail] = useState('');
   const [token, setToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -28,16 +26,14 @@ export function EnviarPorCorreo({ open, onOpenChange, stationName, stationCode, 
     if (!puedeEnviar) return;
     setBusy(true);
     try {
-      const { base64, filename } = await generarPdfBase64();
+      // El cliente solo envía el código de estación: el PDF lo genera el Worker
+      // desde datos de confianza (no se sube ningún archivo).
       const res = await fetch(apiUrl('/api/email-idf'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           to: email.trim(),
           turnstileToken: token,
-          pdfBase64: base64,
-          filename,
-          stationName,
           stationCode,
         }),
       });

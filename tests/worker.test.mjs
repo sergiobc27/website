@@ -315,7 +315,7 @@ test('una ruta que solo empieza con texto similar a api pero no /api va a ASSETS
   }
 });
 
-// --- /api/email-idf (Resend + Turnstile + rate-limit) ------------------------
+// --- /api/email-idf (PDF generado en el Worker desde datos del box) ---------
 
 function mockKv(initial = {}) {
   const store = new Map(Object.entries(initial));
@@ -329,6 +329,7 @@ function mockKv(initial = {}) {
 function emailEnv(overrides = {}) {
   return {
     API_ORIGIN,
+    IDEAM_PROXY_SECRET: 'sekret',
     RESEND_API_KEY: 're_test',
     TURNSTILE_SECRET_KEY: 'ts_secret',
     EMAIL_RL: mockKv(),
@@ -345,20 +346,37 @@ function emailRequest(body) {
   });
 }
 
-const VALID_BODY = {
-  to: 'persona@correo.com',
-  turnstileToken: 'tok',
-  pdfBase64: 'JVBERi0xLjQK', // "%PDF-1.4" en base64, payload mínimo
-  filename: 'curva-idf-x.pdf',
-  stationName: 'Apto E. Cortissoz',
-  stationCode: '29045020',
+const VALID_BODY = { to: 'persona@correo.com', turnstileToken: 'tok', stationCode: '29045020' };
+
+const MOCK_STATION = { codigo: '29045020', nombre: 'Apto E. Cortissoz', municipio: 'Soledad', departamento: 'Atlantico' };
+const MOCK_IDF = {
+  available: true,
+  nYears: 28,
+  durations: [10, 30],
+  returnPeriods: [2, 10],
+  curves: [
+    { returnPeriod: 2, points: [{ durMin: 10, intensityMmH: 72 }, { durMin: 30, intensityMmH: 36 }] },
+    { returnPeriod: 10, points: [{ durMin: 10, intensityMmH: 120 }, { durMin: 30, intensityMmH: 60 }] },
+  ],
+  equation: { K: 1234.5, m: 0.18, n: 0.72, r2: 0.987 },
+  warnings: [],
 };
 
+// Mock de fetch que enruta por URL: siteverify, catálogo idf-stations, idf, Resend.
+function routeFetch({ turnstile = true, station = MOCK_STATION, idf = MOCK_IDF, captured } = {}) {
+  return async (url, init) => {
+    const u = String(url);
+    if (captured) captured.push({ url: u, init });
+    if (u.includes('siteverify')) return new Response(JSON.stringify({ success: turnstile }), { status: 200 });
+    if (u.includes('/api/analytics/idf-stations')) return new Response(JSON.stringify({ stations: station ? [station] : [] }), { status: 200 });
+    if (u.includes('/api/analytics/idf')) return new Response(JSON.stringify(idf || { available: false }), { status: 200 });
+    if (u.includes('api.resend.com')) return new Response(JSON.stringify({ id: 'eml_1' }), { status: 200 });
+    throw new Error('llamada inesperada: ' + u);
+  };
+}
+
 test('email-idf rechaza método GET (405)', async () => {
-  const res = await worker.fetch(
-    new Request('https://ideam.test/api/email-idf', { method: 'GET' }),
-    emailEnv(),
-  );
+  const res = await worker.fetch(new Request('https://ideam.test/api/email-idf', { method: 'GET' }), emailEnv());
   assert.equal(res.status, 405);
 });
 
@@ -373,12 +391,20 @@ test('email-idf rechaza email inválido (400) sin llamar a nada externo', async 
   }
 });
 
+test('email-idf rechaza código de estación inválido (400)', async () => {
+  const stub = stubFetch();
+  try {
+    const res = await worker.fetch(emailRequest({ ...VALID_BODY, stationCode: '../etc' }), emailEnv());
+    assert.equal(res.status, 400);
+    assert.equal(stub.calls.length, 0);
+  } finally {
+    stub.restore();
+  }
+});
+
 test('email-idf rechaza Turnstile inválido (403)', async () => {
   const original = global.fetch;
-  global.fetch = async (url) => {
-    if (String(url).includes('siteverify')) return new Response(JSON.stringify({ success: false }), { status: 200 });
-    throw new Error('no debería llamar a Resend');
-  };
+  global.fetch = routeFetch({ turnstile: false });
   try {
     const res = await worker.fetch(emailRequest(VALID_BODY), emailEnv());
     assert.equal(res.status, 403);
@@ -387,35 +413,54 @@ test('email-idf rechaza Turnstile inválido (403)', async () => {
   }
 });
 
-test('email-idf envía vía Resend con adjunto y responde ok', async () => {
-  const seen = [];
+test('email-idf devuelve 422 si la estación no tiene IDF', async () => {
   const original = global.fetch;
-  global.fetch = async (url, init) => {
-    seen.push({ url: String(url), init });
-    if (String(url).includes('siteverify')) return new Response(JSON.stringify({ success: true }), { status: 200 });
-    if (String(url).includes('api.resend.com')) return new Response(JSON.stringify({ id: 'eml_1' }), { status: 200 });
-    throw new Error('llamada inesperada: ' + url);
-  };
+  global.fetch = routeFetch({ station: null });
   try {
     const res = await worker.fetch(emailRequest(VALID_BODY), emailEnv());
-    assert.equal(res.status, 200);
-    const resend = seen.find((c) => c.url.includes('api.resend.com'));
-    assert.ok(resend, 'llamó a Resend');
-    const payload = JSON.parse(resend.init.body);
-    assert.equal(payload.to, VALID_BODY.to);
-    assert.equal(payload.attachments[0].content, VALID_BODY.pdfBase64);
-    assert.match(payload.subject, /Apto E. Cortissoz/);
+    assert.equal(res.status, 422);
   } finally {
     global.fetch = original;
   }
 });
 
-test('email-idf aplica rate-limit por IP al superar 15/h (429)', async () => {
+test('email-idf genera el PDF en el Worker y lo envía por Resend (200)', async () => {
+  const captured = [];
   const original = global.fetch;
-  global.fetch = async (url) => {
-    if (String(url).includes('siteverify')) return new Response(JSON.stringify({ success: true }), { status: 200 });
-    return new Response(JSON.stringify({ id: 'x' }), { status: 200 });
-  };
+  global.fetch = routeFetch({ captured });
+  try {
+    const res = await worker.fetch(emailRequest(VALID_BODY), emailEnv());
+    assert.equal(res.status, 200);
+    const resend = captured.find((c) => c.url.includes('api.resend.com'));
+    assert.ok(resend, 'llamó a Resend');
+    const payload = JSON.parse(resend.init.body);
+    assert.equal(payload.to, VALID_BODY.to);
+    assert.match(payload.subject, /Apto E. Cortissoz/);
+    // El adjunto es un PDF real generado por el Worker (magic %PDF == base64 "JVBER").
+    assert.ok(payload.attachments[0].content.startsWith('JVBER'), 'adjunto es un PDF');
+  } finally {
+    global.fetch = original;
+  }
+});
+
+test('email-idf escapa HTML del nombre de estación en el cuerpo', async () => {
+  const captured = [];
+  const original = global.fetch;
+  global.fetch = routeFetch({ station: { ...MOCK_STATION, nombre: '<script>x</script>' }, captured });
+  try {
+    const res = await worker.fetch(emailRequest(VALID_BODY), emailEnv());
+    assert.equal(res.status, 200);
+    const payload = JSON.parse(captured.find((c) => c.url.includes('api.resend.com')).init.body);
+    assert.ok(!payload.html.includes('<script>'), 'no debe contener <script> sin escapar');
+    assert.ok(payload.html.includes('&lt;script&gt;'), 'debe escapar < >');
+  } finally {
+    global.fetch = original;
+  }
+});
+
+test('email-idf aplica rate-limit por IP (429)', async () => {
+  const original = global.fetch;
+  global.fetch = routeFetch();
   try {
     const env = emailEnv({ EMAIL_RL: mockKv({ 'rl:ip:203.0.113.9': '15' }) });
     const res = await worker.fetch(emailRequest(VALID_BODY), env);
@@ -427,49 +472,11 @@ test('email-idf aplica rate-limit por IP al superar 15/h (429)', async () => {
 
 test('email-idf aplica el tope global diario (429) aunque la IP esté limpia', async () => {
   const original = global.fetch;
-  global.fetch = async (url) => {
-    if (String(url).includes('siteverify')) return new Response(JSON.stringify({ success: true }), { status: 200 });
-    return new Response(JSON.stringify({ id: 'x' }), { status: 200 });
-  };
+  global.fetch = routeFetch();
   try {
     const env = emailEnv({ EMAIL_RL: mockKv({ 'rl:global:day': '100' }) });
     const res = await worker.fetch(emailRequest(VALID_BODY), env);
     assert.equal(res.status, 429);
-  } finally {
-    global.fetch = original;
-  }
-});
-
-test('email-idf rechaza un adjunto que no es PDF (400)', async () => {
-  const stub = stubFetch();
-  try {
-    // base64 válido de "hello" — no empieza con %PDF-.
-    const res = await worker.fetch(emailRequest({ ...VALID_BODY, pdfBase64: 'aGVsbG8=' }), emailEnv());
-    assert.equal(res.status, 400);
-    assert.equal(stub.calls.length, 0);
-  } finally {
-    stub.restore();
-  }
-});
-
-test('email-idf escapa HTML en el cuerpo (anti inyección/phishing)', async () => {
-  const seen = [];
-  const original = global.fetch;
-  global.fetch = async (url, init) => {
-    seen.push({ url: String(url), init });
-    if (String(url).includes('siteverify')) return new Response(JSON.stringify({ success: true }), { status: 200 });
-    if (String(url).includes('api.resend.com')) return new Response(JSON.stringify({ id: 'eml_1' }), { status: 200 });
-    throw new Error('llamada inesperada: ' + url);
-  };
-  try {
-    const res = await worker.fetch(
-      emailRequest({ ...VALID_BODY, stationName: '<script>alert(1)</script>' }),
-      emailEnv(),
-    );
-    assert.equal(res.status, 200);
-    const payload = JSON.parse(seen.find((c) => c.url.includes('api.resend.com')).init.body);
-    assert.ok(!payload.html.includes('<script>'), 'no debe contener <script> sin escapar');
-    assert.ok(payload.html.includes('&lt;script&gt;'), 'debe escapar los signos < >');
   } finally {
     global.fetch = original;
   }

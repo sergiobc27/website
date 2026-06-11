@@ -480,15 +480,6 @@ export function Hidrologia() {
     }
   };
 
-  // Genera el PDF on-demand y lo devuelve como base64 (sin el prefijo dataURL),
-  // para subirlo al Worker en el flujo de correo.
-  const generarPdfBase64 = async () => {
-    const { doc, filename } = await generarPdf();
-    const dataUri = doc.output('datauristring');
-    const base64 = dataUri.slice(dataUri.indexOf(',') + 1);
-    return { base64, filename };
-  };
-
   return (
     <div className="space-y-6">
       <div>
@@ -1127,7 +1118,6 @@ export function Hidrologia() {
               onOpenChange={setCorreoOpen}
               stationName={station.nombre}
               stationCode={station.codigo}
-              generarPdfBase64={generarPdfBase64}
             />
           )}
         </>

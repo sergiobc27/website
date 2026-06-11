@@ -7,6 +7,8 @@
  * completa contra Socrata + Durable Objects + R2) está en el historial git.
  */
 
+import { buildIdfPdf } from "./idfPdfDoc.js";
+
 // GETs de metadata/catálogo cacheables en el borde. Cloudflare no cachea JSON
 // por defecto (la elegibilidad es por extensión de archivo): cacheEverything
 // la activa y el TTL lo dicta el Cache-Control que pone la API. Lista BLANCA
@@ -340,7 +342,6 @@ async function handleChat(request, env) {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const RL_MAX_PER_HOUR = 15;                  // tope relajado por IP
 const RL_GLOBAL_PER_DAY = 100;               // backstop global (límite gratis de Resend)
-const MAX_PDF_B64_BYTES = 4 * 1024 * 1024;   // ~4 MB de base64
 
 function emailJson(obj, status) {
   return new Response(JSON.stringify(obj), {
@@ -416,6 +417,44 @@ function emailHtml(stationName, stationCode, filename) {
 </body></html>`;
 }
 
+// Llama al box (API propia) con el secreto del proxy. Devuelve null si falla.
+async function boxJson(env, path, init) {
+  const headers = { accept: "application/json", ...(init && init.headers) };
+  if (env.IDEAM_PROXY_SECRET) headers["x-ideam-proxy-secret"] = env.IDEAM_PROXY_SECRET;
+  try {
+    const r = await fetch(new URL(path, env.API_ORIGIN), { ...init, headers });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
+}
+
+function u8ToBase64(u8) {
+  let s = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < u8.length; i += chunk) {
+    s += String.fromCharCode.apply(null, u8.subarray(i, i + chunk));
+  }
+  return btoa(s);
+}
+
+function slugCode(v) {
+  return String(v)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
+
+function todayCO() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`;
+}
+
 async function handleEmailIdf(request, env) {
   if (request.method !== "POST") {
     return emailJson({ error: "Método no permitido." }, 405);
@@ -426,27 +465,15 @@ async function handleEmailIdf(request, env) {
   } catch {
     return emailJson({ error: "JSON inválido." }, 400);
   }
-  const { to, turnstileToken, pdfBase64, filename, stationName, stationCode } = body || {};
+  const { to, turnstileToken, stationCode } = body || {};
   if (typeof to !== "string" || !EMAIL_RE.test(to.trim())) {
     return emailJson({ error: "Correo inválido." }, 400);
   }
-  if (
-    typeof pdfBase64 !== "string" ||
-    pdfBase64.length === 0 ||
-    pdfBase64.length > MAX_PDF_B64_BYTES ||
-    !/^[A-Za-z0-9+/=]+$/.test(pdfBase64)
-  ) {
-    return emailJson({ error: "Adjunto inválido." }, 400);
-  }
-  // El adjunto debe ser un PDF de verdad: verificamos los magic bytes "%PDF-".
-  let head;
-  try {
-    head = atob(pdfBase64.slice(0, 8));
-  } catch {
-    return emailJson({ error: "Adjunto inválido." }, 400);
-  }
-  if (!head.startsWith("%PDF-")) {
-    return emailJson({ error: "Adjunto inválido." }, 400);
+  // El cliente SOLO aporta el código de estación (validado contra el catálogo del
+  // box). El PDF lo genera el Worker desde datos de confianza: el endpoint no
+  // puede usarse para colar adjuntos arbitrarios (cierre del open relay).
+  if (typeof stationCode !== "string" || !/^[0-9A-Za-z]{3,20}$/.test(stationCode)) {
+    return emailJson({ error: "Código de estación inválido." }, 400);
   }
   const ip = request.headers.get("cf-connecting-ip");
 
@@ -458,13 +485,39 @@ async function handleEmailIdf(request, env) {
     return emailJson({ error: "Demasiados envíos. Intenta más tarde." }, 429);
   }
 
-  // Saneo de los campos del cliente: sin saltos de línea/control (clave para el
-  // subject), longitud acotada; el escapado HTML lo hace emailHtml(). El filename
-  // se restringe a un patrón seguro (sin / ni caracteres de HTML/ruta).
-  const clean = (v, max) => (typeof v === "string" ? v : "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, max);
-  const safeName = clean(stationName, 120) || "estación";
-  const safeCode = clean(stationCode, 40);
-  const safeFile = typeof filename === "string" && /^[\w.\-]+\.pdf$/.test(filename) ? filename : "curva-idf.pdf";
+  // Metadatos de la estación (catálogo de IDF, de confianza). Si el código no
+  // está, no es una estación con IDF: no enviamos nada.
+  const catalog = await boxJson(env, "/api/analytics/idf-stations");
+  const meta = ((catalog && catalog.stations) || []).find((s) => s.codigo === stationCode);
+  if (!meta) {
+    return emailJson({ error: "Esa estación no tiene curvas IDF disponibles." }, 422);
+  }
+
+  // Curvas IDF reales de esa estación (mismo contrato que usa la web).
+  const idf = await boxJson(env, "/api/analytics/idf", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ datasetId: "s54a-sgyg", departments: [], catalogFilters: { stations: [stationCode] } }),
+  });
+  if (!idf || !idf.available) {
+    return emailJson({ error: "Esa estación no tiene curvas IDF disponibles." }, 422);
+  }
+
+  const station = {
+    nombre: meta.nombre || stationCode,
+    codigo: stationCode,
+    municipio: meta.municipio || "N/D",
+    departamento: meta.departamento || "N/D",
+    fecha: todayCO(),
+  };
+
+  let pdfBytes;
+  try {
+    pdfBytes = await buildIdfPdf(idf, station);
+  } catch {
+    return emailJson({ error: "No se pudo generar el PDF." }, 500);
+  }
+  const filename = `curva-idf-${slugCode(station.nombre) || stationCode}.pdf`;
 
   const resp = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -475,9 +528,9 @@ async function handleEmailIdf(request, env) {
     body: JSON.stringify({
       from: "Curvas IDF <noreply@sergiobc.com>",
       to: to.trim(),
-      subject: `Tus curvas IDF · ${safeName} — ideam.sergiobc.com`,
-      html: emailHtml(safeName, safeCode, safeFile),
-      attachments: [{ filename: safeFile, content: pdfBase64 }],
+      subject: `Tus curvas IDF · ${station.nombre} — ideam.sergiobc.com`,
+      html: emailHtml(station.nombre, station.codigo, filename),
+      attachments: [{ filename, content: u8ToBase64(pdfBytes) }],
     }),
   });
 
