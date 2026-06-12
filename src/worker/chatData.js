@@ -383,6 +383,17 @@ con 2 o 3 preguntas de seguimiento cortas (máximo 80 caracteres cada una) que e
 // Texto de salida de Workers AI, robusto al modelo: unos devuelven `{response}`
 // y otros el estilo OpenAI `{choices:[{message:{content}}]}` (o anidado en
 // `{result}` vía REST). Así un cambio de modelo no vuelve a romper el bot.
+// Formato es-CO: pasa a coma los decimales de 1-2 dígitos PEGADOS a una unidad
+// física (174.6 mm/h → 174,6 mm/h). Dirigido a propósito: no toca separadores de
+// miles (3 dígitos: 10.681) ni constantes dentro de fórmulas LaTeX (sin unidad
+// pegada), evitando romper números o el render de KaTeX.
+export function normalizarDecimalesEsCO(text) {
+  return String(text || "").replace(
+    /(\d{1,3})\.(\d{1,2})(?=\s?(?:mm\/h|mm|°C|ºC|cm|m\/s|m³\/s|hPa|%))/g,
+    "$1,$2",
+  );
+}
+
 export function textoDeIA(result) {
   if (!result || typeof result !== "object") return "";
   const r = result.result && typeof result.result === "object" ? result.result : result;

@@ -17,6 +17,7 @@ import {
   promptDeDatos,
   extraerIntencion,
   textoDeIA,
+  normalizarDecimalesEsCO,
 } from "../src/worker/chatData.js";
 
 const CATALOGO = {
@@ -542,6 +543,15 @@ test("promptDeDatos: municipio_ambiguo pide precisar el departamento y lista opc
   const p = promptDeDatos({ ok: false, errorTipo: "municipio_ambiguo", lugar: "San Pedro", opciones: ["SUCRE", "VALLE DEL CAUCA"] });
   assert.match(p, /departamento/i);
   assert.match(p, /SUCRE/);
+});
+
+// Formato es-CO: decimales pegados a unidad pasan a coma, sin romper miles ni LaTeX.
+test("normalizarDecimalesEsCO: coma en decimales con unidad, respeta miles y LaTeX", () => {
+  assert.equal(normalizarDecimalesEsCO("La intensidad es 174.6 mm/h y la lámina 5.3 mm."), "La intensidad es 174,6 mm/h y la lámina 5,3 mm.");
+  assert.equal(normalizarDecimalesEsCO("Temperatura de 26.4 °C."), "Temperatura de 26,4 °C.");
+  assert.equal(normalizarDecimalesEsCO("Son 10.681 observaciones."), "Son 10.681 observaciones."); // miles intactos
+  assert.equal(normalizarDecimalesEsCO("$$T_c = 0.0078 \\cdot L$$"), "$$T_c = 0.0078 \\cdot L$$"); // LaTeX intacto
+  assert.equal(normalizarDecimalesEsCO("Según RAS 0330."), "Según RAS 0330."); // norma intacta
 });
 
 // Robustez de salida del modelo: distintos modelos de Workers AI devuelven la
