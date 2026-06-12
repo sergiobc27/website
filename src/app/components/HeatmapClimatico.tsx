@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Maximize2, X } from 'lucide-react';
-import { apiJson } from '../lib/ideamApi';
+import { apiJson, ApiError } from '../lib/ideamApi';
 import { fmt } from '../lib/format';
 import { ControlSelect } from './ControlSelect';
 import { ChartDownloadButton } from './ChartDownloadButton';
@@ -47,19 +47,17 @@ export function HeatmapClimatico({ datasetId, department, metric, anioMin, anioM
   const [expandido, setExpandido] = useState(false);
   const [data, setData] = useState<AnalyticsTimeseriesResponse | null>(null);
   const [cargando, setCargando] = useState(true);
+  // La diaria nacional puede estar deshabilitada en la API (responde 400). En
+  // ese caso pedimos un departamento; cuando la API la habilite, funciona sola.
+  const [requiereDepto, setRequiereDepto] = useState(false);
 
   const esDiaria = VISTAS.find((v) => v.value === vista)?.diaria ?? false;
-  const faltaDepto = esDiaria && !department;
 
   useEffect(() => {
-    if (faltaDepto) {
-      setData(null);
-      setCargando(false);
-      return;
-    }
     const controller = new AbortController();
     const load = async () => {
       setCargando(true);
+      setRequiereDepto(false);
       const body: Record<string, unknown> = {
         datasetId,
         departments: department ? [department] : [],
@@ -86,15 +84,18 @@ export function HeatmapClimatico({ datasetId, department, metric, anioMin, anioM
           'No fue posible cargar el heatmap.',
         );
         setData(res);
-      } catch {
-        if (!controller.signal.aborted) setData(null);
+      } catch (e) {
+        if (controller.signal.aborted) return;
+        setData(null);
+        // 400 en diaria nacional = la API aún no permite el país completo: pide departamento.
+        if (esDiaria && !department && e instanceof ApiError && e.status === 400) setRequiereDepto(true);
       } finally {
         if (!controller.signal.aborted) setCargando(false);
       }
     };
     void load();
     return () => controller.abort();
-  }, [datasetId, department, metric, vista, anio, mes, esDiaria, faltaDepto]);
+  }, [datasetId, department, metric, vista, anio, mes, esDiaria]);
 
   const points = useMemo(() => data?.points ?? [], [data]);
   // Todos los años del dataset (no solo los que devolvió el fetch): el filtro de
@@ -110,14 +111,14 @@ export function HeatmapClimatico({ datasetId, department, metric, anioMin, anioM
   const px = CELDA_PX[tamano];
 
   const cuerpo = (() => {
-    if (faltaDepto) {
+    if (cargando) return <SkeletonLoader rows={4} />;
+    if (requiereDepto) {
       return (
         <p className="text-sm text-muted-foreground">
           Elige un departamento (en el filtro de ámbito de arriba) para ver el detalle diario.
         </p>
       );
     }
-    if (cargando) return <SkeletonLoader rows={4} />;
     if (!points.length) return <p className="text-sm text-muted-foreground">Sin datos para esta combinación.</p>;
 
     if (vista === 'anios-meses') {
@@ -287,7 +288,7 @@ export function HeatmapClimatico({ datasetId, department, metric, anioMin, anioM
     </div>
   );
 
-  const leyenda = !faltaDepto && points.length > 0 && (
+  const leyenda = !requiereDepto && points.length > 0 && (
     <div className="mt-3 flex items-center justify-end gap-1.5 text-[10px] text-muted-foreground">
       seco
       {[0.1, 0.35, 0.6, 0.85].map((t) => (
