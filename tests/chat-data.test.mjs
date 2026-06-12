@@ -362,7 +362,7 @@ test("chat de datos: dos llamadas IA, datos del espejo y línea de fuente", asyn
     if (path === "/api/municipalities") return new Response(JSON.stringify({ municipalities: ["BARRANQUILLA"] }));
     if (path === "/api/meta") return new Response(JSON.stringify(META));
     if (path === "/api/analytics/idf-stations") return new Response(JSON.stringify(IDF_CAT));
-    if (path === "/api/analytics/timeseries") return new Response(JSON.stringify({ points: [{ bucket: "2023-01-01", value: 823.4, n: 1 }] }));
+    if (path === "/api/analytics/timeseries") return new Response(JSON.stringify({ points: [{ bucket: "2023-01-01", value: 823.4, n: 48000 }] }));
     return new Response("{}", { status: 404 });
   };
   const res = await worker.fetch(chatRequest({ messages: [{ role: "user", content: "¿Cuánto llovió en Barranquilla en 2023?" }], view: "analytics" }), env);
