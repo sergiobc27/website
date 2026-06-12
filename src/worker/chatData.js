@@ -235,60 +235,66 @@ async function datoPuntual(env, intent) {
     return { ok: false, errorTipo: "lugar_no_encontrado", lugar: intent.lugar, sugerencias: lugar.sugerencias || [] };
   }
   const v = VARIABLES[intent.variable || "precipitacion"];
+  const esPrecip = v.metrica === "sum";
   const body = {
     datasetId: v.id,
     departments: lugar.departamento ? [lugar.departamento] : [],
     interval: "year",
     metric: v.metrica,
   };
-  if (lugar.municipio) body.catalogFilters = { municipalities: [lugar.municipio] };
   if (intent.anioDesde) body.startDate = `${intent.anioDesde}-01-01`;
   if (intent.anioHasta) body.endDate = `${intent.anioHasta}-12-31`;
-  const r = await boxJson(env, "/api/analytics/timeseries", postJson(body));
-  if (!r) return { ok: false, errorTipo: "espejo_no_disponible" };
-  let serie = resumirSerie(r.points);
 
-  // Cobertura municipal escasa -> reintento honesto con la MEJOR ESTACIÓN de
-  // la zona (catálogo IDF). El total anual de UNA estación es hidrológicamente
-  // real; el agregado del municipio con huecos (o la suma del departamento)
-  // engaña con cifras absurdas.
-  const coberturaAnual = serie.length
-    ? serie.reduce((s, p) => s + p.observaciones, 0) / serie.length
-    : 0;
-  let lugarMostrado = lugar.municipio || lugar.departamento || "Colombia (nacional)";
+  let serie = null;
+  let lugarMostrado;
   let nota;
-  if (lugar.municipio && coberturaAnual < UMBRAL_OBS_ANUAL) {
+
+  // PRECIPITACIÓN municipal -> SIEMPRE la estación representativa del municipio.
+  // Sumar todas las estaciones del municipio sobreestima (más estaciones = total
+  // mayor, físicamente imposible: p. ej. Soledad 2018 = 152.191 mm) y promediar
+  // tampoco aplica a una lámina. El total anual de UNA estación es la lluvia real
+  // de ese punto. (Las curvas IDF ya usaban estación; esto alinea el dato puntual.)
+  if (lugar.municipio && esPrecip) {
     const cat = await boxJson(env, "/api/analytics/idf-stations");
     const est = cat ? elegirEstacion(cat.stations || [], lugar.municipio) : null;
     if (est) {
-      const bodyEst = { ...body, departments: [], catalogFilters: { stations: [est.codigo] } };
-      const rEst = await boxJson(env, "/api/analytics/timeseries", postJson(bodyEst));
+      const rEst = await boxJson(
+        env,
+        "/api/analytics/timeseries",
+        postJson({ ...body, departments: [], catalogFilters: { stations: [est.codigo] } }),
+      );
       const serieEst = rEst ? resumirSerie(rEst.points) : [];
       if (serieEst.length) {
-        // La serie de la estación se acepta aunque sea parcial: lleva sus
-        // "observaciones" por año y el prompt de datos ya obliga a advertir
-        // cobertura parcial — una cifra con caveat es más útil que rechazar.
         serie = serieEst;
         lugarMostrado = `estación ${est.nombre} (${est.municipio})`;
-        nota = `La cobertura agregada del municipio ${lugar.municipio} es escasa para este periodo; se muestran los datos de la estación con mejor registro de la zona. Menciónalo al responder.`;
+        nota = `Para "${lugar.municipio}" se muestran los datos de su estación representativa (${est.nombre}): es la precipitación real de un punto, NO la suma de todas las estaciones del municipio (que sobreestima). Menciónalo al responder.`;
       }
     }
+  }
+
+  // Resto: variables de PROMEDIO a escala municipal (promediar estaciones SÍ
+  // aplica), consultas departamentales/nacionales, o precipitación de un
+  // municipio sin estación en el catálogo IDF.
+  if (!serie) {
+    if (lugar.municipio) body.catalogFilters = { municipalities: [lugar.municipio] };
+    const r = await boxJson(env, "/api/analytics/timeseries", postJson(body));
+    if (!r) return { ok: false, errorTipo: "espejo_no_disponible" };
+    serie = resumirSerie(r.points);
+    lugarMostrado = lugar.municipio || lugar.departamento || "Colombia (nacional)";
   }
 
   if (!serie.length) {
     return { ok: false, errorTipo: "sin_datos", lugar: lugar.municipio || lugar.departamento || "Colombia" };
   }
-  // #9 — cobertura parcial garantizada por CÓDIGO (no se fía del 8B). Solo
-  // aplica a precipitación (10-min: un año-estación completo ≈ 50.000 obs); en
-  // las demás variables el conteo bajo es normal y no implica hueco.
-  const coberturaParcial =
-    v.metrica === "sum" && serie.some((p) => (p.observaciones || 0) < UMBRAL_OBS_ANUAL);
+  // #9 — cobertura parcial garantizada por CÓDIGO (solo precipitación: 10-min,
+  // un año-estación completo ≈ 50.000 obs; en promedios el conteo bajo es normal).
+  const coberturaParcial = esPrecip && serie.some((p) => (p.observaciones || 0) < UMBRAL_OBS_ANUAL);
   return {
     ok: true,
     datos: {
       tipo: "dato_puntual",
       variable: v.etiqueta,
-      agregacion: v.metrica === "sum" ? "total anual" : "promedio anual",
+      agregacion: esPrecip ? "total anual" : "promedio anual",
       unidad: v.unidad,
       lugar: lugarMostrado,
       ...(nota ? { nota } : {}),

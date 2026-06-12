@@ -113,7 +113,10 @@ test("resolverLugar no encontrado devuelve sugerencias parecidas", async () => {
   assert.equal(r.sugerencias.includes("SABANALARGA"), true);
 });
 
-test("consultarDatos dato_puntual arma timeseries y resume por año", async () => {
+test("consultarDatos dato_puntual (variable de promedio) usa el agregado municipal", async () => {
+  // Para variables de PROMEDIO (temperatura) el agregado municipal SÍ aplica
+  // (promediar estaciones es correcto). La precipitación es otra historia (ver
+  // el test de estación representativa).
   const env = { API_ORIGIN: "https://box" };
   let captured = null;
   globalThis.fetch = async (url, init) => {
@@ -123,23 +126,23 @@ test("consultarDatos dato_puntual arma timeseries y resume por año", async () =
     if (path === "/api/analytics/idf-stations") return new Response(JSON.stringify(IDF_CAT));
     if (path === "/api/analytics/timeseries") {
       captured = JSON.parse(init.body);
-      return new Response(JSON.stringify({ points: [{ bucket: "2023-01-01", value: 823.4, n: 50000 }] }));
+      return new Response(JSON.stringify({ points: [{ bucket: "2023-01-01", value: 31.5, n: 8000 }] }));
     }
     return new Response("{}", { status: 404 });
   };
   const r = await consultarDatos(env, {
     intent: "dato_puntual", lugar: "Barranquilla", departamento: "Atlántico",
-    variable: "precipitacion", anioDesde: 2023, anioHasta: 2023, tr: null, topN: null,
+    variable: "temperatura_maxima", anioDesde: 2023, anioHasta: 2023, tr: null, topN: null,
   });
   assert.equal(r.ok, true);
-  assert.equal(captured.datasetId, "s54a-sgyg");
-  assert.equal(captured.metric, "sum");
+  assert.equal(captured.datasetId, "ccvq-rp9s");
+  assert.equal(captured.metric, "avg");
   assert.deepEqual(captured.departments, ["ATLANTICO"]);
   assert.deepEqual(captured.catalogFilters, { municipalities: ["BARRANQUILLA"] });
   assert.equal(captured.startDate, "2023-01-01");
   assert.equal(captured.endDate, "2023-12-31");
-  assert.equal(r.datos.serie[0].valor, 823.4);
-  assert.equal(r.datos.unidad, "mm");
+  assert.equal(r.datos.serie[0].valor, 31.5);
+  assert.equal(r.datos.unidad, "°C");
 });
 
 test("consultarDatos dato_puntual con cobertura municipal escasa usa la mejor estación de la zona", async () => {
@@ -194,17 +197,19 @@ test("consultarDatos: estación con cobertura parcial se acepta CON sus observac
   assert.equal(typeof r.datos.nota, "string");
 });
 
-test("consultarDatos dato_puntual con buena cobertura municipal NO amplía", async () => {
+test("consultarDatos dato_puntual: precipitación municipal usa la estación representativa (no suma el municipio)", async () => {
+  // Sumar la precipitación de TODAS las estaciones del municipio sobreestima
+  // (más estaciones -> total mayor, físicamente imposible). Siempre estación.
   const env = { API_ORIGIN: "https://box" };
-  let llamadasTimeseries = 0;
+  const bodies = [];
   globalThis.fetch = async (url, init) => {
     const path = new URL(url, "https://x").pathname;
     if (path === "/api/municipalities") return new Response(JSON.stringify(CATALOGO));
     if (path === "/api/meta") return new Response(JSON.stringify(META));
     if (path === "/api/analytics/idf-stations") return new Response(JSON.stringify(IDF_CAT));
     if (path === "/api/analytics/timeseries") {
-      llamadasTimeseries++;
-      return new Response(JSON.stringify({ points: [{ bucket: "2023-01-01", value: 950.2, n: 48000 }] }));
+      bodies.push(JSON.parse(init.body));
+      return new Response(JSON.stringify({ points: [{ bucket: "2023-01-01", value: 1150.4, n: 50000 }] }));
     }
     return new Response("{}", { status: 404 });
   };
@@ -213,9 +218,13 @@ test("consultarDatos dato_puntual con buena cobertura municipal NO amplía", asy
     variable: "precipitacion", anioDesde: 2023, anioHasta: 2023, tr: null, topN: null,
   });
   assert.equal(r.ok, true);
-  assert.equal(llamadasTimeseries, 1); // sin segundo fetch
-  assert.equal(r.datos.lugar, "MEDELLIN");
-  assert.equal(r.datos.nota, undefined);
+  assert.ok(bodies.length >= 1);
+  assert.ok(
+    bodies.every((b) => b.catalogFilters && Array.isArray(b.catalogFilters.stations)),
+    "toda consulta de serie va por estación, nunca por agregado municipal",
+  );
+  assert.ok(r.datos.lugar.includes("OLAYA")); // estación IDF de Medellín en el fixture
+  assert.equal(typeof r.datos.nota, "string");
 });
 
 test("consultarDatos lugar no encontrado degrada con sugerencias", async () => {
