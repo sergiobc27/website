@@ -52,7 +52,7 @@ export function CeldaTop({ onClick, indice, className }: { onClick: () => void; 
         {filas.map((f) => (
           <div key={f.nombre} className="flex items-center gap-2 text-xs">
             <span className="w-24 truncate text-muted-foreground">{f.nombre}</span>
-            <span className="h-2 rounded-full bg-gradient-to-r from-primary to-accent" style={{ width: `${Math.max(8, (f.valor / max) * 100 * 0.6)}%` }} />
+            <span className="h-2 rounded-full bg-accent" style={{ width: `${Math.max(8, (f.valor / max) * 100 * 0.6)}%` }} />
             <span className="tabular-nums font-semibold text-card-foreground">{fmt(f.valor, 1)}</span>
           </div>
         ))}

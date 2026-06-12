@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Sparkles, X } from 'lucide-react';
+import { MessageCircle, X } from 'lucide-react';
 import { Asistente } from './Asistente';
 
 export const OPEN_ASISTENTE_EVENT = 'ideam:open-asistente';
@@ -32,11 +32,11 @@ export function AsistenteFlotante({ currentView }: { currentView: string }) {
       <div
         role="dialog"
         aria-label="Asistente Hídrico"
-        className={`${open ? 'flex' : 'hidden'} fixed bottom-24 right-4 z-50 h-[min(640px,calc(100dvh-7rem))] w-[min(420px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-glow`}
+        className={`flex fixed bottom-24 right-4 z-50 h-[min(640px,calc(100dvh-7rem))] w-[min(420px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-glow transition-[opacity,transform] duration-200 ease-out ${open ? 'visible translate-y-0 opacity-100' : 'pointer-events-none invisible translate-y-2 scale-[0.98] opacity-0'}`}
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
           <p className="flex items-center gap-2 text-sm font-bold text-card-foreground">
-            <Sparkles className="h-4 w-4 text-accent" /> Asistente Hídrico
+            <MessageCircle className="h-4 w-4 text-accent" /> Asistente Hídrico
           </p>
           <button
             type="button"
@@ -59,7 +59,7 @@ export function AsistenteFlotante({ currentView }: { currentView: string }) {
         aria-expanded={open}
         className="asistente-flotante fixed bottom-5 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-white shadow-glow transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent active:scale-95"
       >
-        {open ? <X className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
+        {open ? <X className="h-5 w-5" /> : <MessageCircle className="h-5 w-5" />}
       </button>
     </>
   );

@@ -103,7 +103,7 @@ export default function App() {
 
   const getBreadcrumbs = (): Array<{ label: string; view?: string }> => {
     const breadcrumbMap: Record<string, string[]> = {
-      dashboard: ['Inicio', 'Dashboard'],
+      dashboard: ['Inicio', 'Panel general'],
       analytics: ['Inicio', 'Analítica'],
       map: ['Inicio', 'Mapa de Estaciones'],
       compare: ['Inicio', 'Comparador'],
@@ -299,7 +299,7 @@ function DocumentationView({ onOpenExtractor }: { onOpenExtractor: () => void })
 
 function InfoCard({ icon: Icon, title, value, detail }: { icon: React.ElementType; title: string; value: string; detail: string }) {
   return (
-    <div className="bg-card border border-border rounded-xl p-5 shadow-[0_0_20px] shadow-accent/10">
+    <div className="bg-card border border-border rounded-xl p-5 shadow-glow">
       <Icon className="w-6 h-6 text-accent mb-4" />
       <p className="text-muted-foreground text-sm">{title}</p>
       <p className="text-card-foreground font-mono font-bold mt-1">{value}</p>

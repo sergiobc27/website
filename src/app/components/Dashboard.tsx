@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BookOpenText, MapPin, Sparkles } from 'lucide-react';
+import { BookOpenText, MapPin, MessageCircle } from 'lucide-react';
 import { Celda } from './dashboard/Celda';
 import { CeldaAcceso } from './dashboard/CeldaAcceso';
 import { CeldaPulso } from './dashboard/CeldaPulso';
@@ -53,9 +53,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-2xl font-bold text-card-foreground">Dashboard</h2>
+        <h2 className="text-2xl font-bold text-card-foreground">Panel general</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          El pulso del espejo de datos hidrometeorológicos. Toca cualquier tarjeta para explorar a fondo.
+          El pulso del espejo de datos hidrometeorológicos. Toca cualquier tarjeta para ver su detalle.
         </p>
       </div>
 
@@ -81,9 +81,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         />
         <CeldaAcceso
           indice={5}
-          icon={Sparkles}
-          titulo="Pregúntale a tus datos"
-          subtitulo="El asistente consulta el espejo por ti"
+          icon={MessageCircle}
+          titulo="Asistente Hídrico"
+          subtitulo="Resuelve dudas de IDF, SPI y descargas"
           ariaLabel="Abrir el Asistente Hídrico para preguntar sobre los datos"
           onClick={() => window.dispatchEvent(new CustomEvent(OPEN_ASISTENTE_EVENT))}
         />
@@ -105,7 +105,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           <div className="flex flex-1 items-center gap-3">
             <MapPin className="h-6 w-6 shrink-0 text-accent" aria-hidden="true" />
             <div>
-              <p className="font-bold text-card-foreground">Explora las 17.976 estaciones en el mapa</p>
+              <p className="font-bold text-card-foreground">17.976 estaciones en el mapa</p>
               <p className="text-xs text-muted-foreground">Filtra por departamento, zona hidrográfica, río y altitud</p>
             </div>
           </div>

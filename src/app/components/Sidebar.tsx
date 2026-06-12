@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Activity, BookOpenText, Building2, Database, Download, Droplets, Settings, FileText, BarChart3, ChevronLeft, ChevronRight, GitCompareArrows, MapPin, Sparkles, TrendingUp } from 'lucide-react';
+import { Activity, BookOpenText, Building2, Database, Download, Droplets, Settings, FileText, BarChart3, ChevronLeft, ChevronRight, GitCompareArrows, MapPin, MessageCircle, TrendingUp } from 'lucide-react';
 import logoVertical from "../../imports/Logo_CUC_PNG_letra_blanca_barra_roja_vtcal.png";
 import logoCollapsed from "../../imports/u.png";
 import logoIdeam from "../../imports/Ideam_(Colombia)_logo.png";
@@ -15,7 +15,7 @@ const MENU_SECTIONS = [
   {
     title: 'Explorar',
     items: [
-      { id: 'dashboard', icon: BarChart3, label: 'Dashboard' },
+      { id: 'dashboard', icon: BarChart3, label: 'Panel general' },
       { id: 'analytics', icon: TrendingUp, label: 'Analítica' },
       { id: 'map', icon: MapPin, label: 'Mapa de Estaciones' },
       { id: 'compare', icon: GitCompareArrows, label: 'Comparador' },
@@ -27,7 +27,7 @@ const MENU_SECTIONS = [
   {
     title: 'Herramientas',
     items: [
-      { id: 'asistente', icon: Sparkles, label: 'Asistente' },
+      { id: 'asistente', icon: MessageCircle, label: 'Asistente Hídrico' },
       { id: 'extractor', icon: Database, label: 'Extractor de Datos' },
       { id: 'history', icon: Download, label: 'Historial' },
     ],
@@ -115,7 +115,7 @@ export function SidebarContent({
                   key={item.id}
                   onClick={() => onNavigate(item.id)}
                   aria-current={isActive ? 'page' : undefined}
-                  className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 justify-start'} px-4 py-3 rounded-lg transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A227] ${
+                  className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 justify-start'} px-4 py-3 rounded-lg transition-[background-color,color,transform] duration-200 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A227] ${
                     isActive
                       ? 'bg-[#C9A227] text-[#0f0f0f] font-semibold shadow-[0_0_20px_rgba(201,162,39,0.4)]'
                       : 'text-white/80 hover:bg-[#8a1216] hover:text-white'
@@ -165,7 +165,7 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
     });
 
   return (
-    <div className={`${isCollapsed ? 'w-20' : 'w-72'} h-screen bg-[#A3161A] border-r border-[#8a1216] hidden lg:flex flex-col flex-shrink-0 transition-all duration-300`}>
+    <div className={`${isCollapsed ? 'w-20' : 'w-72'} h-screen bg-[#A3161A] border-r border-[#8a1216] hidden lg:flex flex-col flex-shrink-0 transition-[width] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]`}>
       <SidebarContent
         currentView={currentView}
         onNavigate={onNavigate}

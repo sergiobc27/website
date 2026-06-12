@@ -1098,7 +1098,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
               type="button"
               onClick={goBack}
               disabled={selectedStepIndex === 0}
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold text-card-foreground transition-all hover:border-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold text-card-foreground transition-[border-color,transform] duration-200 hover:border-accent/40 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
             >
               <ChevronLeft className="h-4 w-4" />
               Atras
@@ -1109,7 +1109,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
               disabled={!canAdvance}
               title={stepRequirement ?? undefined}
               aria-describedby={stepRequirement ? 'step-requirement' : undefined}
-              className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary to-accent px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:shadow-[0_0_24px] hover:shadow-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary to-accent px-4 py-2 text-sm font-semibold text-primary-foreground transition-[box-shadow,transform] duration-200 hover:shadow-[0_0_24px] hover:shadow-accent/40 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
             >
               Siguiente
               <ChevronRight className="h-4 w-4" />
@@ -1135,7 +1135,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
                     }
                     setStep(item.id);
                   }}
-                  className={`flex min-h-16 items-center gap-2 rounded-lg border px-3 py-2 text-left transition-all ${
+                  className={`flex min-h-16 items-center gap-2 rounded-lg border px-3 py-2 text-left transition-[border-color,background-color,transform] duration-200 active:scale-[0.98] ${
                     isActive
                       ? 'border-accent bg-accent/10 text-card-foreground'
                       : isDone
@@ -1170,8 +1170,8 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
             aria-valuemax={100}
           >
             <div
-              className="h-full bg-gradient-to-r from-primary to-accent transition-all duration-300 shadow-[0_0_20px] shadow-accent/60"
-              style={{ width: `${progress}%` }}
+              className="h-full w-full origin-left bg-gradient-to-r from-primary to-accent transition-transform duration-300 shadow-[0_0_20px] shadow-accent/60"
+              style={{ transform: `scaleX(${progress / 100})` }}
             />
           </div>
 
@@ -1200,8 +1200,8 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
               aria-valuemax={100}
             >
               <div
-                className="h-full rounded-full bg-accent transition-all duration-500"
-                style={{ width: `${runtimeTotalRows ? Math.min(100, (runtimeRows / runtimeTotalRows) * 100) : progress}%` }}
+                className="h-full w-full origin-left rounded-full bg-accent transition-transform duration-500"
+                style={{ transform: `scaleX(${(runtimeTotalRows ? Math.min(100, (runtimeRows / runtimeTotalRows) * 100) : progress) / 100})` }}
               />
             </div>
           </div>
@@ -1543,7 +1543,7 @@ function StepPanel({
               key={department}
               type="button"
               onClick={() => onToggleDepartment(department)}
-              className={`rounded-full border px-3 py-2 text-xs font-semibold transition-all ${
+              className={`rounded-full border px-3 py-2 text-xs font-semibold transition-[border-color,background-color,color,transform] duration-200 active:scale-[0.96] ${
                 selectedDepartments.includes(department)
                   ? 'border-accent bg-accent/15 text-accent'
                   : 'border-border bg-background text-muted-foreground hover:border-accent/40'
@@ -1659,7 +1659,7 @@ function StepPanel({
               type="button"
               onClick={onLoadStationHelper}
               disabled={stationHelperLoading}
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-card-foreground hover:border-accent/40 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-card-foreground transition-[border-color,transform] duration-200 hover:border-accent/40 active:scale-[0.98] disabled:opacity-50"
             >
               <Search className="h-4 w-4" />
               {stationHelperLoading ? 'Consultando...' : 'Ver estaciones filtradas'}
@@ -1762,7 +1762,7 @@ function StepPanel({
           type="button"
           onClick={onRunPreview}
           disabled={isBusy}
-          className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-3 text-sm font-semibold text-card-foreground hover:border-accent/40 disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-3 text-sm font-semibold text-card-foreground transition-[border-color,transform] duration-200 hover:border-accent/40 active:scale-[0.98] disabled:opacity-50"
         >
           <FileSearch className="h-4 w-4" />
           Vista previa
@@ -1771,7 +1771,7 @@ function StepPanel({
           type="button"
           onClick={onRunDownload}
           disabled={isBusy || coverageLoading}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-primary to-accent px-4 py-3 text-sm font-semibold text-primary-foreground hover:shadow-[0_0_24px] hover:shadow-accent/40 disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-primary to-accent px-4 py-3 text-sm font-semibold text-primary-foreground transition-[box-shadow,transform] duration-200 hover:shadow-[0_0_24px] hover:shadow-accent/40 active:scale-[0.98] disabled:opacity-50"
         >
           {coverageLoading ? <ShieldCheck className="h-4 w-4" /> : <Download className="h-4 w-4" />}
           {coverageLoading ? 'Validando cobertura...' : 'Descargar ZIP'}
@@ -1827,7 +1827,7 @@ function ChoiceCard({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-xl border p-4 text-left transition-all ${
+      className={`rounded-xl border p-4 text-left transition-[border-color,background-color,box-shadow,transform] duration-200 active:scale-[0.98] ${
         active
           ? 'border-accent bg-accent/10 text-card-foreground shadow-[0_0_24px_rgba(201,162,39,0.12)]'
           : 'border-border bg-background text-muted-foreground hover:border-accent/40 hover:bg-muted/40'

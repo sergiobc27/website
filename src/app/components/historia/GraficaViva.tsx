@@ -56,7 +56,7 @@ export function GraficaViva({ escena, data }: { escena: number; data: HistoriaId
 
   return (
     <div aria-hidden="true" className="h-full w-full rounded-2xl border border-border bg-card p-4 shadow-glow">
-      <div key={escena} className="flex h-full w-full flex-col">
+      <div key={escena} className="animate-fade-in-up flex h-full w-full flex-col">
         {escena === 1 && (
           <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
             <Droplets className="h-12 w-12 text-accent" />

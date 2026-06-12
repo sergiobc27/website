@@ -194,7 +194,7 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
         )}
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-4 shadow-[0_0_20px] shadow-accent/10">
+      <div className="rounded-xl border border-border bg-card p-4 shadow-glow">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <label className="flex flex-col gap-1.5 text-xs text-muted-foreground">
             <span className="font-semibold uppercase tracking-wide">Departamento</span>
@@ -364,7 +364,7 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
 
 function FichaStat({ icon: Icon, title, value }: { icon: React.ElementType; title: string; value: string }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-6 shadow-[0_0_20px] shadow-accent/10">
+    <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
       <Icon className="mb-3 h-6 w-6 text-accent" />
       <p className="text-sm text-muted-foreground">{title}</p>
       <p className="mt-1 font-mono text-2xl font-bold text-card-foreground break-words">{value}</p>

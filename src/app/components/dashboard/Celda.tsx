@@ -26,7 +26,7 @@ export function Celda({ ariaLabel, onClick, titulo, cargando, error, indice = 0,
       aria-label={ariaLabel}
       onClick={onClick}
       style={{ animationDelay: `${indice * 40}ms` }}
-      className={`bento-enter group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-card p-4 text-left shadow-glow transition-all hover:-translate-y-0.5 hover:border-accent/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.98] ${className}`}
+      className={`bento-enter group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-card p-4 text-left shadow-glow transition-[transform,border-color] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] hover:-translate-y-0.5 hover:border-accent/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.98] ${className}`}
     >
       {titulo && (
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{titulo}</p>

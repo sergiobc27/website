@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
-import { Bot, Send, Sparkles, User } from 'lucide-react';
+import { Bot, MessageCircle, Send, User } from 'lucide-react';
 import { apiUrl } from '../lib/ideamApi';
 
 // Render de fórmulas LaTeX con KaTeX. KaTeX genera su propio markup seguro a
@@ -192,10 +192,10 @@ export function Asistente({ view, compact }: AsistenteProps) {
       {!compact && (
         <div className="mb-3">
           <h2 className="flex items-center gap-2 text-2xl font-bold text-card-foreground">
-            <Sparkles className="h-6 w-6 text-accent" /> Asistente hidrológico
+            <MessageCircle className="h-6 w-6 text-accent" /> Asistente Hídrico
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Ayuda con conceptos de hidrología y el uso de la plataforma — y solo con eso. Es orientativa: no inventa
+            Ayuda con conceptos de hidrología y el uso de la plataforma, nada más. Es orientativa: no inventa
             datos ni reemplaza el criterio de diseño.
           </p>
         </div>
@@ -203,7 +203,7 @@ export function Asistente({ view, compact }: AsistenteProps) {
 
       <div
         ref={scrollRef}
-        className="flex-1 space-y-4 overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-[0_0_40px_rgba(201,162,39,0.06)]"
+        className="flex-1 space-y-4 overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-glow"
       >
         {messages.length === 0 && !isLoading && (
           <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-muted-foreground">
@@ -290,12 +290,12 @@ export function Asistente({ view, compact }: AsistenteProps) {
           onChange={(event) => setInput(event.target.value)}
           placeholder="Escribe tu pregunta..."
           disabled={isLoading}
-          className="h-11 flex-1 rounded-xl border border-border bg-card px-4 text-sm text-card-foreground outline-none transition-colors focus:border-accent disabled:opacity-60"
+          className="h-11 flex-1 rounded-xl border border-border bg-card px-4 text-sm text-card-foreground outline-none transition-colors focus:border-accent focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
         />
         <button
           type="submit"
           disabled={isLoading || !input.trim()}
-          className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent text-white transition-transform hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
+          className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent text-white transition-transform duration-150 ease-out hover:scale-105 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50 disabled:hover:scale-100"
           aria-label="Enviar"
         >
           <Send className="h-4 w-4" />

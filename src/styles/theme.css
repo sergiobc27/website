@@ -322,7 +322,7 @@
   100% { box-shadow: 0 0 0 0 rgba(201, 162, 39, 0); }
 }
 .asistente-flotante {
-  animation: asistente-pulso 2.6s ease-out infinite;
+  animation: asistente-pulso 2.6s ease-out 3; /* 3 pulsos y para: llama la atencion sin ser ruido permanente */
 }
 
 /* Entrada de las celdas del dashboard bento (stagger via animation-delay inline).
@@ -332,5 +332,5 @@
   to { opacity: 1; transform: none; }
 }
 .bento-enter {
-  animation: bento-enter 550ms ease-out both;
+  animation: bento-enter 400ms cubic-bezier(0.23, 1, 0.32, 1) both;
 }

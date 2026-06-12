@@ -115,7 +115,7 @@ export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMobileNav }: Na
           <button
             type="button"
             onClick={() => onNavigate('extractor')}
-            className="hidden items-center gap-3 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-left lg:flex"
+            className="hidden items-center gap-3 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-left transition-colors duration-150 hover:bg-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:flex"
             title="Ver descarga en curso"
           >
             <span className="relative flex h-2.5 w-2.5">
@@ -149,7 +149,7 @@ export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMobileNav }: Na
         <button
           type="button"
           onClick={quickToggle}
-          className="rounded-lg p-2 text-muted-foreground transition-all hover:scale-110 hover:bg-muted hover:text-accent"
+          className="rounded-lg p-2 text-muted-foreground transition-[transform,background-color,color] duration-150 ease-out hover:scale-105 hover:bg-muted hover:text-accent active:scale-95"
           title="Cambiar tema"
           aria-label="Cambiar tema rápido"
         >
@@ -161,7 +161,7 @@ export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMobileNav }: Na
         <button
           type="button"
           onClick={() => onNavigate('docs')}
-          className="rounded-lg p-2 text-muted-foreground transition-all hover:scale-110 hover:bg-muted hover:text-accent"
+          className="rounded-lg p-2 text-muted-foreground transition-[transform,background-color,color] duration-150 ease-out hover:scale-105 hover:bg-muted hover:text-accent active:scale-95"
           title="Ayuda"
           aria-label="Ayuda y documentación"
         >
@@ -172,7 +172,7 @@ export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMobileNav }: Na
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#A3161A] to-[#C9A227] shadow-[0_0_15px_rgba(201,162,39,0.3)] transition-transform hover:scale-110 hover:shadow-[0_0_25px_rgba(201,162,39,0.5)]"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#A3161A] to-[#C9A227] shadow-[0_0_15px_rgba(201,162,39,0.3)] transition-transform duration-150 ease-out hover:scale-105 hover:shadow-[0_0_25px_rgba(201,162,39,0.5)] active:scale-95"
               title="Perfil"
               aria-label="Perfil y sesión"
             >
@@ -246,7 +246,10 @@ export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMobileNav }: Na
       </div>
 
       {runtime.isBusy && (
-        <div className="absolute bottom-0 left-0 h-0.5 bg-accent transition-all duration-300" style={{ width: `${Math.max(2, runtime.progress)}%` }} />
+        <div
+          className="absolute bottom-0 left-0 h-0.5 w-full origin-left bg-accent transition-transform duration-300"
+          style={{ transform: `scaleX(${Math.max(2, runtime.progress) / 100})` }}
+        />
       )}
     </div>
   );
