@@ -366,6 +366,27 @@ test("view inválida se ignora sin romper", async () => {
   assert.equal(res.status, 200);
 });
 
+test("si el modelo rechaza pese a tener datos, ni fuente ni dataUsed (sin contradicción)", async () => {
+  const intentJson = JSON.stringify({ intent: "dato_puntual", lugar: "Barranquilla", departamento: "Atlántico", variable: "precipitacion", anioDesde: 2023, anioHasta: 2023 });
+  const env = {
+    AI: aiMock([intentJson, "Lo siento, solo puedo ayudarte con esta plataforma y con temas de hidrología y los datos del IDEAM. ¿Tienes alguna duda sobre eso?"]),
+    API_ORIGIN: "https://box",
+  };
+  globalThis.fetch = async (url) => {
+    const path = new URL(url, "https://x").pathname;
+    if (path === "/api/municipalities") return new Response(JSON.stringify(CATALOGO));
+    if (path === "/api/meta") return new Response(JSON.stringify(META));
+    if (path === "/api/analytics/idf-stations") return new Response(JSON.stringify(IDF_CAT));
+    if (path === "/api/analytics/timeseries") return new Response(JSON.stringify({ points: [{ bucket: "2023-01-01", value: 800, n: 50000 }] }));
+    return new Response("{}", { status: 404 });
+  };
+  const res = await worker.fetch(chatRequest({ messages: [{ role: "user", content: "¿Cuánto llovió en Barranquilla en 2023?" }] }), env);
+  const data = await res.json();
+  assert.equal(data.dataUsed, false);
+  assert.equal(data.reply.includes("📊 Fuente"), false);
+  assert.deepEqual(data.suggestions, []);
+});
+
 test("red-team: lugar malicioso del extractor llega truncado y nunca como instrucción", async () => {
   // El extractor (mockeado) devuelve un lugar con instrucciones inyectadas: el
   // pipeline lo trunca a 80 chars (parseIntentJson) y solo lo usa para hacer

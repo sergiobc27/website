@@ -372,14 +372,16 @@ async function handleChat(request, env) {
     let reply = limpiarFugasDeJson(extraido.reply); // el bloque interno de datos jamás se muestra
     reply = ensureReferencia(reply); // anexa "📚 Referencia" si citó y faltaba
     reply = ensureDatoCurioso(reply); // garantiza "💡 Dato curioso" al final
-    const dataUsed = !!(resultadoDatos && resultadoDatos.ok);
+    const esRechazo = /solo puedo ayudarte con esta plataforma/i.test(reply);
+    const dataUsed = !!(resultadoDatos && resultadoDatos.ok) && !esRechazo;
     if (dataUsed && !reply.includes("📊 Fuente:")) {
       // La línea de fuente la pone el CÓDIGO, no el modelo: una respuesta con
-      // datos del espejo siempre declara su origen.
+      // datos del espejo siempre declara su origen. Un rechazo (el 8B a veces
+      // rechaza pese a tener datos) jamás lleva fuente: sería contradictorio.
       reply += "\n\n📊 Fuente: espejo de datos IDEAM (consulta en vivo)";
     }
     let suggestions = extraido.suggestions;
-    if (/solo puedo ayudarte con esta plataforma/i.test(reply)) {
+    if (esRechazo) {
       suggestions = []; // el rechazo va literal, sin chips
     } else if (!suggestions.length) {
       suggestions = sugerenciasFallback(intent);

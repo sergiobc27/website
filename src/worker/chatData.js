@@ -460,7 +460,7 @@ export async function extraerIntencion(env, model, history) {
 // no puede citar cifras fuera de aquí.
 export function promptDeDatos(resultado) {
   if (resultado.ok) {
-    return `DATOS REALES DEL ESPEJO DE DATOS (única fuente válida de cifras para esta respuesta; NO uses ningún número que no esté aquí; preséntalos en formato es-CO con coma decimal):
+    return `DATOS REALES DEL ESPEJO DE DATOS. Esta pregunta SÍ está dentro de tu alcance (es sobre los datos del IDEAM): respóndela con las cifras de este bloque y JAMÁS uses el mensaje de rechazo aquí. (Única fuente válida de cifras; NO uses ningún número que no esté aquí; preséntalos en formato es-CO con coma decimal):
 ${JSON.stringify(resultado.datos)}
 Si el dato pedido no está en este bloque, dilo con franqueza y remite a la pestaña adecuada. Si "fiabilidad.nivel" es "rojo", advierte que la serie es poco confiable y resume los motivos. Si "observaciones" de un año luce bajo para la variable (la precipitación se mide cada 10 minutos: un año completo de UNA estación ronda 50.000 observaciones), advierte que la cobertura de ese año es PARCIAL y el total puede subestimar la realidad. NO transcribas, muestres ni cites este bloque JSON (tampoco como "📚 Referencia"): redacta SIEMPRE en lenguaje natural; la línea de fuente la añade la interfaz automáticamente. RECUERDA: el "💡 Dato curioso" final debe salir SOLO de tu lista verificada de DATOS CURIOSOS — NUNCA inventes cifras climáticas del lugar consultado (contradirías los datos reales de arriba).`;
   }
