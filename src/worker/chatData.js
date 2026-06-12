@@ -176,10 +176,11 @@ export async function consultarDatos(env, intent) {
   }
 }
 
-// Bajo este promedio de observaciones/año la cobertura municipal es tan pobre
-// que el total ENGAÑA (caso real: "Barranquilla 2023 = 9 mm" con estaciones
-// contadas). En esos casos se amplía al departamento y SE DICE.
-const UMBRAL_OBS_ANUAL = 5000;
+// Bajo este promedio de observaciones/año la cobertura municipal ENGAÑA: un
+// año completo de UNA estación de 10 min ronda 52.000 obs; el caso real
+// "Barranquilla 2023 = 9 mm" tenía 11.523 (≈22% de un año). Con menos de
+// ~60% de una estación-año se amplía al departamento y SE DICE.
+const UMBRAL_OBS_ANUAL = 30000;
 
 function resumirSerie(points) {
   return (points || [])
