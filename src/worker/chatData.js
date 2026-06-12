@@ -114,6 +114,18 @@ export async function resolverLugar(env, { lugar, departamento }) {
   //    estaciones de lluvia, que es donde de verdad hay datos que mostrar).
   const idf = await boxJson(env, "/api/analytics/idf-stations");
   const stations = (idf && idf.stations) || [];
+  // Municipio homónimo: el mismo nombre EXACTO en ≥2 departamentos y sin
+  // departamento que desempate. No adivinamos: marcamos ambiguo para pedirlo.
+  if (!out.departamento) {
+    const exactos = stations.filter((s) => normalizarTexto(s.municipio) === objetivo);
+    const depsExactos = [...new Set(exactos.map((s) => s.departamento).filter(Boolean))];
+    if (exactos.length && depsExactos.length > 1) {
+      out.ambiguo = true;
+      out.municipio = exactos[0].municipio;
+      out.opcionesDepartamento = depsExactos;
+      return out;
+    }
+  }
   const porMunicipio = stations.find((s) => {
     const n = normalizarTexto(s.municipio);
     return n === objetivo || n.startsWith(objetivo);
@@ -182,6 +194,10 @@ export async function consultarDatos(env, intent) {
 // ~60% de una estación-año se amplía al departamento y SE DICE.
 const UMBRAL_OBS_ANUAL = 30000;
 
+// El espejo de datos arranca en 2001 (ver DATOS CURIOSOS). Un rango por debajo
+// de este piso no tiene observaciones que mostrar.
+const ANIO_MIN = 2001;
+
 function resumirSerie(points) {
   return (points || [])
     .filter((p) => p.value !== null)
@@ -194,7 +210,20 @@ function resumirSerie(points) {
 }
 
 async function datoPuntual(env, intent) {
+  // #7 — rango de años totalmente fuera de cobertura (2001–actual): avisar en
+  // vez de consultar el box y devolver una serie vacía en silencio.
+  const anioActual = new Date().getUTCFullYear();
+  if (
+    (intent.anioHasta != null && intent.anioHasta < ANIO_MIN) ||
+    (intent.anioDesde != null && intent.anioDesde > anioActual)
+  ) {
+    return { ok: false, errorTipo: "rango_fuera_de_cobertura", desde: intent.anioDesde, hasta: intent.anioHasta };
+  }
   const lugar = await resolverLugar(env, intent);
+  // #10 — municipio homónimo: pedir que precise en vez de elegir uno arbitrario.
+  if (lugar.ambiguo) {
+    return { ok: false, errorTipo: "municipio_ambiguo", lugar: intent.lugar, opciones: lugar.opcionesDepartamento || [] };
+  }
   if (intent.lugar && !lugar.municipio) {
     return { ok: false, errorTipo: "lugar_no_encontrado", lugar: intent.lugar, sugerencias: lugar.sugerencias || [] };
   }
@@ -242,6 +271,11 @@ async function datoPuntual(env, intent) {
   if (!serie.length) {
     return { ok: false, errorTipo: "sin_datos", lugar: lugar.municipio || lugar.departamento || "Colombia" };
   }
+  // #9 — cobertura parcial garantizada por CÓDIGO (no se fía del 8B). Solo
+  // aplica a precipitación (10-min: un año-estación completo ≈ 50.000 obs); en
+  // las demás variables el conteo bajo es normal y no implica hueco.
+  const coberturaParcial =
+    v.metrica === "sum" && serie.some((p) => (p.observaciones || 0) < UMBRAL_OBS_ANUAL);
   return {
     ok: true,
     datos: {
@@ -251,6 +285,7 @@ async function datoPuntual(env, intent) {
       unidad: v.unidad,
       lugar: lugarMostrado,
       ...(nota ? { nota } : {}),
+      ...(coberturaParcial ? { coberturaParcial: true } : {}),
       serie,
     },
   };
@@ -287,7 +322,7 @@ async function idfTr(env, intent) {
       trUsado: curva ? curva.returnPeriod : null,
       idf: curva ? curva.points.map((p) => ({ duracionMin: p.durMin, intensidadMmH: Math.round(p.intensityMmH * 10) / 10 })) : [],
       [`tr${curva ? curva.returnPeriod : tr}`]: quantil
-        ? { lluviaDiariaMm: quantil.value, ic90: quantil.lower !== undefined ? [quantil.lower, quantil.upper] : null }
+        ? { laminaMaxDiariaMm: quantil.value, ic90: quantil.lower !== undefined ? [quantil.lower, quantil.upper] : null }
         : null,
     },
   };
@@ -398,7 +433,7 @@ export function sugerenciasFallback(intent) {
 // Vistas válidas para el contexto "qué está mirando el usuario" (whitelist:
 // el cliente no puede inyectar texto arbitrario al prompt vía `view`).
 export const VISTA_LABELS = {
-  dashboard: "Dashboard",
+  dashboard: "Panel general",
   analytics: "Analítica",
   map: "Mapa de Estaciones",
   compare: "Comparador",
@@ -469,9 +504,15 @@ export async function extraerIntencion(env, model, history) {
 // no puede citar cifras fuera de aquí.
 export function promptDeDatos(resultado) {
   if (resultado.ok) {
+    // #6 — la intensidad (mm/h por duración) y la lámina máxima diaria (mm para
+    // ese Tr) son magnitudes distintas; el 8B tiende a mezclarlas.
+    const aclaracionIdf =
+      resultado.datos && resultado.datos.tipo === "idf_tr"
+        ? ` ACLARACIÓN DE UNIDADES: en "idf" cada punto es la INTENSIDAD en mm/h para esa duración (de la curva IDF); "laminaMaxDiariaMm" es la LÁMINA de lluvia máxima diaria en mm para ese período de retorno. Son magnitudes DISTINTAS: no las mezcles ni las sumes; al citar una, di siempre su unidad.`
+        : "";
     return `DATOS REALES DEL ESPEJO DE DATOS. Esta pregunta SÍ está dentro de tu alcance (es sobre los datos del IDEAM): respóndela con las cifras de este bloque y JAMÁS uses el mensaje de rechazo aquí. (Única fuente válida de cifras; NO uses ningún número que no esté aquí; preséntalos en formato es-CO con coma decimal):
 ${JSON.stringify(resultado.datos)}
-Si el dato pedido no está en este bloque, dilo con franqueza y remite a la pestaña adecuada. Si "fiabilidad.nivel" es "rojo", advierte que la serie es poco confiable y resume los motivos. Si "observaciones" de un año luce bajo para la variable (la precipitación se mide cada 10 minutos: un año completo de UNA estación ronda 50.000 observaciones), advierte que la cobertura de ese año es PARCIAL y el total puede subestimar la realidad. NO transcribas, muestres ni cites este bloque JSON (tampoco como "📚 Referencia"): redacta SIEMPRE en lenguaje natural; la línea de fuente la añade la interfaz automáticamente. RECUERDA: el "💡 Dato curioso" final debe salir SOLO de tu lista verificada de DATOS CURIOSOS — NUNCA inventes cifras climáticas del lugar consultado (contradirías los datos reales de arriba).`;
+Si el dato pedido no está en este bloque, dilo con franqueza y remite a la pestaña adecuada. Si "fiabilidad.nivel" es "rojo", advierte que la serie es poco confiable y resume los motivos. Si "observaciones" de un año luce bajo para la variable (la precipitación se mide cada 10 minutos: un año completo de UNA estación ronda 50.000 observaciones), advierte que la cobertura de ese año es PARCIAL y el total puede subestimar la realidad. NO transcribas, muestres ni cites este bloque JSON (tampoco como "📚 Referencia"): redacta SIEMPRE en lenguaje natural; la línea de fuente la añade la interfaz automáticamente.${aclaracionIdf} RECUERDA: el "💡 Dato curioso" final debe salir SOLO de tu lista verificada de DATOS CURIOSOS — NUNCA inventes cifras climáticas del lugar consultado (contradirías los datos reales de arriba).`;
   }
   const sugerencias = resultado.sugerencias && resultado.sugerencias.length
     ? `; lugares parecidos: ${resultado.sugerencias.join(", ")}`
@@ -480,6 +521,8 @@ Si el dato pedido no está en este bloque, dilo con franqueza y remite a la pest
     lugar_no_encontrado: `No se encontró el lugar "${resultado.lugar}" en el catálogo${sugerencias}. Pide al usuario precisar el municipio (NO inventes datos).`,
     sin_estacion_idf: `No hay estación con curvas IDF que coincida con "${resultado.lugar}". Sugiere buscar la estación en la pestaña Hidrología (que además sugiere la más cercana).`,
     sin_datos: `El espejo no tiene observaciones SUFICIENTES para esa combinación de lugar/periodo (dar una cifra engañaría). Dilo con franqueza y sugiere ajustar el periodo o revisar la cobertura en el Mapa de Estaciones.`,
+    rango_fuera_de_cobertura: `El espejo de datos cubre 2001–actualidad y el rango pedido (${resultado.desde || "?"}–${resultado.hasta || "?"}) queda fuera. Dilo con franqueza y pide un rango dentro de ese período (NO inventes cifras).`,
+    municipio_ambiguo: `Hay varios municipios llamados "${resultado.lugar}" en distintos departamentos (${(resultado.opciones || []).join(", ")}). Pide al usuario que precise en qué departamento; NO elijas uno por tu cuenta ni inventes datos.`,
     espejo_no_disponible: `No fue posible consultar el espejo de datos en este momento. Dilo con franqueza, sin inventar cifras, y sugiere intentar de nuevo o usar la pestaña correspondiente.`,
   };
   return `CONSULTA DE DATOS FALLIDA. Esta pregunta SÍ está dentro de tu alcance (es sobre los datos del IDEAM): NO uses el mensaje de rechazo. En su lugar: ${razones[resultado.errorTipo] || razones.espejo_no_disponible}`;
@@ -500,13 +543,20 @@ export function parseIntentJson(raw) {
   }
   if (!obj || typeof obj !== "object" || !INTENTS.has(obj.intent)) return null;
   const str = (v) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 80) : null);
+  let anioDesde = intOrNull(obj.anioDesde, 1950, 2100);
+  let anioHasta = intOrNull(obj.anioHasta, 1950, 2100);
+  // Rango invertido (usuario o extractor cruzaron los años): intercambiar en vez
+  // de mandar al box un rango imposible que devolvería una serie vacía.
+  if (anioDesde !== null && anioHasta !== null && anioDesde > anioHasta) {
+    [anioDesde, anioHasta] = [anioHasta, anioDesde];
+  }
   return {
     intent: obj.intent,
     lugar: str(obj.lugar),
     departamento: str(obj.departamento),
     variable: Object.prototype.hasOwnProperty.call(VARIABLES, obj.variable) ? obj.variable : null,
-    anioDesde: intOrNull(obj.anioDesde, 1950, 2100),
-    anioHasta: intOrNull(obj.anioHasta, 1950, 2100),
+    anioDesde,
+    anioHasta,
     tr: intOrNull(obj.tr, 2, 500),
     topN: intOrNull(obj.topN, 1, 10),
   };

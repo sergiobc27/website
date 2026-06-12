@@ -1,8 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MessageCircle, X } from 'lucide-react';
 import { Asistente } from './Asistente';
 
 export const OPEN_ASISTENTE_EVENT = 'ideam:open-asistente';
+
+// Elementos enfocables dentro del panel (para el trap de foco del diálogo).
+const FOCUSABLES =
+  'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
  * Botón flotante (abajo-derecha, todas las vistas) + panel del Asistente.
@@ -11,6 +15,8 @@ export const OPEN_ASISTENTE_EVENT = 'ideam:open-asistente';
  */
 export function AsistenteFlotante({ currentView }: { currentView: string }) {
   const [open, setOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     const abrir = () => setOpen(true);
@@ -27,10 +33,45 @@ export function AsistenteFlotante({ currentView }: { currentView: string }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
+  // A11y del diálogo (#12): al abrir, mueve el foco al campo de texto (o al
+  // primer focusable) y ATRAPA Tab dentro del panel; al cerrar, devuelve el foco
+  // al botón flotante. No se vuelve el fondo inert (la conversación sobrevive).
+  useEffect(() => {
+    if (!open) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const focusables = () =>
+      Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLES)).filter((el) => el.offsetParent !== null);
+    (panel.querySelector<HTMLElement>('input, textarea') || focusables()[0])?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const items = focusables();
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const activo = document.activeElement as HTMLElement | null;
+      if (e.shiftKey && (activo === first || !panel.contains(activo))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (activo === last || !panel.contains(activo))) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    panel.addEventListener('keydown', onKey);
+    return () => {
+      panel.removeEventListener('keydown', onKey);
+      triggerRef.current?.focus();
+    };
+  }, [open]);
+
   return (
     <>
       <div
+        ref={panelRef}
         role="dialog"
+        aria-modal="true"
+        aria-hidden={!open}
         aria-label="Asistente Hídrico"
         className={`glass-chrome flex fixed bottom-[10rem] lg:bottom-24 right-4 z-50 h-[min(640px,calc(100dvh-13rem))] lg:h-[min(640px,calc(100dvh-7rem))] w-[min(420px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border shadow-glow transition-[opacity,transform] duration-200 ease-out ${open ? 'visible translate-y-0 opacity-100' : 'pointer-events-none invisible translate-y-2 scale-[0.98] opacity-0'}`}
       >
@@ -53,6 +94,7 @@ export function AsistenteFlotante({ currentView }: { currentView: string }) {
       </div>
 
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-label={open ? 'Cerrar Asistente Hídrico' : 'Abrir Asistente Hídrico'}

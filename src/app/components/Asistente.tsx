@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
-import { Bot, MessageCircle, Send, User } from 'lucide-react';
-import { apiUrl } from '../lib/ideamApi';
+import { Bot, Check, Copy, MessageCircle, Send, User } from 'lucide-react';
+import { apiJson } from '../lib/ideamApi';
+import { cercaDelFondo, formatChatError } from '../lib/chatUi';
 
 // Render de fórmulas LaTeX con KaTeX. KaTeX genera su propio markup seguro a
 // partir del LaTeX (no inserta HTML del usuario) y con throwOnError:false nunca
@@ -138,52 +139,84 @@ export function Asistente({ view, compact }: AsistenteProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [copiado, setCopiado] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  // Pegado al fondo: solo auto-desplazamos si el usuario ya estaba abajo, para
+  // no pisar un scroll-up manual mientras lee mensajes anteriores.
+  const pegadoAlFondo = useRef(true);
+
+  const onScroll = () => {
+    const el = scrollRef.current;
+    if (el) pegadoAlFondo.current = cercaDelFondo(el);
+  };
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    const el = scrollRef.current;
+    if (el && pegadoAlFondo.current) {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    }
   }, [messages, isLoading]);
 
-  const send = async (text: string) => {
-    const pregunta = text.trim();
-    if (!pregunta || isLoading) return;
+  // Lanza la consulta con un historial dado SIN tocar `messages`: así
+  // "Reintentar" reusa la conversación actual sin duplicar el turno del usuario.
+  const ejecutarConsulta = async (turnos: ChatMessage[]) => {
     setError('');
     setSuggestions([]);
-    const nuevos: ChatMessage[] = [...messages, { role: 'user', content: pregunta }];
-    setMessages(nuevos);
-    setInput('');
     setIsLoading(true);
     // Timeout de red: si el modelo no responde, no dejamos la UI colgada.
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20000);
     try {
-      const response = await fetch(apiUrl('/api/chat'), {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ messages: nuevos.slice(-10), ...(view ? { view } : {}) }),
-        signal: controller.signal,
-      });
-      const data = await response.json().catch(() => null);
-      if (!response.ok || !data || typeof data.reply !== 'string' || !data.reply.trim()) {
-        throw new Error((data && data.error) || 'El asistente no pudo responder.');
+      const data = await apiJson<{ reply?: string; suggestions?: unknown }>(
+        '/api/chat',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ messages: turnos.slice(-10), ...(view ? { view } : {}) }),
+          signal: controller.signal,
+        },
+        'El asistente no pudo responder.',
+      );
+      if (typeof data.reply !== 'string' || !data.reply.trim()) {
+        throw new Error('El asistente no pudo responder.');
       }
-      setMessages((current) => [...current, { role: 'assistant', content: data.reply }]);
+      const reply = data.reply;
+      setMessages((current) => [...current, { role: 'assistant', content: reply }]);
       setSuggestions(
         Array.isArray(data.suggestions)
           ? data.suggestions.filter((s: unknown): s is string => typeof s === 'string').slice(0, 3)
           : [],
       );
     } catch (cause) {
-      const msg =
-        cause instanceof DOMException && cause.name === 'AbortError'
-          ? 'El asistente tardó demasiado en responder. Intenta de nuevo.'
-          : cause instanceof Error
-            ? cause.message
-            : 'El asistente no está disponible ahora.';
-      setError(msg);
+      // El 429/Retry-After y el caso "respuesta HTML" los traduce formatChatError.
+      setError(formatChatError(cause));
     } finally {
       clearTimeout(timeout);
       setIsLoading(false);
+    }
+  };
+
+  const send = (text: string) => {
+    const pregunta = text.trim();
+    if (!pregunta || isLoading) return;
+    const nuevos: ChatMessage[] = [...messages, { role: 'user', content: pregunta }];
+    setMessages(nuevos);
+    setInput('');
+    void ejecutarConsulta(nuevos);
+  };
+
+  const reintentar = () => {
+    if (isLoading || !messages.length) return;
+    void ejecutarConsulta(messages);
+  };
+
+  const copiar = async (index: number, texto: string) => {
+    try {
+      await navigator.clipboard?.writeText(texto);
+      setCopiado(index);
+      setTimeout(() => setCopiado((c) => (c === index ? null : c)), 1500);
+    } catch {
+      /* portapapeles no disponible: no romper la UI */
     }
   };
 
@@ -203,6 +236,11 @@ export function Asistente({ view, compact }: AsistenteProps) {
 
       <div
         ref={scrollRef}
+        onScroll={onScroll}
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions"
+        aria-label="Conversación con el Asistente Hídrico"
         className="flex-1 space-y-4 overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-glow"
       >
         {messages.length === 0 && !isLoading && (
@@ -235,8 +273,24 @@ export function Asistente({ view, compact }: AsistenteProps) {
             <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${m.role === 'user' ? 'bg-primary/15 text-primary' : 'bg-accent/15 text-accent'}`}>
               {m.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
             </div>
-            <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${m.role === 'user' ? 'whitespace-pre-wrap bg-primary/10 text-card-foreground' : 'border border-border bg-background text-card-foreground'}`}>
-              {m.role === 'user' ? m.content : <MensajeFormateado text={m.content} />}
+            <div className={`flex max-w-[80%] flex-col gap-1 ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
+              <div className={`break-words rounded-2xl px-4 py-2.5 text-sm ${m.role === 'user' ? 'whitespace-pre-wrap bg-primary/10 text-card-foreground' : 'border border-border bg-background text-card-foreground'}`}>
+                {m.role === 'user' ? m.content : <MensajeFormateado text={m.content} />}
+              </div>
+              {m.role === 'assistant' && (
+                <button
+                  type="button"
+                  onClick={() => void copiar(index, m.content)}
+                  aria-label="Copiar respuesta"
+                  className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+                >
+                  {copiado === index ? (
+                    <><Check className="h-3 w-3" /> Copiado</>
+                  ) : (
+                    <><Copy className="h-3 w-3" /> Copiar</>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -247,7 +301,8 @@ export function Asistente({ view, compact }: AsistenteProps) {
               <Bot className="h-4 w-4" />
             </div>
             <div className="rounded-2xl border border-border bg-background px-4 py-2.5 text-sm text-muted-foreground">
-              <span className="inline-flex gap-1">
+              <span className="sr-only">El asistente está escribiendo una respuesta…</span>
+              <span className="inline-flex gap-1" aria-hidden="true">
                 <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent" style={{ animationDelay: '0ms' }} />
                 <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent" style={{ animationDelay: '150ms' }} />
                 <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent" style={{ animationDelay: '300ms' }} />
@@ -273,8 +328,18 @@ export function Asistente({ view, compact }: AsistenteProps) {
       </div>
 
       {error && (
-        <div role="alert" className="mt-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          {error}
+        <div role="alert" className="mt-2 flex items-start justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          <span>{error}</span>
+          {messages.length > 0 && (
+            <button
+              type="button"
+              onClick={() => reintentar()}
+              disabled={isLoading}
+              className="shrink-0 rounded-md border border-destructive/40 px-2 py-1 font-medium transition-colors hover:bg-destructive/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-destructive disabled:opacity-50"
+            >
+              Reintentar
+            </button>
+          )}
         </div>
       )}
 

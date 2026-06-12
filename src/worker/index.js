@@ -73,7 +73,7 @@ function isPublicApiPath(pathname) {
   return PUBLIC_API_ROUTES.has(pathname) || pathname.startsWith("/api/jobs/");
 }
 
-export { looksLikeManipulation };
+export { looksLikeManipulation, ensureDisclaimer, ensureReferencia, ensureDatoCurioso, cifrasConUnidadFueraDe };
 
 export default {
   async fetch(request, env) {
@@ -134,7 +134,7 @@ TONO Y ESTILO: Responde SIEMPRE en español, con lenguaje claro y sencillo que e
 
 ALCANCE ESTRICTO — SOLO ayudas con:
 1. Conceptos de hidrología y datos hidrometeorológicos: precipitación, curvas IDF (Intensidad-Duración-Frecuencia), período de retorno, distribución de Gumbel, prueba de bondad de ajuste, SPI (índice de sequía), hietograma, histograma, coeficiente de escorrentía, método racional Q=C·I·A, tiempo de concentración (Kirpich), niveles de río, temperatura, humedad, viento.
-2. Cómo usar la plataforma y sus pestañas: Dashboard, Analítica, Mapa de Estaciones, Comparador, Ficha Climática, Hidrología (incluye curvas IDF y la calculadora de caudal), Extractor de Datos, Estado del Espejo, y este Asistente. Esto INCLUYE cómo descargar datos, los rangos y restricciones de fechas, los filtros (departamento, zona, río, altitud), la cobertura de cada estación y por qué a una estación le faltan años: todo eso SÍ es parte de tu trabajo.
+2. Cómo usar la plataforma y sus pestañas: Panel general, Analítica, Mapa de Estaciones, Comparador, Ficha Climática, Hidrología (incluye curvas IDF y la calculadora de caudal), Extractor de Datos, Estado del Espejo, y este Asistente. Esto INCLUYE cómo descargar datos, los rangos y restricciones de fechas, los filtros (departamento, zona, río, altitud), la cobertura de cada estación y por qué a una estación le faltan años: todo eso SÍ es parte de tu trabajo.
 
 MAPA EXACTO DE PESTAÑAS — cuando indiques DÓNDE hacer algo, usa SIEMPRE el nombre correcto de esta lista (no inventes ni mezcles pestañas):
 - "Extractor de Datos": descargar y exportar datos (CSV, JSON, Parquet) y generar el ZIP. TODA descarga se hace aquí, NO en Analítica.
@@ -143,7 +143,7 @@ MAPA EXACTO DE PESTAÑAS — cuando indiques DÓNDE hacer algo, usa SIEMPRE el n
 - "Mapa de Estaciones": mapa con todas las estaciones y filtros por departamento, zona hidrográfica, río/corriente y altitud.
 - "Comparador": comparar varias estaciones entre sí.
 - "Ficha Climática": resumen climático de un municipio concreto.
-- "Dashboard": resumen general del espejo de datos.
+- "Panel general": resumen general del espejo de datos.
 - "Estado del Espejo": frescura y estado de los datos (qué tan actualizados están).
 - "Historial": ver y volver a descargar exportaciones previas.
 
@@ -227,13 +227,51 @@ function colapsarDatoCurioso(text) {
   );
 }
 
+// Firmas distintivas de cada dato curioso VERIFICADO (normalizadas: minúsculas,
+// sin tildes). Si el "💡 Dato curioso" que escribió el modelo no contiene
+// ninguna, es inventado y se reemplaza por uno verificado (defendibilidad: el
+// 8B no puede colar una estadística climática nueva con sello de dato oficial).
+const FIRMAS_DATO_CURIOSO = [
+  "760 millones",
+  "10 minutos",
+  "vargas",
+  "diaz-granados",
+  "universidad de la costa",
+  "tesis de ingenieria civil",
+  "alcantarillado",
+  "igualado o superado",
+  "1% de probabilidad",
+];
+
+function normalizarMin(s) {
+  return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+function datoCuriosoVerificado(tail) {
+  const n = normalizarMin(tail);
+  return FIRMAS_DATO_CURIOSO.some((f) => n.includes(f));
+}
+
+const RE_ETIQUETA_DC = /💡?\s*(?:\*\*\s*)?Dato\s+curioso\s*:\s*(?:\*\*\s*)?/i;
+
+function datoCuriosoAleatorio() {
+  return DATOS_CURIOSOS[Math.floor(Math.random() * DATOS_CURIOSOS.length)];
+}
+
 function ensureDatoCurioso(reply) {
   const text = colapsarDatoCurioso(String(reply || "").trim());
   if (!text) return text;
   if (/solo puedo ayudarte con esta plataforma/i.test(text)) return text;
-  if (text.includes("💡") || /dato curioso/i.test(text)) return text;
-  const dc = DATOS_CURIOSOS[Math.floor(Math.random() * DATOS_CURIOSOS.length)];
-  return `${text}\n\n💡 Dato curioso: ${dc}`;
+  const m = text.match(RE_ETIQUETA_DC);
+  if (m) {
+    const idx = text.indexOf(m[0]);
+    const tail = text.slice(idx + m[0].length).trim();
+    if (datoCuriosoVerificado(tail)) return text; // el modelo eligió uno real
+    // Inventado: conserva el cuerpo y sustituye solo la línea del dato curioso.
+    const cuerpo = text.slice(0, idx).replace(/\s+$/, "");
+    return `${cuerpo}\n\n💡 Dato curioso: ${datoCuriosoAleatorio()}`;
+  }
+  return `${text}\n\n💡 Dato curioso: ${datoCuriosoAleatorio()}`;
 }
 
 // Mapa de detección → cita APA verificada (misma lista blanca del system prompt).
@@ -273,7 +311,112 @@ function ensureReferencia(reply) {
     if (hits.length >= 2) break;
   }
   if (!hits.length) return text;
-  return `${text}\n\n${hits.map((a) => `📚 Referencia: ${a}`).join("\n")}`;
+  const bloque = hits.map((a) => `📚 Referencia: ${a}`).join("\n");
+  return insertarAntesDelCierre(text, bloque);
+}
+
+// Inserta `bloque` justo antes de la primera línea de cierre (💡 Dato curioso /
+// 📚 Referencia); si no hay ninguna, lo añade al final. Mantiene el orden de
+// lectura body → ⚠️ → 📚 → 💡 al componer ensureDisclaimer + ensureReferencia.
+function insertarAntesDelCierre(text, bloque) {
+  const lines = String(text).split("\n");
+  const idx = lines.findIndex(
+    (l) => /^\s*(?:💡|📚)/.test(l) || /^\s*(?:\*\*\s*)?(?:Dato\s+curioso|Referencia)\s*:/i.test(l),
+  );
+  if (idx === -1) return `${text}\n\n${bloque}`;
+  const antes = lines.slice(0, idx).join("\n").replace(/\s+$/, "");
+  const desde = lines.slice(idx).join("\n");
+  return `${antes}\n\n${bloque}\n\n${desde}`;
+}
+
+// Métodos cuyas constantes dependen de las unidades (Kirpich, Témez, Manning,
+// SCS, racional): si el 8B suelta un número junto a ellos, hay que forzar el
+// "verifica las constantes en la fuente" — una constante alucinada jamás debe
+// quedar con sello de cita real (hallazgo crítico de la auditoría).
+const METODOS_CONSTANTES = /Kirpich|T[eé]mez|\bManning\b|\bSCS\b|n[uú]mero de curva|m[eé]todo racional/i;
+// Acciones de diseño que justifican la advertencia aunque no haya fórmula.
+const TERMINOS_DISENO = /dimension|pre-?dimensionamiento|dise[ñn]o de|caudal de dise[ñn]o|per[ií]odo de retorno de dise[ñn]o/i;
+
+const DISCLAIMER_BASE =
+  "⚠️ Esto es orientativo y no sustituye el diseño normado (RAS 0330 / INVÍAS) ni el criterio de un ingeniero.";
+const DISCLAIMER_CONSTANTES =
+  "⚠️ Verifica las constantes y sus unidades directamente en la fuente citada; este resultado es orientativo y no sustituye el diseño normado (RAS 0330 / INVÍAS) ni el criterio de un ingeniero.";
+
+function tieneFormula(text) {
+  return (
+    /\$\$[\s\S]+?\$\$/.test(text) ||
+    /\$[^$\n]*\\[a-zA-Z]+[^$\n]*\$/.test(text) ||
+    /\\dfrac|\\frac|\\sqrt|\\cdot/.test(text)
+  );
+}
+
+// Garantiza la advertencia "orientativo / verifica constantes" en respuestas
+// técnicas (fórmula o términos de diseño). No toca el rechazo ni duplica si el
+// modelo ya advirtió. Escala cuando un método de constantes aparece con un
+// número, para que una constante posiblemente alucinada nunca quede sin caveat.
+function ensureDisclaimer(reply) {
+  const text = String(reply || "").trim();
+  if (!text) return text;
+  if (/solo puedo ayudarte con esta plataforma/i.test(text)) return text;
+  const formula = tieneFormula(text);
+  const decimal = /\d[.,]\d/.test(text);
+  const escalado = METODOS_CONSTANTES.test(text) && (formula || decimal);
+  const base = formula || TERMINOS_DISENO.test(text);
+  if (escalado) {
+    if (/verifi\w*.{0,20}(constante|unidad)/i.test(text)) return text;
+    return insertarAntesDelCierre(text, DISCLAIMER_CONSTANTES);
+  }
+  if (!base) return text;
+  if (/no\s+sustituy|no\s+reemplaz|orientativ/i.test(text)) return text;
+  return insertarAntesDelCierre(text, DISCLAIMER_BASE);
+}
+
+// Parsea un número en formato es-CO ("1.234,5" → 1234.5; "823,4" → 823.4) o
+// plano. Devuelve null si no es numérico.
+function parseNumeroFlexible(s) {
+  let t = String(s).trim();
+  if (t.includes(",")) {
+    t = t.replace(/\./g, "").replace(",", "."); // es-CO: punto miles, coma decimal
+  } else if (/^\d{1,3}(\.\d{3})+$/.test(t)) {
+    t = t.replace(/\./g, ""); // miles agrupados de a 3 sin decimal
+  }
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
+function numerosDeTexto(text) {
+  const out = [];
+  const re = /-?\d[\d.,]*/g;
+  let m;
+  while ((m = re.exec(String(text)))) {
+    const n = parseNumeroFlexible(m[0]);
+    if (n !== null) out.push(n);
+  }
+  return out;
+}
+
+// ¿el valor coincide (con tolerancia de redondeo) con algún número permitido?
+function coincideAprox(valor, permitidos) {
+  return permitidos.some((p) => {
+    const tol = Math.max(0.5, Math.abs(p) * 0.01);
+    return Math.abs(valor - p) <= tol || Math.round(valor) === Math.round(p);
+  });
+}
+
+// #8 — grounding post-hoc anclado a UNIDADES: ¿el cuerpo afirma alguna cifra con
+// unidad física (mm, mm/h, °C, m/s, hPa, cm) que NO provenga del bloque de
+// datos? Alta precisión: ignora años, Tr y % (no llevan unidad de dato), así que
+// casi no hay falsos positivos. La acción aguas arriba es un caveat suave.
+function cifrasConUnidadFueraDe(reply, numerosPermitidos) {
+  const text = String(reply || "");
+  const re = /(\d[\d.,]*)\s?(mm\/h|mm|°c|ºc|m\/s|hpa|cm)\b/gi;
+  let m;
+  while ((m = re.exec(text))) {
+    const n = parseNumeroFlexible(m[1]);
+    if (n === null) continue;
+    if (!coincideAprox(n, numerosPermitidos)) return true;
+  }
+  return false;
 }
 
 // Patrones de manipulación / jailbreak. Combinaciones (no palabras sueltas)
@@ -313,7 +456,22 @@ function chatJson(obj, status = 200) {
   });
 }
 
+// Solo nuestro propio sitio puede consumir la cuota de Workers AI desde el
+// navegador. Un Origin de otro sitio se rechaza; Origin AUSENTE se permite
+// (clientes no-browser / same-origin), para no romper clientes legítimos.
+const CHAT_ORIGIN_HOSTS = new Set(["ideam.sergiobc.com", "sergiobc.com", "localhost", "127.0.0.1"]);
+function originPermitido(request) {
+  const origin = request.headers.get("origin");
+  if (!origin) return true;
+  try {
+    return CHAT_ORIGIN_HOSTS.has(new URL(origin).hostname);
+  } catch {
+    return false;
+  }
+}
+
 async function handleChat(request, env) {
+  if (!originPermitido(request)) return chatJson({ error: "Origen no permitido." }, 403);
   if (!env.AI) return chatJson({ error: "El asistente no está disponible (IA no configurada)." }, 503);
   let body;
   try {
@@ -333,9 +491,11 @@ async function handleChat(request, env) {
   // Guardrail determinista ANTES del modelo: ataja intentos de manipulación /
   // jailbreak por patrón, sin depender del LLM (que es débil resistiéndolos) y
   // sin gastar neurons. El off-topic sutil lo maneja el system prompt. Se revisa
-  // TODO el historial de mensajes del usuario, no solo el último, para cerrar la
-  // inyección indirecta (un turno previo contaminado que reactive el jailbreak).
-  if (history.some((m) => m.role === "user" && looksLikeManipulation(m.content))) {
+  // TODO el historial entrante —incluidos los turnos `assistant`, que el cliente
+  // puede fabricar—, para cerrar la inyección indirecta (un turno previo
+  // contaminado que reactive el jailbreak). El contenido legítimo del asistente
+  // (dominio hídrico) no dispara los patrones, así que no hay falsos positivos.
+  if (history.some((m) => looksLikeManipulation(m.content))) {
     return chatJson({ reply: CHAT_REJECTION, blocked: true, suggestions: [] });
   }
   // Rate-limit ANTES de gastar neurons: evita que un script anónimo vacíe la
@@ -370,10 +530,23 @@ async function handleChat(request, env) {
     });
     const extraido = extraerSugerencias((result && result.response) || "");
     let reply = limpiarFugasDeJson(extraido.reply); // el bloque interno de datos jamás se muestra
-    reply = ensureReferencia(reply); // anexa "📚 Referencia" si citó y faltaba
-    reply = ensureDatoCurioso(reply); // garantiza "💡 Dato curioso" al final
+    reply = ensureDisclaimer(reply); // ⚠️ orientativo / verifica constantes en fórmulas
+    reply = ensureReferencia(reply); // anexa "📚 Referencia" si citó y faltaba (antes del dato curioso)
+    reply = ensureDatoCurioso(reply); // garantiza/valida "💡 Dato curioso" al final
     const esRechazo = /solo puedo ayudarte con esta plataforma/i.test(reply);
     const dataUsed = !!(resultadoDatos && resultadoDatos.ok) && !esRechazo;
+    if (dataUsed) {
+      // #9 — cobertura parcial garantizada por CÓDIGO (no se fía del 8B).
+      if (resultadoDatos.datos && resultadoDatos.datos.coberturaParcial && !/parcial/i.test(reply)) {
+        reply = insertarAntesDelCierre(reply, "ℹ️ Algunos años de la serie tienen cobertura parcial; el total puede subestimar la realidad.");
+      }
+      // #8 — cifra con unidad física que no proviene del bloque de datos → caveat
+      // suave anclado a unidades (no reescribe ni borra, solo advierte).
+      const permitidos = numerosDeTexto(JSON.stringify(resultadoDatos.datos || {}));
+      if (cifrasConUnidadFueraDe(reply, permitidos) && !/confirma las cifras exactas/i.test(reply)) {
+        reply = insertarAntesDelCierre(reply, "ℹ️ Confirma las cifras exactas en la pestaña correspondiente; algún número podría no provenir directamente de los datos consultados.");
+      }
+    }
     if (dataUsed && !reply.includes("📊 Fuente:")) {
       // La línea de fuente la pone el CÓDIGO, no el modelo: una respuesta con
       // datos del espejo siempre declara su origen. Un rechazo (el 8B a veces
@@ -398,7 +571,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const RL_MAX_PER_HOUR = 15;                  // tope relajado por IP (correo)
 const RL_GLOBAL_PER_DAY = 100;               // backstop global (límite gratis de Resend)
 const CHAT_RL_PER_HOUR = 30;                 // mensajes/hora por IP (chat)
-const CHAT_GLOBAL_PER_DAY = 250;             // backstop global ~ cuota diaria de neurons
+const CHAT_GLOBAL_CALLS_PER_DAY = 1500;      // backstop global en LLAMADAS IA (peso 3/mensaje)
+const CHAT_CALLS_POR_MENSAJE = 3;            // peor caso del pipeline: extractor + reintento + redactor
 
 function emailJson(obj, status) {
   return new Response(JSON.stringify(obj), {
@@ -437,7 +611,7 @@ async function kvPutSafe(env, key, value, expirationTtl) {
 // contadores por feature (correo vs chat). Si no hay binding KV, no limita.
 // `commitGlobal: false` solo CHEQUEA el tope global sin consumirlo (el correo
 // lo consume después de validar la estación, vía bumpGlobalDay).
-async function kvRateLimited(env, prefix, perHour, perDay, ip, commitGlobal = true) {
+async function kvRateLimited(env, prefix, perHour, perDay, ip, commitGlobal = true, pesoGlobal = 1) {
   if (!env.EMAIL_RL) return false;
 
   try {
@@ -452,7 +626,9 @@ async function kvRateLimited(env, prefix, perHour, perDay, ip, commitGlobal = tr
       await kvPutSafe(env, key, String(current + 1), 3600);
     }
 
-    if (commitGlobal) await kvPutSafe(env, gKey, String(gCount + 1), 86400);
+    // `pesoGlobal` permite que un flujo descuente más de 1 del tope global (el
+    // chat gasta hasta 3 llamadas IA por mensaje: el cupo refleja neuronas reales).
+    if (commitGlobal) await kvPutSafe(env, gKey, String(gCount + pesoGlobal), 86400);
     return false;
   } catch {
     // KV indisponible: fallar abierto (el tope duro real son las cuotas free
@@ -477,8 +653,10 @@ async function bumpGlobalDay(env, prefix) {
 // Correo: tope relajado + backstop global alineado al límite gratis de Resend.
 // commitGlobal=false: el cupo global se consume tras validar la estación.
 const emailRateLimited = (env, ip) => kvRateLimited(env, "rl", RL_MAX_PER_HOUR, RL_GLOBAL_PER_DAY, ip, false);
-// Chat (Workers AI): protege la cuota diaria de neurons del tier gratis.
-const chatRateLimited = (env, ip) => kvRateLimited(env, "rlc", CHAT_RL_PER_HOUR, CHAT_GLOBAL_PER_DAY, ip);
+// Chat (Workers AI): protege la cuota diaria de neurons del tier gratis. El tope
+// global cuenta LLAMADAS IA (peso 3/mensaje); el límite por IP cuenta mensajes.
+const chatRateLimited = (env, ip) =>
+  kvRateLimited(env, "rlc", CHAT_RL_PER_HOUR, CHAT_GLOBAL_CALLS_PER_DAY, ip, true, CHAT_CALLS_POR_MENSAJE);
 
 // Escapa HTML para impedir inyección/phishing en el cuerpo del correo: los
 // campos vienen del cliente y el correo sale desde nuestro dominio verificado.

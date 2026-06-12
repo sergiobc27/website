@@ -14,6 +14,8 @@ import {
   extraerSugerencias,
   sugerenciasFallback,
   SUGERENCIAS_PROMPT,
+  promptDeDatos,
+  extraerIntencion,
 } from "../src/worker/chatData.js";
 
 const CATALOGO = {
@@ -249,7 +251,7 @@ test("consultarDatos idf_tr resuelve estación y reporta semáforo", async () =>
   assert.equal(r.datos.estacion.codigo, "0024");
   assert.equal(r.datos.fiabilidad.nivel, "amarillo");
   assert.equal(r.datos.idf[0].intensidadMmH, 120.3);
-  assert.equal(r.datos.tr25.lluviaDiariaMm, 95.2);
+  assert.equal(r.datos.tr25.laminaMaxDiariaMm, 95.2);
 });
 
 test("consultarDatos ranking nacional usa by-region", async () => {
@@ -434,4 +436,176 @@ test("red-team: lugar malicioso del extractor llega truncado y nunca como instru
   // El lugar llega truncado (≤80) y dentro del bloque de fallo, no como regla.
   assert.equal(promptRedactor.includes("x".repeat(81)), false);
   assert.equal(promptRedactor.includes("CONSULTA DE DATOS FALLIDA"), true);
+});
+
+// --- Tanda 2: corrección -----------------------------------------------------
+// (spec: docs/superpowers/specs/2026-06-12-bot-tanda2-correccion-design.md)
+
+// #7 — parseIntentJson intercambia un rango de años invertido.
+test("parseIntentJson intercambia anioDesde/anioHasta si vienen invertidos", () => {
+  const i = parseIntentJson({ intent: "dato_puntual", anioDesde: 2023, anioHasta: 2018 });
+  assert.equal(i.anioDesde, 2018);
+  assert.equal(i.anioHasta, 2023);
+  const j = parseIntentJson({ intent: "dato_puntual", anioDesde: 2018, anioHasta: 2023 });
+  assert.equal(j.anioDesde, 2018); // un rango correcto no se toca
+  assert.equal(j.anioHasta, 2023);
+});
+
+// #7 — datoPuntual: rango totalmente fuera de cobertura (antes de 2001).
+test("consultarDatos dato_puntual con años anteriores a 2001 avisa fuera de cobertura", async () => {
+  const env = { API_ORIGIN: "https://box" };
+  let llamadasTimeseries = 0;
+  globalThis.fetch = async (url) => {
+    const path = new URL(url, "https://x").pathname;
+    if (path === "/api/analytics/timeseries") { llamadasTimeseries++; return new Response(JSON.stringify({ points: [] })); }
+    return new Response("{}", { status: 404 });
+  };
+  const r = await consultarDatos(env, { intent: "dato_puntual", lugar: "Medellín", departamento: "Antioquia", variable: "precipitacion", anioDesde: 1990, anioHasta: 1995, tr: null, topN: null });
+  assert.equal(r.ok, false);
+  assert.equal(r.errorTipo, "rango_fuera_de_cobertura");
+  assert.equal(llamadasTimeseries, 0, "no consulta el box con un rango imposible");
+});
+
+// #9 — coberturaParcial marcada por código (solo precipitación).
+test("consultarDatos dato_puntual marca coberturaParcial con observaciones bajas", async () => {
+  const env = { API_ORIGIN: "https://box" };
+  globalThis.fetch = async (url) => {
+    const path = new URL(url, "https://x").pathname;
+    if (path === "/api/municipalities") return new Response(JSON.stringify(CATALOGO));
+    if (path === "/api/meta") return new Response(JSON.stringify(META));
+    if (path === "/api/analytics/idf-stations") return new Response(JSON.stringify(IDF_CAT));
+    if (path === "/api/analytics/timeseries") return new Response(JSON.stringify({ points: [{ bucket: "2023-01-01", value: 7.3, n: 900 }] }));
+    return new Response("{}", { status: 404 });
+  };
+  const r = await consultarDatos(env, { intent: "dato_puntual", lugar: "Barranquilla", departamento: "Atlántico", variable: "precipitacion", anioDesde: 2023, anioHasta: 2023, tr: null, topN: null });
+  assert.equal(r.ok, true);
+  assert.equal(r.datos.coberturaParcial, true);
+});
+
+test("consultarDatos dato_puntual NO marca coberturaParcial con buena cobertura", async () => {
+  const env = { API_ORIGIN: "https://box" };
+  globalThis.fetch = async (url) => {
+    const path = new URL(url, "https://x").pathname;
+    if (path === "/api/municipalities") return new Response(JSON.stringify(CATALOGO));
+    if (path === "/api/meta") return new Response(JSON.stringify(META));
+    if (path === "/api/analytics/idf-stations") return new Response(JSON.stringify(IDF_CAT));
+    if (path === "/api/analytics/timeseries") return new Response(JSON.stringify({ points: [{ bucket: "2023-01-01", value: 950.2, n: 48000 }] }));
+    return new Response("{}", { status: 404 });
+  };
+  const r = await consultarDatos(env, { intent: "dato_puntual", lugar: "Medellín", departamento: "Antioquia", variable: "precipitacion", anioDesde: 2023, anioHasta: 2023, tr: null, topN: null });
+  assert.equal(r.ok, true);
+  assert.ok(!r.datos.coberturaParcial);
+});
+
+// #10 — municipios homónimos: mismo nombre en varios departamentos.
+const IDF_HOMONIMO = { stations: [
+  { codigo: "20", nombre: "EST SUCRE", municipio: "SAN PEDRO", departamento: "SUCRE", aniosValidos: 15, fiabilidad: "verde" },
+  { codigo: "21", nombre: "EST VALLE", municipio: "SAN PEDRO", departamento: "VALLE DEL CAUCA", aniosValidos: 12, fiabilidad: "amarillo" },
+] };
+
+test("resolverLugar detecta municipio homónimo en varios departamentos (ambiguo)", async () => {
+  const env = { API_ORIGIN: "https://box" };
+  globalThis.fetch = fetchMock({ "/api/meta": META, "/api/analytics/idf-stations": IDF_HOMONIMO });
+  const r = await resolverLugar(env, { lugar: "San Pedro", departamento: null });
+  assert.equal(r.ambiguo, true);
+  assert.equal(r.opcionesDepartamento.length, 2);
+  assert.ok(r.opcionesDepartamento.includes("SUCRE"));
+});
+
+test("consultarDatos dato_puntual con municipio homónimo pide precisar departamento", async () => {
+  const env = { API_ORIGIN: "https://box" };
+  globalThis.fetch = fetchMock({ "/api/meta": META, "/api/analytics/idf-stations": IDF_HOMONIMO });
+  const r = await consultarDatos(env, { intent: "dato_puntual", lugar: "San Pedro", departamento: null, variable: "precipitacion", anioDesde: null, anioHasta: null, tr: null, topN: null });
+  assert.equal(r.ok, false);
+  assert.equal(r.errorTipo, "municipio_ambiguo");
+});
+
+// #6 — promptDeDatos distingue intensidad (mm/h) de lámina (mm) en idf_tr.
+test("promptDeDatos (idf_tr) instruye no mezclar intensidad (mm/h) y lámina (mm)", () => {
+  const p = promptDeDatos({ ok: true, datos: { tipo: "idf_tr", idf: [{ duracionMin: 15, intensidadMmH: 120.3 }], tr25: { laminaMaxDiariaMm: 95.2 } } });
+  assert.match(p, /mm\/h/i, "explica la unidad de intensidad");
+  assert.match(p, /no las (mezcles|sumes)/i, "instruye no mezclarlas");
+  // La aclaración NO debe aparecer para otros tipos (p. ej. dato_puntual).
+  const otro = promptDeDatos({ ok: true, datos: { tipo: "dato_puntual", serie: [] } });
+  assert.doesNotMatch(otro, /no las (mezcles|sumes)/i);
+});
+
+// #7/#10 — promptDeDatos cubre los nuevos errorTipo.
+test("promptDeDatos: rango_fuera_de_cobertura menciona 2001 y no usa rechazo", () => {
+  const p = promptDeDatos({ ok: false, errorTipo: "rango_fuera_de_cobertura", desde: 1990, hasta: 1995 });
+  assert.match(p, /2001/);
+  assert.match(p, /CONSULTA DE DATOS FALLIDA/);
+});
+
+test("promptDeDatos: municipio_ambiguo pide precisar el departamento y lista opciones", () => {
+  const p = promptDeDatos({ ok: false, errorTipo: "municipio_ambiguo", lugar: "San Pedro", opciones: ["SUCRE", "VALLE DEL CAUCA"] });
+  assert.match(p, /departamento/i);
+  assert.match(p, /SUCRE/);
+});
+
+// #11 — extraerIntencion: las dos pasadas (JSON mode + fallback plano).
+test("extraerIntencion parsea el intent (JSON mode)", async () => {
+  const env = { AI: { run: async (_m, input) => {
+    assert.ok(input.response_format, "la primera pasada usa JSON mode");
+    return { response: '{"intent":"ranking","topN":3,"variable":"precipitacion"}' };
+  } } };
+  const intent = await extraerIntencion(env, "modelo", [{ role: "user", content: "top 3 de lluvia por departamento" }]);
+  assert.equal(intent.intent, "ranking");
+  assert.equal(intent.topN, 3);
+});
+
+test("extraerIntencion cae al intento plano si el JSON mode falla", async () => {
+  let llamadas = 0;
+  const env = { AI: { run: async (_m, input) => {
+    llamadas++;
+    if (input.response_format) throw new Error("json mode no soportado");
+    return { response: 'Claro: {"intent":"dato_puntual","lugar":"Cali"} listo' };
+  } } };
+  const intent = await extraerIntencion(env, "modelo", [{ role: "user", content: "cuánto llovió en Cali" }]);
+  assert.equal(llamadas, 2);
+  assert.equal(intent.intent, "dato_puntual");
+  assert.equal(intent.lugar, "Cali");
+});
+
+// #8 (integración) — el redactor inventa una cifra-mm que no está en el bloque
+// (el espejo dio 823,4; el modelo dice 999) → el código anexa el caveat.
+test("chat de datos: una cifra-mm fuera del bloque dispara el caveat de verificación", async () => {
+  const intentJson = JSON.stringify({ intent: "dato_puntual", lugar: "Barranquilla", variable: "precipitacion", anioDesde: 2023, anioHasta: 2023 });
+  const env = {
+    AI: aiMock([intentJson, "En Barranquilla cayeron **999 mm** en 2023. 🌧️"]),
+    API_ORIGIN: "https://box",
+  };
+  globalThis.fetch = async (url) => {
+    const path = new URL(url, "https://x").pathname;
+    if (path === "/api/municipalities") return new Response(JSON.stringify({ municipalities: ["BARRANQUILLA"] }));
+    if (path === "/api/meta") return new Response(JSON.stringify(META));
+    if (path === "/api/analytics/idf-stations") return new Response(JSON.stringify(IDF_CAT));
+    if (path === "/api/analytics/timeseries") return new Response(JSON.stringify({ points: [{ bucket: "2023-01-01", value: 823.4, n: 48000 }] }));
+    return new Response("{}", { status: 404 });
+  };
+  const res = await worker.fetch(chatRequest({ messages: [{ role: "user", content: "¿Cuánto llovió en Barranquilla en 2023?" }] }), env);
+  const data = await res.json();
+  assert.equal(data.dataUsed, true);
+  assert.match(data.reply, /Confirma las cifras exactas/i);
+});
+
+// #9 (integración) — cobertura parcial → caveat por código aunque el 8B no lo diga.
+test("chat de datos: cobertura parcial añade el caveat por código", async () => {
+  const intentJson = JSON.stringify({ intent: "dato_puntual", lugar: "Barranquilla", departamento: "Atlántico", variable: "precipitacion", anioDesde: 2023, anioHasta: 2023 });
+  const env = {
+    AI: aiMock([intentJson, "En la estación de Barranquilla el total fue de 7,3 mm en 2023. 🌧️"]),
+    API_ORIGIN: "https://box",
+  };
+  globalThis.fetch = async (url) => {
+    const path = new URL(url, "https://x").pathname;
+    if (path === "/api/municipalities") return new Response(JSON.stringify(CATALOGO));
+    if (path === "/api/meta") return new Response(JSON.stringify(META));
+    if (path === "/api/analytics/idf-stations") return new Response(JSON.stringify(IDF_CAT));
+    if (path === "/api/analytics/timeseries") return new Response(JSON.stringify({ points: [{ bucket: "2023-01-01", value: 7.3, n: 900 }] }));
+    return new Response("{}", { status: 404 });
+  };
+  const res = await worker.fetch(chatRequest({ messages: [{ role: "user", content: "¿Cuánto llovió en Barranquilla en 2023?" }] }), env);
+  const data = await res.json();
+  assert.equal(data.dataUsed, true);
+  assert.match(data.reply, /cobertura parcial/i);
 });
