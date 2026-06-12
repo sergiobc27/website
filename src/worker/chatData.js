@@ -228,16 +228,13 @@ async function datoPuntual(env, intent) {
       const bodyEst = { ...body, departments: [], catalogFilters: { stations: [est.codigo] } };
       const rEst = await boxJson(env, "/api/analytics/timeseries", postJson(bodyEst));
       const serieEst = rEst ? resumirSerie(rEst.points) : [];
-      const coberturaEst = serieEst.length
-        ? serieEst.reduce((s, p) => s + p.observaciones, 0) / serieEst.length
-        : 0;
-      if (serieEst.length && coberturaEst >= UMBRAL_OBS_ANUAL) {
+      if (serieEst.length) {
+        // La serie de la estación se acepta aunque sea parcial: lleva sus
+        // "observaciones" por año y el prompt de datos ya obliga a advertir
+        // cobertura parcial — una cifra con caveat es más útil que rechazar.
         serie = serieEst;
         lugarMostrado = `estación ${est.nombre} (${est.municipio})`;
         nota = `La cobertura agregada del municipio ${lugar.municipio} es escasa para este periodo; se muestran los datos de la estación con mejor registro de la zona. Menciónalo al responder.`;
-      } else {
-        // Ni la mejor estación tiene registro decente: una cifra engañaría.
-        return { ok: false, errorTipo: "sin_datos", lugar: lugar.municipio };
       }
     }
   }

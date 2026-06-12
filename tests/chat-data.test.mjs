@@ -166,7 +166,7 @@ test("consultarDatos dato_puntual con cobertura municipal escasa usa la mejor es
   assert.equal(r.datos.nota.includes("BARRANQUILLA"), true);
 });
 
-test("consultarDatos: si ni la mejor estación tiene cobertura, responde sin_datos (no engaña)", async () => {
+test("consultarDatos: estación con cobertura parcial se acepta CON sus observaciones (el redactor advierte)", async () => {
   const env = { API_ORIGIN: "https://box" };
   globalThis.fetch = async (url, init) => {
     const path = new URL(url, "https://x").pathname;
@@ -174,7 +174,7 @@ test("consultarDatos: si ni la mejor estación tiene cobertura, responde sin_dat
     if (path === "/api/meta") return new Response(JSON.stringify(META));
     if (path === "/api/analytics/idf-stations") return new Response(JSON.stringify(IDF_CAT));
     if (path === "/api/analytics/timeseries") {
-      // Tanto el municipio como la estación tienen cobertura pobrísima.
+      // Tanto el municipio como la estación tienen cobertura parcial.
       return new Response(JSON.stringify({ points: [{ bucket: "2023-01-01", value: 7.3, n: 900 }] }));
     }
     return new Response("{}", { status: 404 });
@@ -183,9 +183,10 @@ test("consultarDatos: si ni la mejor estación tiene cobertura, responde sin_dat
     intent: "dato_puntual", lugar: "Barranquilla", departamento: "Atlántico",
     variable: "precipitacion", anioDesde: 2023, anioHasta: 2023, tr: null, topN: null,
   });
-  assert.equal(r.ok, false);
-  assert.equal(r.errorTipo, "sin_datos");
-  assert.equal(r.lugar, "BARRANQUILLA");
+  assert.equal(r.ok, true);
+  assert.equal(r.datos.lugar.includes("AEROPUERTO EC"), true);
+  assert.equal(r.datos.serie[0].observaciones, 900); // el redactor ve la cobertura y advierte
+  assert.equal(typeof r.datos.nota, "string");
 });
 
 test("consultarDatos dato_puntual con buena cobertura municipal NO amplía", async () => {
