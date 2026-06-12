@@ -11,6 +11,7 @@ import { buildIdfPdf } from "./idfPdfDoc.js";
 import {
   boxJson,
   pareceConsultaDatos,
+  mencionaAqui,
   extraerIntencion,
   consultarDatos,
   promptDeDatos,
@@ -467,6 +468,20 @@ function chatJson(obj, status = 200) {
   });
 }
 
+// Sanea la ubicación que manda el cliente (municipio/departamento/estación ya
+// resueltos en el navegador): recorta longitud y colapsa espacios/saltos de línea
+// para que no sirva de vector de inyección de prompt. Si no hay ni municipio ni
+// departamento, no hay ubicación utilizable.
+function saneaUbicacion(u) {
+  if (!u || typeof u !== "object") return null;
+  const s = (v) => String(v == null ? "" : v).replace(/\s+/g, " ").trim().slice(0, 80);
+  const municipio = s(u.municipio);
+  const departamento = s(u.departamento);
+  const estacion = s(u.estacion);
+  if (!municipio && !departamento) return null;
+  return { municipio, departamento, estacion };
+}
+
 // Solo nuestro propio sitio puede consumir la cuota de Workers AI desde el
 // navegador. Un Origin de otro sitio se rechaza; Origin AUSENTE se permite
 // (clientes no-browser / same-origin), para no romper clientes legítimos.
@@ -516,6 +531,10 @@ async function handleChat(request, env) {
   }
   // Contexto "qué pestaña mira el usuario": whitelist (nunca texto libre del cliente).
   const view = typeof body.view === "string" && VISTA_LABELS[body.view] ? body.view : null;
+  // "Dónde estoy": el cliente resuelve la estación más cercana a su ubicación y
+  // manda SOLO el lugar (no las coordenadas). Se sanea (longitud, saltos de línea)
+  // y se cotejará contra el catálogo, así un valor fabricado no hace daño.
+  const ubicacion = saneaUbicacion(body.ubicacion);
   try {
     // Pipeline "pregúntale a tus datos": pre-filtro gratis -> extractor (IA) ->
     // consulta determinista al box. Cualquier fallo degrada al chat conceptual.
@@ -525,6 +544,20 @@ async function handleChat(request, env) {
     if (pareceConsultaDatos(ultimo)) {
       intent = await extraerIntencion(env, CHAT_MODEL, history);
       if (intent && intent.intent !== "ninguno") {
+        // "Dónde estoy": si el usuario alude a su ubicación ("aquí", "mi zona") —
+        // o pide un valor puntual/IDF sin nombrar lugar— y hay ubicación activa,
+        // resolvemos al municipio del usuario antes de consultar el espejo.
+        if (
+          ubicacion &&
+          (mencionaAqui(ultimo) ||
+            (!intent.lugar && !intent.departamento && (intent.intent === "dato_puntual" || intent.intent === "idf_tr")))
+        ) {
+          intent = {
+            ...intent,
+            lugar: intent.lugar || ubicacion.municipio,
+            departamento: intent.departamento || ubicacion.departamento,
+          };
+        }
         resultadoDatos = await consultarDatos(env, intent);
       }
     }
@@ -532,6 +565,11 @@ async function handleChat(request, env) {
     const systemParts = [CHAT_SYSTEM, SUGERENCIAS_PROMPT];
     if (view) {
       systemParts.push(`CONTEXTO DE PANTALLA: el usuario está viendo ahora mismo la pestaña "${VISTA_LABELS[view]}".`);
+    }
+    if (ubicacion) {
+      systemParts.push(
+        `CONTEXTO DE UBICACIÓN: el usuario está cerca de ${ubicacion.estacion || ubicacion.municipio} en ${ubicacion.municipio}, ${ubicacion.departamento}. Si pregunta por "aquí", "mi zona" o "donde estoy", usa ese lugar.`,
+      );
     }
     if (resultadoDatos) systemParts.push(promptDeDatos(resultadoDatos));
 

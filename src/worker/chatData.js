@@ -39,6 +39,13 @@ export function pareceConsultaDatos(text) {
   return DATA_HINTS.test(String(text || ""));
 }
 
+// ¿la pregunta se refiere a la ubicación del usuario ("aquí", "mi zona", "donde
+// estoy")? Se evalúa sobre texto sin tildes. Para el flujo "dónde estoy".
+export function mencionaAqui(text) {
+  const t = normalizarTexto(text).toLowerCase();
+  return /\baqui\b|\baca\b|mi (zona|ciudad|municipio|pueblo|region|departamento)|donde (estoy|vivo)|por aqui|cerca de mi\b/.test(t);
+}
+
 export function normalizarTexto(s) {
   return String(s || "")
     .normalize("NFD")

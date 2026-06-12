@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
-import { Bot, Check, Copy, MessageCircle, Send, User } from 'lucide-react';
+import { Bot, Check, Copy, MapPin, MessageCircle, Send, User, X } from 'lucide-react';
 import { apiJson } from '../lib/ideamApi';
 import { cercaDelFondo, formatChatError } from '../lib/chatUi';
+import { estacionMasCercana, type EstacionFeature, type EstacionGeo } from '../lib/geo';
 
 // Render de fórmulas LaTeX con KaTeX. KaTeX genera su propio markup seguro a
 // partir del LaTeX (no inserta HTML del usuario) y con throwOnError:false nunca
@@ -140,7 +141,54 @@ export function Asistente({ view, compact }: AsistenteProps) {
   const [error, setError] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [copiado, setCopiado] = useState<number | null>(null);
+  const [ubicacion, setUbicacion] = useState<EstacionGeo | null>(null);
+  const [geoEstado, setGeoEstado] = useState<'idle' | 'cargando' | 'activa' | 'error'>('idle');
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const featuresRef = useRef<EstacionFeature[] | null>(null);
+
+  // "Dónde estoy": pide la ubicación al navegador, resuelve la estación más
+  // cercana EN EL CLIENTE (con stations.geojson) y guarda solo el lugar. Las
+  // coordenadas nunca se envían al servidor.
+  const activarUbicacion = () => {
+    if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
+      setGeoEstado('error');
+      return;
+    }
+    setGeoEstado('cargando');
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          if (!featuresRef.current) {
+            const geo = await apiJson<{ features: EstacionFeature[] }>(
+              '/api/stations.geojson',
+              undefined,
+              'No se pudo cargar el catálogo de estaciones.',
+            );
+            featuresRef.current = Array.isArray(geo.features) ? geo.features : [];
+          }
+          const est = estacionMasCercana(
+            { lat: pos.coords.latitude, lng: pos.coords.longitude },
+            featuresRef.current,
+          );
+          if (est && est.municipio) {
+            setUbicacion(est);
+            setGeoEstado('activa');
+          } else {
+            setGeoEstado('error');
+          }
+        } catch {
+          setGeoEstado('error');
+        }
+      },
+      () => setGeoEstado('error'),
+      { timeout: 10000, maximumAge: 600000 },
+    );
+  };
+
+  const quitarUbicacion = () => {
+    setUbicacion(null);
+    setGeoEstado('idle');
+  };
   // Pegado al fondo: solo auto-desplazamos si el usuario ya estaba abajo, para
   // no pisar un scroll-up manual mientras lee mensajes anteriores.
   const pegadoAlFondo = useRef(true);
@@ -172,7 +220,7 @@ export function Asistente({ view, compact }: AsistenteProps) {
         {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ messages: turnos.slice(-10), ...(view ? { view } : {}) }),
+          body: JSON.stringify({ messages: turnos.slice(-10), ...(view ? { view } : {}), ...(ubicacion ? { ubicacion } : {}) }),
           signal: controller.signal,
         },
         'El asistente no pudo responder.',
@@ -343,12 +391,40 @@ export function Asistente({ view, compact }: AsistenteProps) {
         </div>
       )}
 
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+        {geoEstado === 'activa' && ubicacion ? (
+          <span className="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/5 px-2 py-1 text-card-foreground">
+            <MapPin className="h-3 w-3 text-accent" /> {ubicacion.municipio}
+            <button
+              type="button"
+              onClick={quitarUbicacion}
+              aria-label="Quitar mi ubicación"
+              className="ml-0.5 rounded text-muted-foreground transition-colors hover:text-card-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={activarUbicacion}
+            disabled={geoEstado === 'cargando'}
+            className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-1 text-muted-foreground transition-colors hover:border-accent/50 hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-60"
+          >
+            <MapPin className="h-3 w-3" /> {geoEstado === 'cargando' ? 'Obteniendo ubicación…' : 'Usar mi ubicación'}
+          </button>
+        )}
+        {geoEstado === 'error' && (
+          <span className="text-muted-foreground">No pudimos obtener tu ubicación; nombra el lugar en tu pregunta.</span>
+        )}
+      </div>
+
       <form
         onSubmit={(event) => {
           event.preventDefault();
           void send(input);
         }}
-        className="mt-3 flex items-center gap-2"
+        className="mt-2 flex items-center gap-2"
       >
         <input
           value={input}

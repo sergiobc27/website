@@ -18,6 +18,7 @@ import {
   extraerIntencion,
   textoDeIA,
   normalizarDecimalesEsCO,
+  mencionaAqui,
 } from "../src/worker/chatData.js";
 
 const CATALOGO = {
@@ -543,6 +544,54 @@ test("promptDeDatos: municipio_ambiguo pide precisar el departamento y lista opc
   const p = promptDeDatos({ ok: false, errorTipo: "municipio_ambiguo", lugar: "San Pedro", opciones: ["SUCRE", "VALLE DEL CAUCA"] });
   assert.match(p, /departamento/i);
   assert.match(p, /SUCRE/);
+});
+
+// "Dónde estoy": detección de referencias a la ubicación del usuario.
+test("mencionaAqui detecta referencias a la ubicación del usuario", () => {
+  assert.equal(mencionaAqui("¿cuánto llueve aquí?"), true);
+  assert.equal(mencionaAqui("dame el dato de mi zona"), true);
+  assert.equal(mencionaAqui("¿qué temperatura hay donde estoy?"), true);
+  assert.equal(mencionaAqui("por acá cuánto llueve"), true);
+  // negativos: nombrar un lugar o preguntar conceptual no es "aquí"
+  assert.equal(mencionaAqui("¿cuánto llueve en Bogotá?"), false);
+  assert.equal(mencionaAqui("explícame las curvas IDF"), false);
+});
+
+// Integración: con ubicación activa, "aquí" resuelve al municipio del usuario y
+// el contexto de ubicación se inyecta al redactor.
+test("chat con ubicación: 'aquí' resuelve al municipio del usuario e inyecta contexto", async () => {
+  const intentJson = JSON.stringify({ intent: "dato_puntual", variable: "precipitacion", anioDesde: 2023, anioHasta: 2023 }); // SIN lugar
+  let systemRedactor = "";
+  let llamada = 0;
+  let bodyTimeseries = null;
+  const env = {
+    AI: { run: async (_m, opts) => {
+      llamada++;
+      if (llamada === 1) return { response: intentJson };
+      systemRedactor = opts.messages[0].content;
+      return { response: "Por tu zona llovió bastante. 🌧️" };
+    } },
+    API_ORIGIN: "https://box",
+  };
+  globalThis.fetch = async (url, init) => {
+    const path = new URL(url, "https://x").pathname;
+    if (path === "/api/meta") return new Response(JSON.stringify(META));
+    if (path === "/api/municipalities") return new Response(JSON.stringify({ municipalities: ["SOLEDAD"] }));
+    if (path === "/api/analytics/idf-stations") return new Response(JSON.stringify(IDF_CAT));
+    if (path === "/api/analytics/timeseries") { bodyTimeseries = JSON.parse(init.body); return new Response(JSON.stringify({ points: [{ bucket: "2023-01-01", value: 900, n: 48000 }] })); }
+    return new Response("{}", { status: 404 });
+  };
+  const req = new Request("https://ideam.sergiobc.com/api/chat", {
+    method: "POST",
+    headers: { "content-type": "application/json", "cf-connecting-ip": "1.2.3.4", origin: "https://ideam.sergiobc.com" },
+    body: JSON.stringify({ messages: [{ role: "user", content: "¿cuánto llueve aquí?" }], ubicacion: { municipio: "Soledad", departamento: "Atlántico", estacion: "Apto E. Cortissoz" } }),
+  });
+  const res = await worker.fetch(req, env);
+  await res.json();
+  assert.match(systemRedactor, /CONTEXTO DE UBICACIÓN/);
+  assert.match(systemRedactor, /Soledad/);
+  assert.ok(bodyTimeseries, "consultó el espejo de datos");
+  assert.deepEqual(bodyTimeseries.catalogFilters, { municipalities: ["SOLEDAD"] });
 });
 
 // Formato es-CO: decimales pegados a unidad pasan a coma, sin romper miles ni LaTeX.
