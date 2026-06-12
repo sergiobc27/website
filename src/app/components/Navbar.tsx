@@ -1,7 +1,6 @@
-import { Sun, Moon, Monitor, HelpCircle, User, Check, ChevronDown, ChevronRight, History, Trash2, Menu } from 'lucide-react';
+import { Sun, Moon, Monitor, HelpCircle, User, ChevronRight, History, Search, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ExtractorRuntimeState } from './DataExtractor';
-import { MENU_SECTIONS } from './Sidebar';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -31,9 +30,7 @@ import { CopyLinkButton } from './CopyLinkButton';
 interface NavbarProps {
   breadcrumbs: Array<{ label: string; view?: string }>;
   runtime: ExtractorRuntimeState;
-  currentView: string;
   onNavigate: (view: string) => void;
-  onOpenMobileNav: () => void;
 }
 
 function formatDuration(value: number) {
@@ -61,7 +58,7 @@ function resolveQuickToggle(current: ThemeChoice): ThemeChoice {
   return isDarkNow ? 'light' : 'dark';
 }
 
-export function Navbar({ breadcrumbs, runtime, currentView, onNavigate, onOpenMobileNav }: NavbarProps) {
+export function Navbar({ breadcrumbs, runtime, onNavigate }: NavbarProps) {
   const [theme, setTheme] = useState<ThemeChoice>(getThemeChoice);
   const [downloadCount, setDownloadCount] = useState(0);
 
@@ -80,14 +77,6 @@ export function Navbar({ breadcrumbs, runtime, currentView, onNavigate, onOpenMo
   return (
     <div className="glass-chrome absolute inset-x-0 top-0 z-30 flex min-h-16 items-center justify-between gap-3 border-b border-border px-4 md:px-6">
       <div className="min-w-0 flex items-center gap-2 overflow-hidden text-sm">
-        <button
-          type="button"
-          onClick={onOpenMobileNav}
-          className="shrink-0 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-accent lg:hidden"
-          aria-label="Abrir menú de navegación"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
         {breadcrumbs.map((crumb, index) => {
           const isLast = index === breadcrumbs.length - 1;
           const clickable = !isLast && crumb.view;
@@ -102,43 +91,10 @@ export function Navbar({ breadcrumbs, runtime, currentView, onNavigate, onOpenMo
                 >
                   {crumb.label}
                 </button>
-              ) : isLast ? (
-                // La vista actual es un menú: salta a cualquier vista desde la barra.
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      aria-label={`Vista actual: ${crumb.label}. Abrir menú de vistas`}
-                      className="group flex min-w-0 items-center gap-1 rounded-lg px-1.5 py-1 font-semibold text-accent transition-colors duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent data-[state=open]:bg-muted"
-                    >
-                      <span className="truncate">{crumb.label}</span>
-                      <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-60">
-                    {MENU_SECTIONS.map((section, si) => (
-                      <div key={section.title}>
-                        {si > 0 && <DropdownMenuSeparator />}
-                        <DropdownMenuLabel className="text-xs uppercase tracking-wider text-muted-foreground">
-                          {section.title}
-                        </DropdownMenuLabel>
-                        {section.items.map((item) => {
-                          const Icon = item.icon;
-                          const activa = item.id === currentView;
-                          return (
-                            <DropdownMenuItem key={item.id} onClick={() => onNavigate(item.id)} className="gap-2">
-                              <Icon className="h-4 w-4 text-accent" />
-                              <span className="flex-1">{item.label}</span>
-                              {activa && <Check className="h-4 w-4 text-accent" />}
-                            </DropdownMenuItem>
-                          );
-                        })}
-                      </div>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
               ) : (
-                <span className="truncate text-muted-foreground transition-colors">{crumb.label}</span>
+                <span className={`truncate transition-colors ${isLast ? 'font-semibold text-accent' : 'text-muted-foreground'}`}>
+                  {crumb.label}
+                </span>
               )}
             </div>
           );
@@ -146,6 +102,17 @@ export function Navbar({ breadcrumbs, runtime, currentView, onNavigate, onOpenMo
       </div>
 
       <div className="flex shrink-0 items-center gap-2 md:gap-3">
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent('ideam:abrir-buscador'))}
+          className="group inline-flex items-center gap-2 rounded-lg border border-border bg-background/60 px-2.5 py-1.5 text-sm text-muted-foreground transition-[border-color,color,transform] duration-150 hover:border-accent/50 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          aria-label="Abrir buscador universal (Ctrl+K)"
+        >
+          <Search className="anim-wiggle h-4 w-4" />
+          <span className="hidden md:inline">Buscar</span>
+          <kbd className="hidden rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-semibold md:inline">⌘K</kbd>
+        </button>
+
         {runtime.isBusy && (
           <button
             type="button"

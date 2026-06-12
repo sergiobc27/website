@@ -107,7 +107,7 @@ export function SidebarContent({
             ) : (
               sectionIndex > 0 && <div className="mx-auto my-2 h-px w-8 bg-[#8a1216]" aria-hidden="true" />
             )}
-            {section.items.map((item) => {
+            {section.items.map((item, index) => {
               const Icon = item.icon;
               const isActive = currentView === item.id;
 
@@ -116,7 +116,8 @@ export function SidebarContent({
                   key={item.id}
                   onClick={() => onNavigate(item.id)}
                   aria-current={isActive ? 'page' : undefined}
-                  className={`group w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 justify-start'} px-4 py-3 rounded-lg transition-[background-color,color,transform] duration-200 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A227] ${
+                  style={{ animationDelay: `${(sectionIndex * 4 + index) * 30}ms` }}
+                  className={`bento-enter group w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 justify-start'} px-4 py-3 rounded-lg transition-[background-color,color,transform] duration-200 hover:translate-x-0.5 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A227] ${
                     isActive
                       ? 'bg-[#C9A227] text-[#0f0f0f] font-semibold shadow-[0_0_20px_rgba(201,162,39,0.4)]'
                       : 'text-white/80 hover:bg-[#8a1216] hover:text-white'

@@ -32,7 +32,7 @@ export function AsistenteFlotante({ currentView }: { currentView: string }) {
       <div
         role="dialog"
         aria-label="Asistente Hídrico"
-        className={`glass-chrome flex fixed bottom-24 right-4 z-50 h-[min(640px,calc(100dvh-7rem))] w-[min(420px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border shadow-glow transition-[opacity,transform] duration-200 ease-out ${open ? 'visible translate-y-0 opacity-100' : 'pointer-events-none invisible translate-y-2 scale-[0.98] opacity-0'}`}
+        className={`glass-chrome flex fixed bottom-[10rem] lg:bottom-24 right-4 z-50 h-[min(640px,calc(100dvh-13rem))] lg:h-[min(640px,calc(100dvh-7rem))] w-[min(420px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border shadow-glow transition-[opacity,transform] duration-200 ease-out ${open ? 'visible translate-y-0 opacity-100' : 'pointer-events-none invisible translate-y-2 scale-[0.98] opacity-0'}`}
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
           <p className="flex items-center gap-2 text-sm font-bold text-card-foreground">
@@ -57,7 +57,7 @@ export function AsistenteFlotante({ currentView }: { currentView: string }) {
         onClick={() => setOpen((o) => !o)}
         aria-label={open ? 'Cerrar Asistente Hídrico' : 'Abrir Asistente Hídrico'}
         aria-expanded={open}
-        className="asistente-flotante fixed bottom-5 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-white shadow-glow transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent active:scale-95"
+        className="asistente-flotante fixed bottom-[5.5rem] lg:bottom-5 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-white shadow-glow transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent active:scale-95"
       >
         {open ? <X className="h-5 w-5" /> : <MessageCircle className="h-5 w-5" />}
       </button>

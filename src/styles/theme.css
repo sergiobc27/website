@@ -2,6 +2,10 @@
 
 :root {
   --font-size: 16px;
+  /* Vidrio del chrome (Liquid Glass): rgba planos — robustos en cualquier
+     Safari/WebView, sin color-mix. Overrides por [data-plataforma] al final. */
+  --glass-bg: rgb(245 245 245 / 0.66);
+  --glass-brillo: rgb(255 255 255 / 0.10);
   --background: #ffffff;
   --foreground: #1a1a1a;
   --card: #f5f5f5;
@@ -47,6 +51,8 @@
 }
 
 .dark {
+  --glass-bg: rgb(26 26 26 / 0.6);
+  --glass-brillo: rgb(255 255 255 / 0.06);
   --background: #0f0f0f;
   --foreground: #f3f4f6;
   --card: #1a1a1a;
@@ -367,27 +373,42 @@
 }
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .glass-chrome {
-    background: color-mix(in srgb, var(--card) 70%, transparent);
+    background: var(--glass-bg);
     -webkit-backdrop-filter: blur(14px) saturate(150%);
     backdrop-filter: blur(14px) saturate(150%);
-    box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.08);
+    box-shadow: inset 0 1px 0 0 var(--glass-brillo);
   }
-  /* iPhone/iPad: Liquid Glass pleno (más blur, más saturación, brillo especular). */
+  /* iPhone/iPad: Liquid Glass pleno (más transparencia, blur y brillo). */
   [data-plataforma='ios'] .glass-chrome {
-    background: color-mix(in srgb, var(--card) 55%, transparent);
     -webkit-backdrop-filter: blur(24px) saturate(180%);
     backdrop-filter: blur(24px) saturate(180%);
-    box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.18);
   }
   /* Android: vidrio más entintado, estilo Material. */
   [data-plataforma='android'] .glass-chrome {
-    background: color-mix(in srgb, var(--card) 78%, transparent);
     -webkit-backdrop-filter: blur(14px) saturate(140%);
     backdrop-filter: blur(14px) saturate(140%);
   }
   .glass-rojo {
-    background: color-mix(in srgb, #A3161A 80%, transparent);
+    background: rgb(163 22 26 / 0.8);
     -webkit-backdrop-filter: blur(16px) saturate(150%);
     backdrop-filter: blur(16px) saturate(150%);
   }
+}
+
+/* Intensidad del vidrio por plataforma (variables, fuera del @supports para que
+   el fallback sólido no cambie). iOS más transparente y brillante; Android más
+   opaco. El binomio claro/oscuro se resuelve porque .dark también vive en <html>. */
+[data-plataforma='ios'] {
+  --glass-bg: rgb(245 245 245 / 0.5);
+  --glass-brillo: rgb(255 255 255 / 0.22);
+}
+.dark[data-plataforma='ios'] {
+  --glass-bg: rgb(26 26 26 / 0.42);
+  --glass-brillo: rgb(255 255 255 / 0.12);
+}
+[data-plataforma='android'] {
+  --glass-bg: rgb(245 245 245 / 0.8);
+}
+.dark[data-plataforma='android'] {
+  --glass-bg: rgb(26 26 26 / 0.78);
 }

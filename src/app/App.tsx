@@ -42,6 +42,8 @@ import { initTheme } from './lib/theme';
 import { viewToPath, pathToView } from './lib/navigation';
 import { detectarPlataforma } from './lib/plataforma';
 import { AsistenteFlotante, OPEN_ASISTENTE_EVENT } from './components/AsistenteFlotante';
+import { BarraInferior } from './components/BarraInferior';
+import { BuscadorUniversal } from './components/BuscadorUniversal';
 
 export default function App() {
   const [currentView, setCurrentView] = useState(() =>
@@ -180,8 +182,8 @@ export default function App() {
 
       <div className="relative flex-1 flex flex-col overflow-hidden min-w-0">
         {/* La navbar es overlay: el contenido scrollea POR DEBAJO del vidrio. */}
-        <Navbar breadcrumbs={getBreadcrumbs()} runtime={runtime} currentView={currentView} onNavigate={navigate} onOpenMobileNav={() => setMobileNavOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-4 pt-20 md:p-6 md:pt-20 scrollbar-thin scrollbar-track-transparent">
+        <Navbar breadcrumbs={getBreadcrumbs()} runtime={runtime} onNavigate={navigate} />
+        <main className="flex-1 overflow-y-auto p-4 pt-20 pb-24 md:p-6 md:pt-20 lg:pb-6 scrollbar-thin scrollbar-track-transparent">
           <div className={currentView === 'extractor' ? 'block' : 'hidden'}>
             <DataExtractor onRuntimeChange={setRuntime} />
           </div>
@@ -197,6 +199,8 @@ export default function App() {
         </main>
       </div>
       <AsistenteFlotante currentView={currentView} />
+      <BuscadorUniversal onNavigate={navigate} />
+      <BarraInferior currentView={currentView} onNavigate={navigate} onMore={() => setMobileNavOpen(true)} />
       <Toaster richColors position="bottom-right" />
     </div>
   );

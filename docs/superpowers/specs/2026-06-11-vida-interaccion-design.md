@@ -51,3 +51,32 @@ Sin screenshots (Sergio prueba en vivo, incluido su celular).
 ## Fuera de alcance
 Glass en tarjetas/contenido, dock central en navbar, animaciones infinitas fuera de la gota,
 detección de tablet como categoría aparte.
+
+---
+
+## V2 (mismo día, feedback de Sergio con iPhone 16 Pro Max / iOS 26)
+
+Decisión de Sergio: fuera el menú del crumb (el sidebar es LA navegación) + buscador
+universal + experiencia móvil de verdad. Sin "diseño aparte": misma base responsive con
+chrome móvil propio.
+
+1. **Revertir el menú del crumb** (vuelve a texto con hover). El espacio lo ocupa el botón
+   del buscador (lupa + kbd ⌘K).
+2. **Buscador universal** (`BuscadorUniversal.tsx`, CommandDialog de cmdk ya instalado):
+   atajo Ctrl/⌘K + botón navbar (evento `ideam:abrir-buscador`). Grupos: Vistas
+   (MENU_SECTIONS), Acciones (preguntar al asistente, cambiar tema), Estaciones IDF
+   (lazy-fetch de `/api/analytics/idf-stations` al abrir; busca nombre/municipio/código;
+   al elegir → `history.pushState('/hydro?est=CODIGO')` + `PopStateEvent('popstate')` —
+   Hidrología restaura la estación con su deep-link existente).
+3. **Sidebar animado**: entrada con stagger (reusa `bento-enter`, delay 30ms/item),
+   `hover:translate-x-0.5` acompañando el wiggle.
+4. **Barra de pestañas inferior móvil** (`BarraInferior.tsx`, `lg:hidden`, glass-chrome,
+   borde superior, `pb-[env(safe-area-inset-bottom)]`, `viewport-fit=cover` en index.html):
+   5 destinos — Panel, Analítica, Hidrología, Mapa y "Más" (abre el drawer existente con
+   todo). Activo en oro con `aria-current`; targets ≥44px. El hamburger del navbar se VA
+   (lo reemplaza "Más"). `<main>` gana `pb-24 lg:pb-6`; el FAB del asistente sube en móvil
+   (`bottom-[5.5rem] lg:bottom-5`) y su panel también.
+5. **Glass robusto y visible**: fuera `color-mix` → tokens `--glass-bg`/`--glass-brillo`
+   en rgba definidos en `:root`/`.dark` con overrides por `[data-plataforma]` (ios más
+   transparente y brillante: 0.50 claro / 0.42 oscuro; android más opaco: 0.80/0.78).
+   En móvil el vidrio se nota de verdad en la barra inferior (siempre hay contenido debajo).
