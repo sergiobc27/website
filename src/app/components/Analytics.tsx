@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, BarChart3, CalendarRange, Globe2, MapPin, TrendingUp } from 'lucide-react';
+import { Activity, BarChart3 } from 'lucide-react';
 import { ChartDownloadButton } from './ChartDownloadButton';
 import { useUrlSync } from '../lib/urlState';
 import {
@@ -369,7 +369,7 @@ export function Analytics() {
         </p>
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-4 shadow-glow">
+      <div className="rounded-xl border border-border bg-card p-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <ControlSelect
             label="Variable"
@@ -456,7 +456,6 @@ export function Analytics() {
             {seriesData.length > 0 && (
               <ChartDownloadButton targetRef={chartRef} title={`${metricLabel} de ${selectedDataset?.name || datasetId}`} subtitle={scopeLabel} filenameParts={['analitica', selectedDataset?.name || datasetId]} />
             )}
-            <TrendingUp className="h-5 w-5 shrink-0 text-accent" />
           </div>
         </div>
         {isLoadingSeries ? (
@@ -491,13 +490,12 @@ export function Analytics() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
+        <div className="rounded-xl border border-border bg-card p-6">
           <div className="mb-6 flex items-center justify-between gap-4">
             <div>
               <h3 className="font-bold text-card-foreground">Climatología mensual{unitSuffix(varUnit)}</h3>
               <p className="text-sm text-muted-foreground">Promedio histórico y extremos por mes · {scopeLabel}</p>
             </div>
-            <CalendarRange className="h-5 w-5 shrink-0 text-accent" />
           </div>
           {isLoadingPanels ? (
             <SkeletonLoader rows={4} />
@@ -518,13 +516,12 @@ export function Analytics() {
           )}
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
+        <div className="rounded-xl border border-border bg-card p-6">
           <div className="mb-6 flex items-center justify-between gap-4">
             <div>
               <h3 className="font-bold text-card-foreground">Top 10 departamentos</h3>
               <p className="text-sm text-muted-foreground">Por volumen de observaciones de {selectedDataset?.name || datasetId}</p>
             </div>
-            <MapPin className="h-5 w-5 shrink-0 text-accent" />
           </div>
           {isLoadingPanels ? (
             <SkeletonLoader rows={4} />
@@ -553,7 +550,7 @@ export function Analytics() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
+        <div className="rounded-xl border border-border bg-card p-6">
           <div className="mb-6 flex items-center justify-between gap-4">
             <div>
               <h3 className="font-bold text-card-foreground">Anomalías mensuales (últimos 24 meses)</h3>
@@ -565,7 +562,6 @@ export function Analytics() {
                 <span>(<V>P</V> = lluvia del mes; <MeanBar><V>P</V></MeanBar> = promedio histórico de ese mes)</span>
               </p>
             </div>
-            <Activity className="h-5 w-5 shrink-0 text-accent" />
           </div>
           {anomalyData.length === 0 ? (
             <p className="text-muted-foreground text-sm">Sin datos suficientes para calcular anomalías.</p>
@@ -588,13 +584,12 @@ export function Analytics() {
           )}
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
+        <div className="rounded-xl border border-border bg-card p-6">
           <div className="mb-4 flex items-center justify-between gap-4">
             <div>
               <h3 className="font-bold text-card-foreground">Top 10 estaciones</h3>
               <p className="text-sm text-muted-foreground">Por volumen de observaciones · {scopeLabel}</p>
             </div>
-            <MapPin className="h-5 w-5 shrink-0 text-accent" />
           </div>
           {stationRows.length === 0 ? (
             <p className="text-muted-foreground text-sm">Sin datos para esta combinación de filtros.</p>
@@ -625,13 +620,12 @@ export function Analytics() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
+      <div className="rounded-xl border border-border bg-card p-6">
         <div className="mb-4 flex items-center justify-between gap-4">
           <div>
             <h3 className="font-bold text-card-foreground">Cobertura del espejo por variable</h3>
             <p className="text-sm text-muted-foreground">Haz clic en una variable para analizarla.</p>
           </div>
-          <Globe2 className="h-5 w-5 shrink-0 text-accent" />
         </div>
         {overview.length === 0 ? (
           <SkeletonLoader rows={4} />
