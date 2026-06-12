@@ -39,7 +39,8 @@ import { DownloadHistory } from './components/DownloadHistory';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toaster } from './components/ui/sonner';
 import { initTheme } from './lib/theme';
-import { viewToPath, pathToView } from './lib/navigation';
+import { viewToPath, pathToView, NAVIGATE_EVENT, ACCION_VIEWS, type NavigateDetail } from './lib/navigation';
+import { buildSearch } from './lib/urlState';
 import { detectarPlataforma } from './lib/plataforma';
 import { AsistenteFlotante, OPEN_ASISTENTE_EVENT } from './components/AsistenteFlotante';
 import { BarraInferior } from './components/BarraInferior';
@@ -96,6 +97,25 @@ export default function App() {
       window.removeEventListener('popstate', sync);
       window.removeEventListener('hashchange', sync);
     };
+  }, []);
+
+  // Deep-links del Asistente (botones de acción): navega a la vista con los
+  // filtros YA en la URL (?est, ?dep&var&years), que la vista destino lee con
+  // useUrlSync.onRestore al montar. Distinto de navigate(): aquí la URL lleva
+  // los params. Whitelist ACCION_VIEWS por seguridad. Si la vista ya está
+  // montada (mismo currentView), un popstate sintético la fuerza a releerlos.
+  useEffect(() => {
+    const onNavigate = (e: Event) => {
+      const detail = (e as CustomEvent<NavigateDetail>).detail;
+      if (!detail || typeof detail.view !== 'string' || !ACCION_VIEWS.has(detail.view)) return;
+      const search = buildSearch(detail.params || {});
+      const yaEnVista = pathToView(window.location.pathname) === detail.view;
+      window.history.pushState(null, '', viewToPath(detail.view) + (search ? `?${search}` : ''));
+      setCurrentView(detail.view);
+      if (yaEnVista) window.dispatchEvent(new PopStateEvent('popstate'));
+    };
+    window.addEventListener(NAVIGATE_EVENT, onNavigate);
+    return () => window.removeEventListener(NAVIGATE_EVENT, onNavigate);
   }, []);
 
   const navigate = (view: string) => {

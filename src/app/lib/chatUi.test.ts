@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatChatError, cercaDelFondo } from './chatUi';
+import { formatChatError, cercaDelFondo, parseAcciones } from './chatUi';
 import { ApiError } from './ideamApi';
 
 describe('lib/chatUi formatChatError', () => {
@@ -42,5 +42,74 @@ describe('lib/chatUi cercaDelFondo', () => {
   it('justo en el umbral -> true', () => {
     // distancia = 1000 - (780 + 100) = 120 == umbral por defecto
     expect(cercaDelFondo({ scrollTop: 780, scrollHeight: 1000, clientHeight: 100 })).toBe(true);
+  });
+});
+
+describe('lib/chatUi parseAcciones', () => {
+  it('no-array -> []', () => {
+    expect(parseAcciones(undefined)).toEqual([]);
+    expect(parseAcciones(null)).toEqual([]);
+    expect(parseAcciones('hydro')).toEqual([]);
+    expect(parseAcciones({})).toEqual([]);
+  });
+
+  it('acción válida se conserva con sus params', () => {
+    const acc = parseAcciones([
+      { label: 'Ver la curva IDF de TIBAITATÁ →', view: 'hydro', params: { est: '21205791' } },
+    ]);
+    expect(acc).toEqual([
+      { label: 'Ver la curva IDF de TIBAITATÁ →', view: 'hydro', params: { est: '21205791' } },
+    ]);
+  });
+
+  it('descarta vistas fuera de la whitelist', () => {
+    const acc = parseAcciones([
+      { label: 'Ir a Ajustes', view: 'settings', params: {} },
+      { label: 'Ver Analítica →', view: 'analytics', params: { dep: 'ATLÁNTICO' } },
+    ]);
+    expect(acc).toHaveLength(1);
+    expect(acc[0].view).toBe('analytics');
+  });
+
+  it('descarta items sin label string o sin objeto', () => {
+    const acc = parseAcciones([
+      { view: 'hydro', params: {} },
+      { label: '', view: 'hydro', params: {} },
+      'no soy objeto',
+      null,
+      { label: 'OK →', view: 'extractor', params: {} },
+    ]);
+    expect(acc).toHaveLength(1);
+    expect(acc[0].label).toBe('OK →');
+  });
+
+  it('sanea params: solo strings no vacíos, recortados a 60', () => {
+    const largo = 'x'.repeat(80);
+    const acc = parseAcciones([
+      {
+        label: 'Descargar →',
+        view: 'extractor',
+        params: { dep: 'BOLÍVAR', vacio: '', num: 2024, nulo: null, largo },
+      },
+    ]);
+    expect(acc[0].params).toEqual({ dep: 'BOLÍVAR', largo: 'x'.repeat(60) });
+  });
+
+  it('tope de 3 acciones', () => {
+    const muchas = Array.from({ length: 6 }, (_, i) => ({
+      label: `Acción ${i} →`,
+      view: 'hydro',
+      params: {},
+    }));
+    expect(parseAcciones(muchas)).toHaveLength(3);
+  });
+
+  it('params ausente o no-objeto -> {}', () => {
+    const acc = parseAcciones([
+      { label: 'A →', view: 'hydro' },
+      { label: 'B →', view: 'analytics', params: 'oops' },
+    ]);
+    expect(acc[0].params).toEqual({});
+    expect(acc[1].params).toEqual({});
   });
 });

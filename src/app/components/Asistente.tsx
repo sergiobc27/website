@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
-import { Bot, Check, Copy, MapPin, MessageCircle, Send, User, X } from 'lucide-react';
+import { ArrowRight, Bot, Check, Copy, MapPin, MessageCircle, Send, User, X } from 'lucide-react';
 import { apiJson } from '../lib/ideamApi';
-import { cercaDelFondo, formatChatError } from '../lib/chatUi';
+import { cercaDelFondo, formatChatError, parseAcciones, type Accion } from '../lib/chatUi';
+import { NAVIGATE_EVENT, type NavigateDetail } from '../lib/navigation';
 import { estacionMasCercana, type EstacionFeature, type EstacionGeo } from '../lib/geo';
 
 // Render de fórmulas LaTeX con KaTeX. KaTeX genera su propio markup seguro a
@@ -140,6 +141,7 @@ export function Asistente({ view, compact }: AsistenteProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [acciones, setAcciones] = useState<Accion[]>([]);
   const [copiado, setCopiado] = useState<number | null>(null);
   const [ubicacion, setUbicacion] = useState<EstacionGeo | null>(null);
   const [geoEstado, setGeoEstado] = useState<'idle' | 'cargando' | 'activa' | 'error'>('idle');
@@ -210,12 +212,13 @@ export function Asistente({ view, compact }: AsistenteProps) {
   const ejecutarConsulta = async (turnos: ChatMessage[]) => {
     setError('');
     setSuggestions([]);
+    setAcciones([]);
     setIsLoading(true);
     // Timeout de red: si el modelo no responde, no dejamos la UI colgada.
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20000);
     try {
-      const data = await apiJson<{ reply?: string; suggestions?: unknown }>(
+      const data = await apiJson<{ reply?: string; suggestions?: unknown; acciones?: unknown }>(
         '/api/chat',
         {
           method: 'POST',
@@ -235,6 +238,9 @@ export function Asistente({ view, compact }: AsistenteProps) {
           ? data.suggestions.filter((s: unknown): s is string => typeof s === 'string').slice(0, 3)
           : [],
       );
+      // Botones de acción: el Worker los arma de forma determinista; aquí se
+      // revalidan (whitelist + saneo) antes de pintarlos.
+      setAcciones(parseAcciones(data.acciones));
     } catch (cause) {
       // El 429/Retry-After y el caso "respuesta HTML" los traduce formatChatError.
       setError(formatChatError(cause));
@@ -256,6 +262,14 @@ export function Asistente({ view, compact }: AsistenteProps) {
   const reintentar = () => {
     if (isLoading || !messages.length) return;
     void ejecutarConsulta(messages);
+  };
+
+  // Click en un botón de acción: emite el evento global de navegación. App lo
+  // escucha, fija la URL con los params y cambia de pestaña; el panel flotante
+  // se cierra solo (escucha el mismo evento) para que se vea el resultado.
+  const irA = (accion: Accion) => {
+    const detail: NavigateDetail = { view: accion.view, params: accion.params };
+    window.dispatchEvent(new CustomEvent(NAVIGATE_EVENT, { detail }));
   };
 
   const copiar = async (index: number, texto: string) => {
@@ -356,6 +370,22 @@ export function Asistente({ view, compact }: AsistenteProps) {
                 <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent" style={{ animationDelay: '300ms' }} />
               </span>
             </div>
+          </div>
+        )}
+
+        {!isLoading && acciones.length > 0 && messages.length > 0 && (
+          <div className="flex flex-wrap gap-2 pl-11">
+            {acciones.map((a) => (
+              <button
+                key={`${a.view}-${a.label}`}
+                type="button"
+                onClick={() => irA(a)}
+                className="group inline-flex items-center gap-1.5 rounded-lg border border-accent/60 bg-accent/15 px-3 py-1.5 text-xs font-semibold text-accent transition-colors hover:bg-accent hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+              >
+                {a.label.replace(/\s*→\s*$/, '')}
+                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+              </button>
+            ))}
           </div>
         )}
 

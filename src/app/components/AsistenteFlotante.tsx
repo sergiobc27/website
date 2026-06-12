@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { MessageCircle, X } from 'lucide-react';
 import { Asistente } from './Asistente';
+import { NAVIGATE_EVENT } from '../lib/navigation';
 
 export const OPEN_ASISTENTE_EVENT = 'ideam:open-asistente';
 
@@ -22,6 +23,14 @@ export function AsistenteFlotante({ currentView }: { currentView: string }) {
     const abrir = () => setOpen(true);
     window.addEventListener(OPEN_ASISTENTE_EVENT, abrir);
     return () => window.removeEventListener(OPEN_ASISTENTE_EVENT, abrir);
+  }, []);
+
+  // Al pulsar un botón de acción del Asistente, cierra el panel para que el
+  // usuario vea la pestaña a la que navegó (la conversación sigue montada).
+  useEffect(() => {
+    const cerrar = () => setOpen(false);
+    window.addEventListener(NAVIGATE_EVENT, cerrar);
+    return () => window.removeEventListener(NAVIGATE_EVENT, cerrar);
   }, []);
 
   useEffect(() => {
