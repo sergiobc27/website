@@ -248,6 +248,7 @@ async function datoPuntual(env, intent) {
   let serie = null;
   let lugarMostrado;
   let nota;
+  let estUsada = null; // estación representativa usada (para deep-links de acciones)
 
   // PRECIPITACIÓN municipal -> SIEMPRE la estación representativa del municipio.
   // Sumar todas las estaciones del municipio sobreestima (más estaciones = total
@@ -266,6 +267,7 @@ async function datoPuntual(env, intent) {
       const serieEst = rEst ? resumirSerie(rEst.points) : [];
       if (serieEst.length) {
         serie = serieEst;
+        estUsada = est;
         lugarMostrado = `estación ${est.nombre} (${est.municipio})`;
         nota = `Para "${lugar.municipio}" se muestran los datos de su estación representativa (${est.nombre}): es la precipitación real de un punto, NO la suma de todas las estaciones del municipio (que sobreestima). Menciónalo al responder.`;
       }
@@ -300,6 +302,13 @@ async function datoPuntual(env, intent) {
       ...(nota ? { nota } : {}),
       ...(coberturaParcial ? { coberturaParcial: true } : {}),
       serie,
+    },
+    // Identificadores para los botones de acción (deep-links). Fuera de `datos`
+    // para no ensuciar el bloque que ve el redactor.
+    ref: {
+      departamento: lugar.departamento || (estUsada && estUsada.departamento) || null,
+      estacionCodigo: (estUsada && estUsada.codigo) || null,
+      estacionNombre: (estUsada && estUsada.nombre) || null,
     },
   };
 }
@@ -337,6 +346,11 @@ async function idfTr(env, intent) {
       [`tr${curva ? curva.returnPeriod : tr}`]: quantil
         ? { laminaMaxDiariaMm: quantil.value, ic90: quantil.lower !== undefined ? [quantil.lower, quantil.upper] : null }
         : null,
+    },
+    ref: {
+      departamento: estacion.departamento || null,
+      estacionCodigo: estacion.codigo,
+      estacionNombre: estacion.nombre,
     },
   };
 }
@@ -387,6 +401,54 @@ async function estadoPlataforma(env) {
       totalObservacionesAprox: "más de 760 millones",
     },
   };
+}
+
+// Vistas a las que un botón de acción puede deep-linkear (whitelist de seguridad).
+const ACCION_VIEWS = new Set(["hydro", "analytics", "extractor"]);
+
+function limpiarParams(o) {
+  const out = {};
+  for (const [k, val] of Object.entries(o)) {
+    if (val === undefined || val === null || val === "") continue;
+    out[k] = String(val).slice(0, 60);
+  }
+  return out;
+}
+
+// Construye DETERMINISTAMENTE los botones de acción (deep-links) a partir del
+// intent resuelto y del resultado de datos. El modelo NO interviene → enlaces y
+// params siempre verificados. Devuelve [] si no hubo datos válidos.
+export function construirAcciones(intent, resultado) {
+  if (!intent || !resultado || !resultado.ok) return [];
+  const tipo = (resultado.datos || {}).tipo;
+  const ref = resultado.ref || {};
+  const v = VARIABLES[intent.variable || "precipitacion"];
+  const datasetId = v.id;
+  const varParam = datasetId !== "s54a-sgyg" ? datasetId : undefined; // precip es el default
+  const years = intent.anioDesde && intent.anioHasta ? `${intent.anioDesde}-${intent.anioHasta}` : undefined;
+  const acc = [];
+  if (tipo === "idf_tr" && ref.estacionCodigo) {
+    acc.push({
+      label: `Ver la curva IDF de ${ref.estacionNombre || "la estación"} →`.slice(0, 60),
+      view: "hydro",
+      params: limpiarParams({ est: ref.estacionCodigo }),
+    });
+  }
+  if (tipo === "dato_puntual" && ref.departamento) {
+    acc.push({
+      label: "Ver la serie en Analítica →",
+      view: "analytics",
+      params: limpiarParams({ dep: ref.departamento, var: varParam, years }),
+    });
+  }
+  if ((tipo === "dato_puntual" || tipo === "idf_tr") && (ref.departamento || ref.estacionCodigo)) {
+    acc.push({
+      label: "Descargar estos datos en el Extractor →",
+      view: "extractor",
+      params: limpiarParams({ var: varParam, dep: ref.departamento || undefined, est: ref.estacionCodigo || undefined, years }),
+    });
+  }
+  return acc.filter((a) => ACCION_VIEWS.has(a.view)).slice(0, 3);
 }
 
 export const SUGERENCIAS_PROMPT = `ÚLTIMA LÍNEA OBLIGATORIA (para la interfaz, invisible al usuario): termina SIEMPRE tu respuesta con una línea EXACTAMENTE así:

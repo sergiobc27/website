@@ -15,6 +15,7 @@ import {
   extraerIntencion,
   consultarDatos,
   promptDeDatos,
+  construirAcciones,
   extraerSugerencias,
   limpiarFugasDeJson,
   sugerenciasFallback,
@@ -613,7 +614,9 @@ async function handleChat(request, env) {
     } else if (!suggestions.length) {
       suggestions = sugerenciasFallback(intent);
     }
-    return chatJson({ reply, suggestions, dataUsed, usage: (result && result.usage) || null });
+    // Botones de acción (deep-links) que el CÓDIGO arma desde el intent resuelto.
+    const acciones = dataUsed ? construirAcciones(intent, resultadoDatos) : [];
+    return chatJson({ reply, suggestions, acciones, dataUsed, usage: (result && result.usage) || null });
   } catch (err) {
     // El 502 de cara al usuario es mudo; este log deja la causa real en Workers
     // Observability (p. ej. fallo o cuota agotada de Workers AI).

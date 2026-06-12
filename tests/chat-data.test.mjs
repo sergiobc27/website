@@ -19,6 +19,7 @@ import {
   textoDeIA,
   normalizarDecimalesEsCO,
   mencionaAqui,
+  construirAcciones,
 } from "../src/worker/chatData.js";
 
 const CATALOGO = {
@@ -385,6 +386,9 @@ test("chat de datos: dos llamadas IA, datos del espejo y línea de fuente", asyn
   assert.equal(data.dataUsed, true);
   assert.equal(data.reply.includes("📊 Fuente: espejo de datos IDEAM"), true);
   assert.equal(data.suggestions.length >= 2, true); // fallback (el redactor no emitió marker)
+  // Botones de acción: al haber datos, el Worker incluye deep-links.
+  assert.ok(Array.isArray(data.acciones) && data.acciones.length >= 1, "incluye acciones");
+  assert.ok(data.acciones.some((a) => a.view === "extractor"), "ofrece descargar en el Extractor");
 });
 
 test("rechazo del guardrail: sin sugerencias y sin llamadas IA", async () => {
@@ -553,6 +557,50 @@ test("promptDeDatos: municipio_ambiguo pide precisar el departamento y lista opc
   const p = promptDeDatos({ ok: false, errorTipo: "municipio_ambiguo", lugar: "San Pedro", opciones: ["SUCRE", "VALLE DEL CAUCA"] });
   assert.match(p, /departamento/i);
   assert.match(p, /SUCRE/);
+});
+
+// Botones de acción (deep-links) construidos por el Worker, no por el modelo.
+test("construirAcciones: idf_tr -> botón a Hidrología con la estación", () => {
+  const acc = construirAcciones(
+    { intent: "idf_tr" },
+    { ok: true, datos: { tipo: "idf_tr" }, ref: { estacionCodigo: "0029004520", estacionNombre: "ESCUELA NAVAL", departamento: "ATLANTICO" } },
+  );
+  const hydro = acc.find((a) => a.view === "hydro");
+  assert.ok(hydro, "hay acción a Hidrología");
+  assert.equal(hydro.params.est, "0029004520");
+  assert.match(hydro.label, /IDF/i);
+  // idf_tr también ofrece descargar en el Extractor.
+  assert.ok(acc.find((a) => a.view === "extractor"));
+});
+
+test("construirAcciones: dato_puntual -> Analítica (dep+years) y Extractor", () => {
+  const acc = construirAcciones(
+    { intent: "dato_puntual", variable: "precipitacion", anioDesde: 2023, anioHasta: 2023 },
+    { ok: true, datos: { tipo: "dato_puntual" }, ref: { departamento: "ATLANTICO", estacionCodigo: "0029045190" } },
+  );
+  const an = acc.find((a) => a.view === "analytics");
+  assert.ok(an);
+  assert.equal(an.params.dep, "ATLANTICO");
+  assert.equal(an.params.years, "2023-2023");
+  assert.equal(an.params.var, undefined, "precipitación es el default: sin var");
+  assert.ok(acc.find((a) => a.view === "extractor" && a.params.dep === "ATLANTICO"));
+  assert.ok(acc.length <= 3);
+});
+
+test("construirAcciones: temperatura lleva var (datasetId) en la acción de Analítica", () => {
+  const acc = construirAcciones(
+    { intent: "dato_puntual", variable: "temperatura_maxima", anioDesde: 2020, anioHasta: 2022 },
+    { ok: true, datos: { tipo: "dato_puntual" }, ref: { departamento: "ANTIOQUIA" } },
+  );
+  const an = acc.find((a) => a.view === "analytics");
+  assert.equal(an.params.var, "ccvq-rp9s");
+  assert.equal(an.params.years, "2020-2022");
+});
+
+test("construirAcciones: sin datos válidos -> []", () => {
+  assert.deepEqual(construirAcciones({ intent: "dato_puntual" }, { ok: false }), []);
+  assert.deepEqual(construirAcciones(null, null), []);
+  assert.deepEqual(construirAcciones({ intent: "ranking" }, { ok: true, datos: { tipo: "ranking" }, ref: {} }), []);
 });
 
 // "Dónde estoy": detección de referencias a la ubicación del usuario.
