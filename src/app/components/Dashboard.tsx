@@ -103,7 +103,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           className="min-h-[90px] lg:col-span-4"
         >
           <div className="flex flex-1 items-center gap-3">
-            <MapPin className="h-6 w-6 shrink-0 text-accent" aria-hidden="true" />
+            <MapPin className="anim-bounce h-6 w-6 shrink-0 text-accent" aria-hidden="true" />
             <div>
               <p className="font-bold text-card-foreground">17.976 estaciones en el mapa</p>
               <p className="text-xs text-muted-foreground">Filtra por departamento, zona hidrográfica, río y altitud</p>

@@ -100,7 +100,7 @@ export function HistoriaIdf({ onNavigate }: HistoriaIdfProps) {
   return (
     <div className="relative">
       {/* Barra de progreso de lectura */}
-      <div className="sticky top-0 z-10 -mx-4 mb-2 h-1 bg-border/40 md:-mx-6">
+      <div className="sticky top-16 z-10 -mx-4 mb-2 h-1 bg-border/40 md:-mx-6">
         <div
           className="h-full w-full origin-left bg-gradient-to-r from-primary to-accent transition-transform duration-300"
           style={{ transform: `scaleX(${escena / TOTAL_ESCENAS})` }}
@@ -118,7 +118,7 @@ export function HistoriaIdf({ onNavigate }: HistoriaIdfProps) {
 
       {/* Móvil: gráfica sticky arriba. Desktop: texto izquierda, gráfica sticky derecha. */}
       <div className="md:grid md:grid-cols-[1fr_1.1fr] md:gap-8">
-        <div className="sticky top-2 z-[5] h-[38vh] md:order-2 md:top-20 md:h-[70vh]">
+        <div className="sticky top-[4.5rem] z-[5] h-[38vh] md:order-2 md:top-20 md:h-[70vh]">
           <GraficaViva escena={escena} data={D} />
         </div>
 

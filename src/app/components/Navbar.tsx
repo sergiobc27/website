@@ -1,6 +1,7 @@
-import { Sun, Moon, Monitor, HelpCircle, User, ChevronRight, History, Trash2, Menu } from 'lucide-react';
+import { Sun, Moon, Monitor, HelpCircle, User, Check, ChevronDown, ChevronRight, History, Trash2, Menu } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ExtractorRuntimeState } from './DataExtractor';
+import { MENU_SECTIONS } from './Sidebar';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -30,6 +31,7 @@ import { CopyLinkButton } from './CopyLinkButton';
 interface NavbarProps {
   breadcrumbs: Array<{ label: string; view?: string }>;
   runtime: ExtractorRuntimeState;
+  currentView: string;
   onNavigate: (view: string) => void;
   onOpenMobileNav: () => void;
 }
@@ -59,7 +61,7 @@ function resolveQuickToggle(current: ThemeChoice): ThemeChoice {
   return isDarkNow ? 'light' : 'dark';
 }
 
-export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMobileNav }: NavbarProps) {
+export function Navbar({ breadcrumbs, runtime, currentView, onNavigate, onOpenMobileNav }: NavbarProps) {
   const [theme, setTheme] = useState<ThemeChoice>(getThemeChoice);
   const [downloadCount, setDownloadCount] = useState(0);
 
@@ -76,7 +78,7 @@ export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMobileNav }: Na
   const quickToggle = () => onThemeChange(resolveQuickToggle(theme));
 
   return (
-    <div className="relative flex min-h-16 items-center justify-between gap-3 border-b border-border bg-card px-4 backdrop-blur-sm md:px-6">
+    <div className="glass-chrome absolute inset-x-0 top-0 z-30 flex min-h-16 items-center justify-between gap-3 border-b border-border px-4 md:px-6">
       <div className="min-w-0 flex items-center gap-2 overflow-hidden text-sm">
         <button
           type="button"
@@ -100,10 +102,43 @@ export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMobileNav }: Na
                 >
                   {crumb.label}
                 </button>
+              ) : isLast ? (
+                // La vista actual es un menú: salta a cualquier vista desde la barra.
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={`Vista actual: ${crumb.label}. Abrir menú de vistas`}
+                      className="group flex min-w-0 items-center gap-1 rounded-lg px-1.5 py-1 font-semibold text-accent transition-colors duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent data-[state=open]:bg-muted"
+                    >
+                      <span className="truncate">{crumb.label}</span>
+                      <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-60">
+                    {MENU_SECTIONS.map((section, si) => (
+                      <div key={section.title}>
+                        {si > 0 && <DropdownMenuSeparator />}
+                        <DropdownMenuLabel className="text-xs uppercase tracking-wider text-muted-foreground">
+                          {section.title}
+                        </DropdownMenuLabel>
+                        {section.items.map((item) => {
+                          const Icon = item.icon;
+                          const activa = item.id === currentView;
+                          return (
+                            <DropdownMenuItem key={item.id} onClick={() => onNavigate(item.id)} className="gap-2">
+                              <Icon className="h-4 w-4 text-accent" />
+                              <span className="flex-1">{item.label}</span>
+                              {activa && <Check className="h-4 w-4 text-accent" />}
+                            </DropdownMenuItem>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               ) : (
-                <span className={`truncate transition-colors ${isLast ? 'font-semibold text-accent' : 'text-muted-foreground'}`}>
-                  {crumb.label}
-                </span>
+                <span className="truncate text-muted-foreground transition-colors">{crumb.label}</span>
               )}
             </div>
           );
@@ -149,11 +184,11 @@ export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMobileNav }: Na
         <button
           type="button"
           onClick={quickToggle}
-          className="rounded-lg p-2 text-muted-foreground transition-[transform,background-color,color] duration-150 ease-out hover:scale-105 hover:bg-muted hover:text-accent active:scale-95"
+          className="group rounded-lg p-2 text-muted-foreground transition-[transform,background-color,color] duration-150 ease-out hover:scale-105 hover:bg-muted hover:text-accent active:scale-95"
           title="Cambiar tema"
           aria-label="Cambiar tema rápido"
         >
-          {resolveQuickToggle(theme) === 'light' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          {resolveQuickToggle(theme) === 'light' ? <Sun className="anim-wiggle h-5 w-5" /> : <Moon className="anim-wiggle h-5 w-5" />}
         </button>
 
         <CopyLinkButton />
@@ -161,11 +196,11 @@ export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMobileNav }: Na
         <button
           type="button"
           onClick={() => onNavigate('docs')}
-          className="rounded-lg p-2 text-muted-foreground transition-[transform,background-color,color] duration-150 ease-out hover:scale-105 hover:bg-muted hover:text-accent active:scale-95"
+          className="group rounded-lg p-2 text-muted-foreground transition-[transform,background-color,color] duration-150 ease-out hover:scale-105 hover:bg-muted hover:text-accent active:scale-95"
           title="Ayuda"
           aria-label="Ayuda y documentación"
         >
-          <HelpCircle className="h-5 w-5" />
+          <HelpCircle className="anim-wiggle h-5 w-5" />
         </button>
 
         <DropdownMenu>

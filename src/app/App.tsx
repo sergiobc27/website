@@ -40,6 +40,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toaster } from './components/ui/sonner';
 import { initTheme } from './lib/theme';
 import { viewToPath, pathToView } from './lib/navigation';
+import { detectarPlataforma } from './lib/plataforma';
 import { AsistenteFlotante, OPEN_ASISTENTE_EVENT } from './components/AsistenteFlotante';
 
 export default function App() {
@@ -58,6 +59,12 @@ export default function App() {
 
   useEffect(() => {
     return initTheme();
+  }, []);
+
+  // Marca la plataforma en <html> para el tratamiento Liquid Glass del chrome
+  // (iOS: vidrio pleno; Android: entintado; desktop: sutil). Ver theme.css.
+  useEffect(() => {
+    document.documentElement.dataset.plataforma = detectarPlataforma();
   }, []);
 
   // Shim de URLs viejas: /asistente ya no es vista — abre el panel flotante
@@ -157,7 +164,7 @@ export default function App() {
       <Sidebar currentView={currentView} onNavigate={navigate} />
 
       <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
-        <SheetContent side="left" className="w-72 border-r border-[#8a1216] bg-[#A3161A] p-0 text-white [&>button]:text-white">
+        <SheetContent side="left" className="glass-rojo w-72 border-r border-[#8a1216] p-0 text-white [&>button]:text-white">
           <SheetTitle className="sr-only">Navegación</SheetTitle>
           <div className="flex h-full flex-col">
             <SidebarContent
@@ -171,9 +178,10 @@ export default function App() {
         </SheetContent>
       </Sheet>
 
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <Navbar breadcrumbs={getBreadcrumbs()} runtime={runtime} onNavigate={navigate} onOpenMobileNav={() => setMobileNavOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 scrollbar-thin scrollbar-track-transparent">
+      <div className="relative flex-1 flex flex-col overflow-hidden min-w-0">
+        {/* La navbar es overlay: el contenido scrollea POR DEBAJO del vidrio. */}
+        <Navbar breadcrumbs={getBreadcrumbs()} runtime={runtime} currentView={currentView} onNavigate={navigate} onOpenMobileNav={() => setMobileNavOpen(true)} />
+        <main className="flex-1 overflow-y-auto p-4 pt-20 md:p-6 md:pt-20 scrollbar-thin scrollbar-track-transparent">
           <div className={currentView === 'extractor' ? 'block' : 'hidden'}>
             <DataExtractor onRuntimeChange={setRuntime} />
           </div>

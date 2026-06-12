@@ -59,7 +59,7 @@ export function GraficaViva({ escena, data }: { escena: number; data: HistoriaId
       <div key={escena} className="animate-fade-in-up flex h-full w-full flex-col">
         {escena === 1 && (
           <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-            <Droplets className="h-12 w-12 text-accent" />
+            <Droplets className="anim-float h-12 w-12 text-accent" />
             <p className="text-3xl font-bold text-card-foreground">{data.estacion.nombre}</p>
             <p className="text-muted-foreground">
               {data.estacion.municipio}, {data.estacion.departamento}

@@ -18,7 +18,7 @@ export function CeldaAcceso({ icon: Icon, titulo, subtitulo, ariaLabel, onClick,
     <Celda ariaLabel={ariaLabel} onClick={onClick} indice={indice} className={className}>
       <div className="flex flex-1 flex-col justify-between gap-3">
         <div className="flex items-start justify-between">
-          <Icon className="h-6 w-6 text-accent" />
+          <Icon className="anim-bounce h-6 w-6 text-accent" />
           <ArrowUpRight className="h-4 w-4 text-muted-foreground transition-[transform,color] duration-200 ease-out group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-accent" />
         </div>
         <div>

@@ -11,7 +11,8 @@ interface SidebarProps {
 
 // Items agrupados por intención de uso: 12 ítems planos superan el límite de
 // escaneo (7±2). Tres secciones dan jerarquía sin esconder nada.
-const MENU_SECTIONS = [
+// EXPORTADO: el menú de vistas del Navbar usa esta misma fuente única.
+export const MENU_SECTIONS = [
   {
     title: 'Explorar',
     items: [
@@ -115,14 +116,14 @@ export function SidebarContent({
                   key={item.id}
                   onClick={() => onNavigate(item.id)}
                   aria-current={isActive ? 'page' : undefined}
-                  className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 justify-start'} px-4 py-3 rounded-lg transition-[background-color,color,transform] duration-200 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A227] ${
+                  className={`group w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 justify-start'} px-4 py-3 rounded-lg transition-[background-color,color,transform] duration-200 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A227] ${
                     isActive
                       ? 'bg-[#C9A227] text-[#0f0f0f] font-semibold shadow-[0_0_20px_rgba(201,162,39,0.4)]'
                       : 'text-white/80 hover:bg-[#8a1216] hover:text-white'
                   }`}
                   title={isCollapsed ? item.label : ''}
                 >
-                  <Icon className="w-5 h-5 flex-shrink-0" />
+                  <Icon className="anim-wiggle w-5 h-5 flex-shrink-0" />
                   {!isCollapsed && <span className="text-sm truncate">{item.label}</span>}
                 </button>
               );
