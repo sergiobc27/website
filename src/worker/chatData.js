@@ -176,6 +176,22 @@ export async function consultarDatos(env, intent) {
   }
 }
 
+// Bajo este promedio de observaciones/año la cobertura municipal es tan pobre
+// que el total ENGAÑA (caso real: "Barranquilla 2023 = 9 mm" con estaciones
+// contadas). En esos casos se amplía al departamento y SE DICE.
+const UMBRAL_OBS_ANUAL = 5000;
+
+function resumirSerie(points) {
+  return (points || [])
+    .filter((p) => p.value !== null)
+    .slice(-10)
+    .map((p) => ({
+      anio: Number(String(p.bucket).slice(0, 4)),
+      valor: Math.round(p.value * 10) / 10,
+      observaciones: p.n || 0,
+    }));
+}
+
 async function datoPuntual(env, intent) {
   const lugar = await resolverLugar(env, intent);
   if (intent.lugar && !lugar.municipio) {
@@ -193,14 +209,26 @@ async function datoPuntual(env, intent) {
   if (intent.anioHasta) body.endDate = `${intent.anioHasta}-12-31`;
   const r = await boxJson(env, "/api/analytics/timeseries", postJson(body));
   if (!r) return { ok: false, errorTipo: "espejo_no_disponible" };
-  const serie = (r.points || [])
-    .filter((p) => p.value !== null)
-    .slice(-10)
-    .map((p) => ({
-      anio: Number(String(p.bucket).slice(0, 4)),
-      valor: Math.round(p.value * 10) / 10,
-      observaciones: p.n || 0,
-    }));
+  let serie = resumirSerie(r.points);
+
+  // Cobertura municipal escasa -> reintento honesto a escala departamental.
+  const coberturaAnual = serie.length
+    ? serie.reduce((s, p) => s + p.observaciones, 0) / serie.length
+    : 0;
+  let lugarMostrado = lugar.municipio || lugar.departamento || "Colombia (nacional)";
+  let nota;
+  if (lugar.municipio && lugar.departamento && coberturaAnual < UMBRAL_OBS_ANUAL) {
+    const bodyDep = { ...body };
+    delete bodyDep.catalogFilters;
+    const rDep = await boxJson(env, "/api/analytics/timeseries", postJson(bodyDep));
+    const serieDep = rDep ? resumirSerie(rDep.points) : [];
+    if (serieDep.length) {
+      serie = serieDep;
+      lugarMostrado = `${lugar.departamento} (departamento)`;
+      nota = `La cobertura de estaciones en ${lugar.municipio} es escasa para este periodo; se muestra el agregado del departamento ${lugar.departamento}. Acláralo al responder.`;
+    }
+  }
+
   if (!serie.length) {
     return { ok: false, errorTipo: "sin_datos", lugar: lugar.municipio || lugar.departamento || "Colombia" };
   }
@@ -211,7 +239,8 @@ async function datoPuntual(env, intent) {
       variable: v.etiqueta,
       agregacion: v.metrica === "sum" ? "total anual" : "promedio anual",
       unidad: v.unidad,
-      lugar: lugar.municipio || lugar.departamento || "Colombia (nacional)",
+      lugar: lugarMostrado,
+      ...(nota ? { nota } : {}),
       serie,
     },
   };
