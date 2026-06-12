@@ -620,3 +620,18 @@ test("chat de datos: cobertura parcial añade el caveat por código", async () =
   assert.equal(data.dataUsed, true);
   assert.match(data.reply, /cobertura parcial/i);
 });
+
+// Bug de orden: una respuesta con fórmula que NO cita normas no debe recibir una
+// 📚 Referencia espuria. (El texto del ⚠️ disclaimer menciona "RAS 0330 / INVÍAS";
+// se arregló corriendo ensureReferencia ANTES del disclaimer.) Además, la fórmula
+// con constante decimal debe ESCALAR el disclaimer aunque no nombre el método.
+test("chat: una fórmula sin citar normas escala el disclaimer y NO recibe 📚 Referencia espuria", async () => {
+  const env = {
+    AI: aiMock(["La fórmula es $$T_c = 0.0078 \\cdot L^{0.77} \\cdot S^{0.56}$$. 💧"]),
+    API_ORIGIN: "https://box",
+  };
+  const res = await worker.fetch(chatRequest({ messages: [{ role: "user", content: "dame una fórmula de tiempo de concentración" }] }), env);
+  const data = await res.json();
+  assert.match(data.reply, /verifica las constantes/i, "escala por la constante decimal");
+  assert.doesNotMatch(data.reply, /📚 Referencia/, "no inventa una cita que el modelo no hizo");
+});

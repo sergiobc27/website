@@ -557,6 +557,22 @@ test('ensureDisclaimer: no duplica si la respuesta ya advierte que es orientativ
   assert.equal((r.match(/no sustituye/gi) || []).length, 1);
 });
 
+// #1/#3 — una fórmula con una CONSTANTE decimal escala aunque no nombre el método
+// (caso real: el 8B soltó una fórmula de Kirpich inventada sin escribir "Kirpich").
+test('ensureDisclaimer: escala con una fórmula que trae una constante decimal aunque no nombre el método', () => {
+  const r = ensureDisclaimer('La fórmula es $$T_c = 0.0078 \\cdot L^{0.77} \\cdot S^{0.56}$$.');
+  assert.match(r, /verifica las constantes y sus unidades/i);
+  assert.equal((r.match(/⚠️/g) || []).length, 1);
+});
+
+// Los EXPONENTES (2/3, 1/2) no son constantes decimales: una fórmula con solo
+// exponentes y sin método nombrado no escala (evita falsos positivos).
+test('ensureDisclaimer: una fórmula con exponentes pero sin constante decimal no escala', () => {
+  const r = ensureDisclaimer('La velocidad: $$V = \\dfrac{1}{n} \\cdot R^{2/3} \\cdot S^{1/2}$$.');
+  assert.doesNotMatch(r, /verifica las constantes/i);
+  assert.match(r, /no sustituye el diseño normado/i);
+});
+
 // #2 — ensureDatoCurioso valida contra la lista verificada.
 test('ensureDatoCurioso: reemplaza un dato curioso inventado por uno verificado', () => {
   const t = 'La precipitación se mide en milímetros. 💧\n\n💡 Dato curioso: en Barranquilla cayeron 999 mm en un solo día de 2050.';

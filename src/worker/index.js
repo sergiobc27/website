@@ -364,7 +364,11 @@ function ensureDisclaimer(reply) {
   if (/solo puedo ayudarte con esta plataforma/i.test(text)) return text;
   const formula = tieneFormula(text);
   const decimal = /\d[.,]\d/.test(text);
-  const escalado = METODOS_CONSTANTES.test(text) && (formula || decimal);
+  // Escala (verificar constantes) cuando hay una constante decimal en juego: en
+  // una fórmula —aunque el cuerpo no nombre el método (el 8B a veces suelta la
+  // fórmula con la constante inventada y sin decir "Kirpich")— o junto a un
+  // método de constantes. Los exponentes (2/3, 1/2) no son constantes decimales.
+  const escalado = (formula && decimal) || (METODOS_CONSTANTES.test(text) && (formula || decimal));
   const base = formula || TERMINOS_DISENO.test(text);
   if (escalado) {
     if (/verifi\w*.{0,20}(constante|unidad)/i.test(text)) return text;
@@ -534,8 +538,12 @@ async function handleChat(request, env) {
     });
     const extraido = extraerSugerencias(textoDeIA(result));
     let reply = limpiarFugasDeJson(extraido.reply); // el bloque interno de datos jamás se muestra
+    // OJO al orden: ensureReferencia va ANTES del disclaimer. El disclaimer
+    // menciona "RAS 0330 / INVÍAS"; si corriera primero, ensureReferencia
+    // detectaría esos nombres y pegaría citas que el modelo nunca hizo (sello
+    // bibliográfico a una alucinación). Así solo cita lo que citó el MODELO.
+    reply = ensureReferencia(reply); // anexa "📚 Referencia" si el modelo citó y faltaba
     reply = ensureDisclaimer(reply); // ⚠️ orientativo / verifica constantes en fórmulas
-    reply = ensureReferencia(reply); // anexa "📚 Referencia" si citó y faltaba (antes del dato curioso)
     reply = ensureDatoCurioso(reply); // garantiza/valida "💡 Dato curioso" al final
     const esRechazo = /solo puedo ayudarte con esta plataforma/i.test(reply);
     const dataUsed = !!(resultadoDatos && resultadoDatos.ok) && !esRechazo;
