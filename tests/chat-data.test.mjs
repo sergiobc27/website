@@ -166,6 +166,28 @@ test("consultarDatos dato_puntual con cobertura municipal escasa usa la mejor es
   assert.equal(r.datos.nota.includes("BARRANQUILLA"), true);
 });
 
+test("consultarDatos: si ni la mejor estación tiene cobertura, responde sin_datos (no engaña)", async () => {
+  const env = { API_ORIGIN: "https://box" };
+  globalThis.fetch = async (url, init) => {
+    const path = new URL(url, "https://x").pathname;
+    if (path === "/api/municipalities") return new Response(JSON.stringify(CATALOGO));
+    if (path === "/api/meta") return new Response(JSON.stringify(META));
+    if (path === "/api/analytics/idf-stations") return new Response(JSON.stringify(IDF_CAT));
+    if (path === "/api/analytics/timeseries") {
+      // Tanto el municipio como la estación tienen cobertura pobrísima.
+      return new Response(JSON.stringify({ points: [{ bucket: "2023-01-01", value: 7.3, n: 900 }] }));
+    }
+    return new Response("{}", { status: 404 });
+  };
+  const r = await consultarDatos(env, {
+    intent: "dato_puntual", lugar: "Barranquilla", departamento: "Atlántico",
+    variable: "precipitacion", anioDesde: 2023, anioHasta: 2023, tr: null, topN: null,
+  });
+  assert.equal(r.ok, false);
+  assert.equal(r.errorTipo, "sin_datos");
+  assert.equal(r.lugar, "BARRANQUILLA");
+});
+
 test("consultarDatos dato_puntual con buena cobertura municipal NO amplía", async () => {
   const env = { API_ORIGIN: "https://box" };
   let llamadasTimeseries = 0;

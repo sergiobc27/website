@@ -228,10 +228,16 @@ async function datoPuntual(env, intent) {
       const bodyEst = { ...body, departments: [], catalogFilters: { stations: [est.codigo] } };
       const rEst = await boxJson(env, "/api/analytics/timeseries", postJson(bodyEst));
       const serieEst = rEst ? resumirSerie(rEst.points) : [];
-      if (serieEst.length) {
+      const coberturaEst = serieEst.length
+        ? serieEst.reduce((s, p) => s + p.observaciones, 0) / serieEst.length
+        : 0;
+      if (serieEst.length && coberturaEst >= UMBRAL_OBS_ANUAL) {
         serie = serieEst;
         lugarMostrado = `estación ${est.nombre} (${est.municipio})`;
         nota = `La cobertura agregada del municipio ${lugar.municipio} es escasa para este periodo; se muestran los datos de la estación con mejor registro de la zona. Menciónalo al responder.`;
+      } else {
+        // Ni la mejor estación tiene registro decente: una cifra engañaría.
+        return { ok: false, errorTipo: "sin_datos", lugar: lugar.municipio };
       }
     }
   }
@@ -476,7 +482,7 @@ Si el dato pedido no está en este bloque, dilo con franqueza y remite a la pest
   const razones = {
     lugar_no_encontrado: `No se encontró el lugar "${resultado.lugar}" en el catálogo${sugerencias}. Pide al usuario precisar el municipio (NO inventes datos).`,
     sin_estacion_idf: `No hay estación con curvas IDF que coincida con "${resultado.lugar}". Sugiere buscar la estación en la pestaña Hidrología (que además sugiere la más cercana).`,
-    sin_datos: `El espejo no tiene observaciones para esa combinación de lugar/periodo. Dilo con franqueza y sugiere ajustar el periodo o revisar la cobertura en el Mapa de Estaciones.`,
+    sin_datos: `El espejo no tiene observaciones SUFICIENTES para esa combinación de lugar/periodo (dar una cifra engañaría). Dilo con franqueza y sugiere ajustar el periodo o revisar la cobertura en el Mapa de Estaciones.`,
     espejo_no_disponible: `No fue posible consultar el espejo de datos en este momento. Dilo con franqueza, sin inventar cifras, y sugiere intentar de nuevo o usar la pestaña correspondiente.`,
   };
   return `CONSULTA DE DATOS FALLIDA — ${razones[resultado.errorTipo] || razones.espejo_no_disponible}`;
