@@ -485,7 +485,7 @@ Si el dato pedido no está en este bloque, dilo con franqueza y remite a la pest
     sin_datos: `El espejo no tiene observaciones SUFICIENTES para esa combinación de lugar/periodo (dar una cifra engañaría). Dilo con franqueza y sugiere ajustar el periodo o revisar la cobertura en el Mapa de Estaciones.`,
     espejo_no_disponible: `No fue posible consultar el espejo de datos en este momento. Dilo con franqueza, sin inventar cifras, y sugiere intentar de nuevo o usar la pestaña correspondiente.`,
   };
-  return `CONSULTA DE DATOS FALLIDA — ${razones[resultado.errorTipo] || razones.espejo_no_disponible}`;
+  return `CONSULTA DE DATOS FALLIDA. Esta pregunta SÍ está dentro de tu alcance (es sobre los datos del IDEAM): NO uses el mensaje de rechazo. En su lugar: ${razones[resultado.errorTipo] || razones.espejo_no_disponible}`;
 }
 
 // Acepta el resultado del extractor venga como venga (objeto, JSON string o
