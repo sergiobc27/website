@@ -658,6 +658,27 @@ test('chat: acepta el Origin propio (no 403)', async () => {
   assert.notEqual(res.status, 403);
 });
 
+// Diagnóstico: un fallo del pipeline (p. ej. Workers AI caído/sin cuota) debe
+// dar 502 al usuario PERO registrar la causa real en los logs (el 502 es mudo).
+test('chat: si env.AI.run falla, responde 502 y registra el error real', async () => {
+  const original = console.error;
+  const logs = [];
+  console.error = (...args) => { logs.push(args.map(String).join(' ')); };
+  try {
+    const env = { API_ORIGIN, ASSETS: createAssetsStub(), AI: { run: async () => { throw new Error('AI quota exceeded'); } } };
+    const req = new Request('https://ideam.test/api/chat', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: 'https://ideam.sergiobc.com' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'hola' }] }),
+    });
+    const res = await worker.fetch(req, env);
+    assert.equal(res.status, 502);
+    assert.ok(logs.some((l) => l.includes('AI quota exceeded')), 'debe registrar la causa real en los logs');
+  } finally {
+    console.error = original;
+  }
+});
+
 // #18/#19 — el cupo global se descuenta por las llamadas IA (peso 3), no por 1.
 test('chat: el cupo global diario se descuenta con peso 3 (llamadas IA), no 1', async () => {
   const kv = mockKv();

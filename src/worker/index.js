@@ -561,6 +561,9 @@ async function handleChat(request, env) {
     }
     return chatJson({ reply, suggestions, dataUsed, usage: (result && result.usage) || null });
   } catch (err) {
+    // El 502 de cara al usuario es mudo; este log deja la causa real en Workers
+    // Observability (p. ej. fallo o cuota agotada de Workers AI).
+    console.error("handleChat: fallo en el pipeline del chat:", err && (err.stack || err.message || String(err)));
     return chatJson({ error: "El asistente no pudo responder en este momento. Intenta de nuevo." }, 502);
   }
 }
