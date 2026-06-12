@@ -11,22 +11,50 @@ import {
   matrizUnAnioMeses,
   matrizDiasSemana,
   matrizMesDias,
+  type Dia,
 } from '../lib/heatmap';
 import type { AnalyticsTimeseriesResponse } from '../../shared/ideamContracts';
 
 type Vista = 'anios-meses' | 'anio-meses' | 'dias-semana' | 'mes-dias';
-type Tamano = 's' | 'm' | 'l';
 
-const MESES = ['E', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
-const MES_LARGO = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-const DIAS_SEMANA = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
-const CELDA_PX: Record<Tamano, number> = { s: 10, m: 16, l: 24 };
+const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+const PX = 24; // tamaño L (único)
+const GAP = 3;
+const EJE_DIAS_W = 78; // ancho de la columna de etiquetas de día de semana
+const EJE_ANIO_W = 48; // ancho de la columna de etiquetas de año
+
 const VISTAS: Array<{ value: Vista; label: string; diaria: boolean }> = [
   { value: 'anios-meses', label: 'Años × meses', diaria: false },
-  { value: 'anio-meses', label: '1 año × meses', diaria: false },
+  { value: 'anio-meses', label: 'Un año · meses', diaria: false },
   { value: 'dias-semana', label: 'Año completo · días', diaria: true },
-  { value: 'mes-dias', label: 'Mes × día', diaria: true },
+  { value: 'mes-dias', label: 'Un mes · días', diaria: true },
 ];
+
+function fechaLarga(iso: string): string {
+  const [y, m, d] = iso.split('-');
+  return `${Number(d)} de ${MESES[Number(m) - 1]} de ${y}`;
+}
+
+// Agrupa las columnas-semana por el mes de su primer día, para rotular el eje X.
+function segmentosDeMeses(columnas: Array<Array<Dia | null>>): Array<{ nombre: string; cols: number }> {
+  const segs: Array<{ nombre: string; cols: number }> = [];
+  let mesActual = -1;
+  let cuenta = 0;
+  for (const col of columnas) {
+    const primer = col.find((d) => d) || null;
+    const mes = primer ? Number(primer.fecha.slice(5, 7)) - 1 : mesActual;
+    if (mes !== mesActual) {
+      if (cuenta && mesActual >= 0) segs.push({ nombre: MESES[mesActual], cols: cuenta });
+      mesActual = mes;
+      cuenta = 1;
+    } else {
+      cuenta += 1;
+    }
+  }
+  if (cuenta && mesActual >= 0) segs.push({ nombre: MESES[mesActual], cols: cuenta });
+  return segs;
+}
 
 interface Props {
   datasetId: string;
@@ -42,8 +70,6 @@ export function HeatmapClimatico({ datasetId, department, metric, anioMin, anioM
   const [vista, setVista] = useState<Vista>('anios-meses');
   const [anio, setAnio] = useState(() => Math.min(anioMax ?? ahora, ahora - 1));
   const [mes, setMes] = useState(1);
-  const [tamano, setTamano] = useState<Tamano>('m');
-  const [layoutAnual, setLayoutAnual] = useState<'github' | 'calendario'>('github');
   const [expandido, setExpandido] = useState(false);
   const [data, setData] = useState<AnalyticsTimeseriesResponse | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -98,8 +124,7 @@ export function HeatmapClimatico({ datasetId, department, metric, anioMin, anioM
   }, [datasetId, department, metric, vista, anio, mes, esDiaria]);
 
   const points = useMemo(() => data?.points ?? [], [data]);
-  // Todos los años del dataset (no solo los que devolvió el fetch): el filtro de
-  // año debe ofrecer cualquier año aunque la vista actual aún no tenga datos.
+  // Todos los años del dataset (no solo los que devolvió el fetch).
   const aniosDisponibles = useMemo(() => {
     const max = anioMax ?? ahora;
     const min = Math.min(anioMin ?? 2003, max);
@@ -107,8 +132,6 @@ export function HeatmapClimatico({ datasetId, department, metric, anioMin, anioM
     for (let y = max; y >= min; y--) arr.push(y);
     return arr;
   }, [anioMin, anioMax, ahora]);
-
-  const px = CELDA_PX[tamano];
 
   const cuerpo = (() => {
     if (cargando) return <SkeletonLoader rows={4} />;
@@ -125,105 +148,58 @@ export function HeatmapClimatico({ datasetId, department, metric, anioMin, anioM
       const m = matrizAniosMeses(points);
       const anios = m.anios.slice(-24);
       return (
-        <div className="grid gap-x-1.5 gap-y-1" style={{ gridTemplateColumns: `auto repeat(12, ${px}px)` }}>
-          <span />
-          {MESES.map((mm, i) => (
-            <span key={i} className="text-center text-[10px] text-muted-foreground">{mm}</span>
-          ))}
+        <div className="inline-block">
+          {/* Eje X: meses (nombres completos, verticales para que quepan) */}
+          <div className="flex" style={{ paddingLeft: EJE_ANIO_W }}>
+            {MESES.map((nombre, i) => (
+              <div key={i} className="flex justify-center" style={{ width: PX + GAP }}>
+                <span className="text-xs text-muted-foreground" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+                  {nombre}
+                </span>
+              </div>
+            ))}
+          </div>
           {anios.map((fila) => (
-            <Fila
-              key={fila.anio}
-              etiqueta={String(fila.anio)}
-              valores={fila.meses}
-              max={m.max}
-              px={px}
-              fmtTitulo={(v, i) => `${MES_LARGO[i]} ${fila.anio} — ${fmt((v as number) * 6, 2)} mm/h`}
-            />
+            <div key={fila.anio} className="flex items-center" style={{ marginTop: GAP }}>
+              <span className="pr-2 text-right text-xs tabular-nums text-muted-foreground" style={{ width: EJE_ANIO_W }}>{fila.anio}</span>
+              <div className="flex" style={{ gap: GAP }}>
+                {fila.meses.map((v, i) => (
+                  <span
+                    key={i}
+                    className="block rounded-[3px] border border-border/30"
+                    style={{ width: PX, height: PX, backgroundColor: colorCalendario(v, m.max) }}
+                    title={v !== null ? `${MESES[i]} ${fila.anio} — ${fmt(v * 6, 2)} mm/h` : `${MESES[i]} ${fila.anio} — sin datos`}
+                  />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       );
     }
+
     if (vista === 'anio-meses') {
       const m = matrizUnAnioMeses(points, anio);
       return (
-        <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(12, 1fr)' }}>
+        <div className="flex flex-wrap gap-3">
           {m.meses.map((v, i) => (
-            <div key={i} className="flex flex-col items-center gap-1">
+            <div key={i} className="flex flex-col items-center gap-1.5" style={{ width: 64 }}>
               <span
-                className="block w-full rounded-[3px] border border-border/30"
-                style={{ height: px * 2, backgroundColor: colorCalendario(v, m.max) }}
-                title={v !== null ? `${MES_LARGO[i]} ${anio} — ${fmt(v * 6, 2)} mm/h` : `${MES_LARGO[i]} ${anio} — sin datos`}
+                className="block w-full rounded-md border border-border/30"
+                style={{ height: 72, backgroundColor: colorCalendario(v, m.max) }}
+                title={v !== null ? `${MESES[i]} ${anio} — ${fmt(v * 6, 2)} mm/h` : `${MESES[i]} ${anio} — sin datos`}
               />
-              <span className="text-[10px] text-muted-foreground">{MES_LARGO[i]}</span>
+              <span className="text-center text-[11px] text-muted-foreground">{MESES[i]}</span>
             </div>
           ))}
         </div>
       );
     }
-    if (vista === 'dias-semana') {
-      const m = matrizDiasSemana(points, anio); // .max sirve de escala común a todo el año
-      if (layoutAnual === 'calendario') {
-        return (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {MES_LARGO.map((nombre, idx) => {
-              const mm = matrizMesDias(points, anio, idx + 1);
-              return (
-                <div key={idx}>
-                  <p className="mb-1 text-xs font-semibold capitalize text-muted-foreground">{nombre}</p>
-                  <div className="inline-grid gap-[2px]" style={{ gridTemplateColumns: `repeat(7, ${px}px)` }}>
-                    {DIAS_SEMANA.map((d, i) => (
-                      <span key={i} className="text-center text-[8px] text-muted-foreground">{d}</span>
-                    ))}
-                    {mm.semanas.flat().map((d, i) => (
-                      <span
-                        key={i}
-                        className="block rounded-[2px] border border-border/20"
-                        style={{ width: px, height: px, backgroundColor: d ? colorCalendario(d.valor, m.max) : 'transparent' }}
-                        title={d ? `${d.fecha} — ${d.valor !== null ? fmt(d.valor, 2) : 'sin datos'}` : ''}
-                      />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        );
-      }
-      return (
-        <div className="flex gap-[3px] overflow-x-auto">
-          {m.columnas.map((col, ci) => (
-            <div key={ci} className="flex flex-col gap-[3px]">
-              {col.map((d, ri) => (
-                <span
-                  key={ri}
-                  className="block rounded-[2px] border border-border/20"
-                  style={{ width: px, height: px, backgroundColor: d ? colorCalendario(d.valor, m.max) : 'transparent' }}
-                  title={d ? `${d.fecha} — ${d.valor !== null ? fmt(d.valor, 2) : 'sin datos'}` : ''}
-                />
-              ))}
-            </div>
-          ))}
-        </div>
-      );
-    }
-    const m = matrizMesDias(points, anio, mes);
-    return (
-      <div className="inline-grid gap-[3px]" style={{ gridTemplateColumns: `repeat(7, ${px * 1.6}px)` }}>
-        {DIAS_SEMANA.map((d, i) => (
-          <span key={i} className="text-center text-[10px] text-muted-foreground">{d}</span>
-        ))}
-        {m.semanas.flat().map((d, i) => (
-          <span
-            key={i}
-            className="flex items-center justify-center rounded-[3px] border border-border/20 text-[9px] tabular-nums text-card-foreground/70"
-            style={{ height: px * 1.6, backgroundColor: d ? colorCalendario(d.valor, m.max) : 'transparent' }}
-            title={d ? `${d.fecha} — ${d.valor !== null ? fmt(d.valor, 2) : 'sin datos'}` : ''}
-          >
-            {d ? Number(d.fecha.slice(8, 10)) : ''}
-          </span>
-        ))}
-      </div>
-    );
+
+    // Vistas diarias: año completo o un mes, ambas con ejes (días de semana + meses).
+    const md = vista === 'dias-semana' ? matrizDiasSemana(points, anio) : matrizMesDias(points, anio, mes);
+    const columnas = 'columnas' in md ? md.columnas : md.semanas;
+    return <VistaDiaria columnas={columnas} max={md.max} />;
   })();
 
   const controles = (
@@ -247,44 +223,9 @@ export function HeatmapClimatico({ datasetId, department, metric, anioMin, anioM
           label="Mes"
           value={String(mes)}
           onChange={(v) => setMes(Number(v))}
-          options={MES_LARGO.map((m, i) => ({ value: String(i + 1), label: m }))}
+          options={MESES.map((m, i) => ({ value: String(i + 1), label: m }))}
         />
       )}
-      {vista === 'dias-semana' && (
-        <div className="flex items-center gap-1" role="group" aria-label="Disposición">
-          {([
-            ['github', 'GitHub'],
-            ['calendario', 'Meses'],
-          ] as Array<['github' | 'calendario', string]>).map(([val, etiqueta]) => (
-            <button
-              key={val}
-              type="button"
-              onClick={() => setLayoutAnual(val)}
-              aria-pressed={layoutAnual === val}
-              className={`h-8 rounded-md border px-2.5 text-xs font-semibold transition-colors ${
-                layoutAnual === val ? 'border-accent bg-accent/15 text-accent' : 'border-border text-muted-foreground hover:bg-muted/60'
-              }`}
-            >
-              {etiqueta}
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="flex items-center gap-1" role="group" aria-label="Tamaño">
-        {(['s', 'm', 'l'] as Tamano[]).map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTamano(t)}
-            aria-pressed={tamano === t}
-            className={`h-8 w-8 rounded-md border text-xs font-semibold transition-colors ${
-              tamano === t ? 'border-accent bg-accent/15 text-accent' : 'border-border text-muted-foreground hover:bg-muted/60'
-            }`}
-          >
-            {t.toUpperCase()}
-          </button>
-        ))}
-      </div>
     </div>
   );
 
@@ -354,32 +295,49 @@ export function HeatmapClimatico({ datasetId, department, metric, anioMin, anioM
   );
 }
 
-function Fila({
-  etiqueta,
-  valores,
-  max,
-  px,
-  fmtTitulo,
-}: {
-  etiqueta: string;
-  valores: Array<number | null>;
-  max: number;
-  px: number;
-  fmtTitulo: (v: number | null, i: number) => string;
-}) {
+// Cuadrícula diaria con ejes definidos: meses arriba (nombres completos) y días
+// de la semana a la izquierda. Compartida por la vista anual y la mensual.
+function VistaDiaria({ columnas, max }: { columnas: Array<Array<Dia | null>>; max: number }) {
+  const segs = segmentosDeMeses(columnas);
   return (
-    <>
-      <span className="pr-1 text-right text-[10px] tabular-nums text-muted-foreground" style={{ lineHeight: `${px}px` }}>
-        {etiqueta}
-      </span>
-      {valores.map((v, i) => (
-        <span
-          key={i}
-          className="block rounded-[2px] border border-border/30"
-          style={{ height: px, backgroundColor: colorCalendario(v, max) }}
-          title={v !== null ? fmtTitulo(v, i) : 'sin datos'}
-        />
-      ))}
-    </>
+    <div className="inline-block">
+      {/* Eje X: meses */}
+      <div className="flex" style={{ paddingLeft: EJE_DIAS_W }}>
+        {segs.map((s, i) => (
+          <div
+            key={i}
+            className="shrink-0 truncate pr-2 text-xs font-medium text-muted-foreground"
+            style={{ width: s.cols * (PX + GAP) }}
+          >
+            {s.nombre}
+          </div>
+        ))}
+      </div>
+      <div className="flex" style={{ gap: GAP }}>
+        {/* Eje Y: días de la semana */}
+        <div className="flex flex-col" style={{ width: EJE_DIAS_W, gap: GAP }}>
+          {DIAS.map((d, i) => (
+            <span key={i} className="flex items-center text-xs text-muted-foreground" style={{ height: PX }}>
+              {d}
+            </span>
+          ))}
+        </div>
+        {/* Columnas-semana */}
+        <div className="flex" style={{ gap: GAP }}>
+          {columnas.map((col, ci) => (
+            <div key={ci} className="flex flex-col" style={{ gap: GAP }}>
+              {col.map((d, ri) => (
+                <span
+                  key={ri}
+                  className="block rounded-[3px] border border-border/20"
+                  style={{ width: PX, height: PX, backgroundColor: d ? colorCalendario(d.valor, max) : 'transparent' }}
+                  title={d ? `${fechaLarga(d.fecha)} — ${d.valor !== null ? fmt(d.valor, 2) : 'sin datos'}` : ''}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
