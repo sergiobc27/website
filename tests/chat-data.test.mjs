@@ -565,6 +565,19 @@ test("extraerIntencion parsea el intent (JSON mode)", async () => {
   assert.equal(intent.topN, 3);
 });
 
+test("extraerIntencion acepta el intent como OBJETO en .response (JSON mode de Llama 4)", async () => {
+  let llamadas = 0;
+  const env = { AI: { run: async (_m, input) => {
+    llamadas++;
+    if (input.response_format) return { response: { intent: "dato_puntual", lugar: "Cartagena" } };
+    return { response: "no debería llegar al fallback" };
+  } } };
+  const intent = await extraerIntencion(env, "modelo", [{ role: "user", content: "lluvia en Cartagena" }]);
+  assert.equal(llamadas, 1, "no debe necesitar el fallback plano");
+  assert.equal(intent.intent, "dato_puntual");
+  assert.equal(intent.lugar, "Cartagena");
+});
+
 test("extraerIntencion cae al intento plano si el JSON mode falla", async () => {
   let llamadas = 0;
   const env = { AI: { run: async (_m, input) => {

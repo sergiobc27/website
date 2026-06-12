@@ -127,10 +127,12 @@ export default {
 
 // --- Asistente / tutor hidrológico (Workers AI) -------------------------------
 
-// El modelo base @cf/meta/llama-3.1-8b-instruct fue DEPRECADO por Cloudflare el
-// 2026-05-30 (devolvía AiError 5028 → todo chat daba 502). Se usa la variante
-// fp8 vigente: mismo 8B para el que está afinado el prompt, en el tier gratis.
-const CHAT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8";
+// Llama 4 Scout (17B MoE): salto de calidad sobre el 8B (mejor español, presenta
+// el dato parcial en vez de negarse, menos invención), gratis y dentro de la
+// cuota de neuronas según el consumo real medido. (El 8B base se deprecó el
+// 2026-05-30 → AiError 5028; el fp8 fue el puente.) Devuelve `.response` (texto)
+// y, en JSON mode, el intent como objeto; textoDeIA/extraerIntencion lo manejan.
+const CHAT_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct";
 
 const CHAT_SYSTEM = `Eres "Asistente Hídrico", el asistente de la plataforma web IDEAM Hydrology Data Automator (ideam.sergiobc.com), de datos hidrometeorológicos del IDEAM (Colombia), creada como tesis de Ingeniería Civil de la Universidad de la Costa (CUC).
 

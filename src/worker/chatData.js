@@ -497,14 +497,20 @@ export async function extraerIntencion(env, model, history) {
       max_tokens: 200,
       response_format: { type: "json_schema", json_schema: INTENT_SCHEMA },
     });
-    intent = parseIntentJson(textoDeIA(r) || null);
+    // JSON mode puede devolver el intent ya como OBJETO en .response (Llama 4) o
+    // como string (8B); parseIntentJson acepta ambos. Si el modelo es estilo
+    // OpenAI ({choices}) caemos a textoDeIA para sacar el contenido de texto.
+    intent = parseIntentJson(r && r.response != null ? r.response : textoDeIA(r));
   } catch {
     /* JSON mode no disponible: cae al intento plano */
   }
   if (!intent) {
     try {
       const r = await env.AI.run(model, { messages, max_tokens: 200 });
-      intent = parseIntentJson(textoDeIA(r) || null);
+      // JSON mode puede devolver el intent ya como OBJETO en .response (Llama 4) o
+    // como string (8B); parseIntentJson acepta ambos. Si el modelo es estilo
+    // OpenAI ({choices}) caemos a textoDeIA para sacar el contenido de texto.
+    intent = parseIntentJson(r && r.response != null ? r.response : textoDeIA(r));
     } catch {
       return null;
     }
