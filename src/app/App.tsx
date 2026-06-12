@@ -125,7 +125,7 @@ export default function App() {
   const renderContent = () => {
     switch (currentView) {
       case 'dashboard':
-        return <Dashboard />;
+        return <Dashboard onNavigate={navigate} />;
       case 'analytics':
         return <Analytics />;
       case 'map':
@@ -148,7 +148,7 @@ export default function App() {
       case 'docs':
         return <DocumentationView onOpenExtractor={() => navigate('extractor')} />;
       default:
-        return <Dashboard />;
+        return <Dashboard onNavigate={navigate} />;
     }
   };
 

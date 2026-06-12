@@ -324,3 +324,13 @@
 .asistente-flotante {
   animation: asistente-pulso 2.6s ease-out infinite;
 }
+
+/* Entrada de las celdas del dashboard bento (stagger via animation-delay inline).
+   El bloque global de prefers-reduced-motion la neutraliza. */
+@keyframes bento-enter {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.bento-enter {
+  animation: bento-enter 550ms ease-out both;
+}

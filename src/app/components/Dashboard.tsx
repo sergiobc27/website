@@ -1,243 +1,116 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Clock3, Database, Download, MapPin, RefreshCw, Waves } from 'lucide-react';
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { SkeletonLoader } from './SkeletonLoader';
-import { ChartDownloadButton } from './ChartDownloadButton';
+import { useEffect, useState } from 'react';
+import { BookOpenText, MapPin, Sparkles } from 'lucide-react';
+import { Celda } from './dashboard/Celda';
+import { CeldaAcceso } from './dashboard/CeldaAcceso';
+import { CeldaPulso } from './dashboard/CeldaPulso';
+import { CeldaLluvia } from './dashboard/CeldaLluvia';
+import { CeldaCalendario } from './dashboard/CeldaCalendario';
+import { CeldaTop } from './dashboard/CeldaTop';
+import { CeldaDescargas } from './dashboard/CeldaDescargas';
+import { OPEN_ASISTENTE_EVENT } from './AsistenteFlotante';
 import { apiJson } from '../lib/ideamApi';
-import { fmt } from '../lib/format';
-import type { DataFreshness, MetaResponse } from '../../shared/ideamContracts';
+import type { AnalyticsTimeseriesPoint, AnalyticsTimeseriesResponse } from '../../shared/ideamContracts';
 
-interface HistoryEntry {
-  timestamp: string;
-  variable: string;
-  format: string;
-  rowCount: number;
-  stationCount: number;
-  municipalityCount: number;
-  zoneCount: number;
-  processingMs: number;
-  sizeBytes: number;
-  fileName: string;
+interface DashboardProps {
+  onNavigate: (view: string) => void;
 }
 
-function formatDuration(value: number) {
-  if (!Number.isFinite(value) || value <= 0) return '0 s';
-  if (value < 60000) return `${fmt(value / 1000, value < 10000 ? 1 : 0)} s`;
-  const totalSeconds = Math.round(value / 1000);
-  return `${Math.floor(totalSeconds / 60)}m ${String(totalSeconds % 60).padStart(2, '0')}s`;
-}
-
-function formatFreshnessDate(iso: string | null) {
-  if (!iso) return 'Sin datos';
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return 'Sin datos';
-  return date.toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' });
-}
-
-function formatFreshnessRelative(iso: string | null) {
-  if (!iso) return '';
-  const elapsedMs = Date.now() - new Date(iso).getTime();
-  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) return '';
-  const minutes = Math.round(elapsedMs / 60000);
-  if (minutes < 60) return `hace ${minutes} min`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 48) return `hace ${hours} h`;
-  return `hace ${Math.round(hours / 24)} días`;
-}
-
-export function Dashboard() {
-  const chartRef = useRef<HTMLDivElement>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [datasets, setDatasets] = useState<Array<{ id: string; name: string }>>([]);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [freshness, setFreshness] = useState<DataFreshness | null>(null);
+/**
+ * Dashboard bento: centro de mando del espejo. Cada celda navega a su vista
+ * (drill-down) y carga sus propios datos — salvo la serie mensual nacional,
+ * que se trae UNA vez aquí y alimenta a Lluvia y Calendario.
+ */
+export function Dashboard({ onNavigate }: DashboardProps) {
+  const [serie, setSerie] = useState<AnalyticsTimeseriesPoint[] | null>(null);
+  const [serieCargando, setSerieCargando] = useState(true);
+  const [serieError, setSerieError] = useState(false);
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        // apiJson resuelve el origen correcto también fuera de producción
-        // (previews *.pages.dev) y normaliza errores.
-        const data = await apiJson<MetaResponse>('/api/meta', undefined, 'No fue posible cargar la metadata.');
-        setDatasets(data.datasets || []);
-        setFreshness(data.dataFreshness || null);
-      } catch {
-        // El dashboard sigue útil con el historial local aunque falle la metadata.
-      } finally {
-        setHistory(JSON.parse(localStorage.getItem('ideam-history') || '[]'));
-        setTimeout(() => setIsLoading(false), 400);
-      }
+    let cancelado = false;
+    apiJson<AnalyticsTimeseriesResponse>(
+      '/api/analytics/timeseries',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ datasetId: 's54a-sgyg', departments: [], interval: 'month', metric: 'avg' }),
+      },
+      'sin serie nacional',
+    )
+      .then((r) => {
+        if (!cancelado) setSerie(r.points || []);
+      })
+      .catch(() => {
+        if (!cancelado) setSerieError(true);
+      })
+      .finally(() => {
+        if (!cancelado) setSerieCargando(false);
+      });
+    return () => {
+      cancelado = true;
     };
-    void load();
   }, []);
 
-  const totals = useMemo(() => {
-    const totalRows = history.reduce((sum, item) => sum + Number(item.rowCount || 0), 0);
-    const totalStations = history.reduce((sum, item) => sum + Number(item.stationCount || 0), 0);
-    const totalTime = history.reduce((sum, item) => sum + Number(item.processingMs || 0), 0);
-    return {
-      rows: totalRows,
-      stations: totalStations,
-      timeMs: totalTime,
-      avgTimeMs: history.length ? Math.round(totalTime / history.length) : 0,
-    };
-  }, [history]);
-
-  const chartData = useMemo(
-    () =>
-      history
-        .slice(0, 7)
-        .map((item, index) => ({
-          id: index + 1,
-          label: item.timestamp.slice(0, 10),
-          filas: Number(item.rowCount || 0),
-          estaciones: Number(item.stationCount || 0),
-          tiempo: Math.round(Number(item.processingMs || 0) / 1000),
-        }))
-        .reverse(),
-    [history]
-  );
-
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-2 rounded-xl border border-border bg-card px-4 py-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-        <span className="flex items-center gap-2">
-          <Database className="h-3.5 w-3.5 shrink-0 text-accent" />
-          Fuente: IDEAM, datos abiertos de Colombia (datos.gov.co). Espejo propio sincronizado dos veces al día.
-        </span>
-        {freshness && (freshness.latestObservation || freshness.lastSync) && (
-          <span className="flex items-center gap-2 sm:text-right">
-            <RefreshCw className="h-3.5 w-3.5 shrink-0 text-accent" />
-            <span>
-              Dato más reciente: <span className="font-semibold text-card-foreground">{formatFreshnessDate(freshness.latestObservation)}</span>
-              {freshness.lastSync ? ` · sincronizado ${formatFreshnessRelative(freshness.lastSync)}` : ''}
-            </span>
-          </span>
-        )}
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-2xl font-bold text-card-foreground">Dashboard</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          El pulso del espejo de datos hidrometeorológicos. Toca cualquier tarjeta para explorar a fondo.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard icon={Database} title="Datasets disponibles" value={String(datasets.length)} subtitle="Catalogo operativo" index={0} />
-        <MetricCard icon={Download} title="Filas descargadas" value={totals.rows.toLocaleString('es-CO')} subtitle={`${history.length} ejecuciones`} index={1} />
-        <MetricCard icon={MapPin} title="Estaciones procesadas" value={totals.stations.toLocaleString('es-CO')} subtitle="Suma del historial local" index={2} />
-        <MetricCard icon={Clock3} title="Tiempo medio" value={formatDuration(totals.avgTimeMs)} subtitle="Promedio por descarga" index={3} />
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
-          <div className="mb-6 flex items-center justify-between gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:auto-rows-[minmax(120px,auto)]">
+        <CeldaPulso indice={0} className="min-h-[200px] lg:col-span-2 lg:row-span-2" onClick={() => onNavigate('status')} />
+        <CeldaLluvia
+          indice={1}
+          className="min-h-[200px] lg:col-span-2 lg:row-span-2"
+          serie={serie}
+          cargando={serieCargando}
+          error={serieError}
+          onClick={() => onNavigate('analytics')}
+        />
+        <CeldaTop indice={2} className="min-h-[170px]" onClick={() => onNavigate('analytics')} />
+        <CeldaDescargas indice={3} className="min-h-[170px]" onClick={() => onNavigate('history')} />
+        <CeldaAcceso
+          indice={4}
+          icon={BookOpenText}
+          titulo="La historia del dato"
+          subtitulo="Cómo la lluvia se vuelve curvas IDF"
+          ariaLabel="Abrir La historia del dato: el recorrido narrativo de los datos"
+          onClick={() => onNavigate('historia')}
+        />
+        <CeldaAcceso
+          indice={5}
+          icon={Sparkles}
+          titulo="Pregúntale a tus datos"
+          subtitulo="El asistente consulta el espejo por ti"
+          ariaLabel="Abrir el Asistente Hídrico para preguntar sobre los datos"
+          onClick={() => window.dispatchEvent(new CustomEvent(OPEN_ASISTENTE_EVENT))}
+        />
+        <CeldaCalendario
+          indice={6}
+          className="min-h-[300px] lg:col-span-4"
+          serie={serie}
+          cargando={serieCargando}
+          error={serieError}
+          onClick={() => onNavigate('analytics')}
+        />
+        <Celda
+          indice={7}
+          titulo="Mapa de estaciones"
+          ariaLabel="Abrir el mapa: explora las más de 17.000 estaciones del catálogo IDEAM"
+          onClick={() => onNavigate('map')}
+          className="min-h-[90px] lg:col-span-4"
+        >
+          <div className="flex flex-1 items-center gap-3">
+            <MapPin className="h-6 w-6 shrink-0 text-accent" aria-hidden="true" />
             <div>
-              <h3 className="font-bold text-card-foreground">Rendimiento reciente</h3>
-              <p className="text-sm text-muted-foreground">Filas y estaciones por ejecucion</p>
-            </div>
-            <div className="flex shrink-0 items-center gap-3">
-              <ChartDownloadButton targetRef={chartRef} title="Rendimiento reciente" filenameParts={['dashboard', 'rendimiento']} />
-              <Waves className="h-5 w-5 shrink-0 text-accent" />
+              <p className="font-bold text-card-foreground">Explora las 17.976 estaciones en el mapa</p>
+              <p className="text-xs text-muted-foreground">Filtra por departamento, zona hidrográfica, río y altitud</p>
             </div>
           </div>
-          <div ref={chartRef} className="bg-card" style={{ width: '100%', height: '260px' }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData.length ? chartData : [{ label: '-', filas: 0, estaciones: 0 }]}>
-                <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
-                <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} />
-                <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'var(--background)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '8px',
-                    color: 'var(--foreground)',
-                  }}
-                />
-                <Bar dataKey="filas" fill="var(--primary)" radius={[8, 8, 0, 0]} isAnimationActive animationDuration={550} />
-                <Bar dataKey="estaciones" fill="var(--accent)" radius={[8, 8, 0, 0]} isAnimationActive animationDuration={550} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
-          <h3 className="mb-4 font-bold text-card-foreground">Impacto visible</h3>
-          <div className="space-y-4 text-sm">
-            <SummaryRow label="Última ejecución" value={history[0]?.timestamp || 'Sin registros'} />
-            <SummaryRow label="Tiempo total acumulado" value={formatDuration(totals.timeMs)} />
-            <SummaryRow
-              label="Mayor volumen descargado"
-              value={history.length ? `${Math.max(...history.map((item) => Number(item.rowCount || 0))).toLocaleString('es-CO')} filas` : 'Sin datos'}
-            />
-            <SummaryRow
-              label="Mayor cobertura municipal"
-              value={history.length ? `${Math.max(...history.map((item) => Number(item.municipalityCount || 0))).toLocaleString('es-CO')} municipios` : 'Sin datos'}
-            />
-            <SummaryRow
-              label="Mayor cobertura de zonas"
-              value={history.length ? `${Math.max(...history.map((item) => Number(item.zoneCount || 0))).toLocaleString('es-CO')} zonas` : 'Sin datos'}
-            />
-          </div>
-        </div>
+        </Celda>
       </div>
-
-      <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
-        <h3 className="mb-4 font-bold text-card-foreground">Descargas recientes</h3>
-        {isLoading ? (
-          <SkeletonLoader rows={3} />
-        ) : history.length === 0 ? (
-          <p className="text-muted-foreground">Aún no hay descargas registradas en este navegador.</p>
-        ) : (
-          <div className="space-y-3">
-            {history.slice(0, 5).map((item, index) => (
-              <div key={`${item.fileName}-${index}`} className="flex flex-col gap-3 rounded-lg border border-border bg-background p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <p className="font-semibold text-card-foreground">{item.variable}</p>
-                  <p className="break-words text-xs text-muted-foreground">
-                    {item.rowCount.toLocaleString('es-CO')} filas | {Number(item.stationCount || 0).toLocaleString('es-CO')} estaciones | {Number(item.municipalityCount || 0).toLocaleString('es-CO')} municipios
-                  </p>
-                </div>
-                <div className="text-xs text-muted-foreground sm:text-right">
-                  <p>{item.format.toUpperCase()}</p>
-                  <p>{formatDuration(item.processingMs)}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function MetricCard({
-  icon: Icon,
-  title,
-  value,
-  subtitle,
-  index = 0,
-}: {
-  icon: React.ElementType;
-  title: string;
-  value: string;
-  subtitle: string;
-  index?: number;
-}) {
-  return (
-    <div
-      className="min-h-[150px] rounded-xl border border-border bg-card p-6 shadow-[0_0_20px] shadow-accent/10 animate-fade-in-up transition-all duration-200 hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-glow"
-      style={{ animationDelay: `${index * 60}ms` }}
-    >
-      <div className="mb-4 flex items-start justify-between">
-        <Icon className="h-7 w-7 text-accent" />
-      </div>
-      <p className="mb-1 text-sm text-muted-foreground">{title}</p>
-      <p className="mb-1 font-mono text-2xl font-bold text-card-foreground break-words">{value}</p>
-      <p className="text-xs text-muted-foreground">{subtitle}</p>
-    </div>
-  );
-}
-
-function SummaryRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col gap-1 border-b border-border/60 pb-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-semibold text-card-foreground sm:text-right">{value}</span>
     </div>
   );
 }
