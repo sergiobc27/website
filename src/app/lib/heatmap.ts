@@ -64,6 +64,26 @@ export function matrizDiasSemana(
   return { columnas, max };
 }
 
+// 12 filas (meses) × 31 columnas (día del mes) para un año. Los días 29-31 de
+// meses cortos quedan en null. Ideal para precipitación: muestra estacionalidad
+// (qué meses) y detalle diario a la vez.
+export function matrizMesesDias(
+  points: AnalyticsTimeseriesPoint[],
+  anio: number,
+): { filas: Array<Array<number | null>>; max: number } {
+  const filas: Array<Array<number | null>> = Array.from({ length: 12 }, () => new Array(31).fill(null));
+  let max = 0;
+  for (const pt of points) {
+    if (pt.value === null || !pt.bucket.startsWith(`${anio}-`)) continue;
+    const mes = Number(pt.bucket.slice(5, 7)) - 1;
+    const dia = Number(pt.bucket.slice(8, 10)) - 1;
+    if (mes < 0 || mes > 11 || dia < 0 || dia > 30) continue;
+    filas[mes][dia] = pt.value;
+    if (pt.value > max) max = pt.value;
+  }
+  return { filas, max };
+}
+
 export function matrizMesDias(
   points: AnalyticsTimeseriesPoint[],
   anio: number,

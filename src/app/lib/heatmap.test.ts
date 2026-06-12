@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matrizUnAnioMeses, matrizDiasSemana, matrizMesDias, type Dia } from './heatmap';
+import { matrizUnAnioMeses, matrizDiasSemana, matrizMesDias, matrizMesesDias, type Dia } from './heatmap';
 import type { AnalyticsTimeseriesPoint } from '../../shared/ideamContracts';
 
 const p = (bucket: string, value: number | null): AnalyticsTimeseriesPoint => ({ bucket, value, n: 1 });
@@ -33,6 +33,19 @@ describe('matrizDiasSemana (estilo GitHub)', () => {
     expect(r.columnas[0][0]).toBeNull();
     expect(r.columnas[0][1]).toBeNull();
     expect(r.columnas[0][2]?.fecha).toBe('2025-01-01');
+  });
+});
+
+describe('matrizMesesDias', () => {
+  it('12 filas × 31, ubica por mes y día, ignora otros años y calcula max', () => {
+    const r = matrizMesesDias([p('2024-01-01', 5), p('2024-03-15', 10), p('2024-12-31', 7), p('2023-01-01', 99)], 2024);
+    expect(r.filas).toHaveLength(12);
+    expect(r.filas[0]).toHaveLength(31);
+    expect(r.filas[0][0]).toBe(5); // 1 ene
+    expect(r.filas[2][14]).toBe(10); // 15 mar
+    expect(r.filas[11][30]).toBe(7); // 31 dic
+    expect(r.filas[1][0]).toBeNull(); // 1 feb sin dato
+    expect(r.max).toBe(10);
   });
 });
 
