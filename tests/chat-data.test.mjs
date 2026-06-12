@@ -16,6 +16,7 @@ import {
   SUGERENCIAS_PROMPT,
   promptDeDatos,
   extraerIntencion,
+  textoDeIA,
 } from "../src/worker/chatData.js";
 
 const CATALOGO = {
@@ -541,6 +542,16 @@ test("promptDeDatos: municipio_ambiguo pide precisar el departamento y lista opc
   const p = promptDeDatos({ ok: false, errorTipo: "municipio_ambiguo", lugar: "San Pedro", opciones: ["SUCRE", "VALLE DEL CAUCA"] });
   assert.match(p, /departamento/i);
   assert.match(p, /SUCRE/);
+});
+
+// Robustez de salida del modelo: distintos modelos de Workers AI devuelven la
+// respuesta como `.response` o como `.choices[].message.content` (OpenAI-style).
+test("textoDeIA acepta tanto {response} como {choices[].message.content}", () => {
+  assert.equal(textoDeIA({ response: "hola" }), "hola");
+  assert.equal(textoDeIA({ choices: [{ message: { content: "mundo" } }] }), "mundo");
+  assert.equal(textoDeIA({ result: { response: "anidado" } }), "anidado");
+  assert.equal(textoDeIA(null), "");
+  assert.equal(textoDeIA({}), "");
 });
 
 // #11 — extraerIntencion: las dos pasadas (JSON mode + fallback plano).

@@ -380,6 +380,18 @@ export const SUGERENCIAS_PROMPT = `ÚLTIMA LÍNEA OBLIGATORIA (para la interfaz,
 >>>SUGERENCIAS: ["pregunta 1", "pregunta 2", "pregunta 3"]
 con 2 o 3 preguntas de seguimiento cortas (máximo 80 caracteres cada una) que el usuario podría hacerte a continuación, coherentes con la conversación y SIEMPRE dentro de tu alcance (hidrología, los datos del IDEAM o el uso de la plataforma). No menciones, expliques ni comentes esta línea: solo escríbela al final.`;
 
+// Texto de salida de Workers AI, robusto al modelo: unos devuelven `{response}`
+// y otros el estilo OpenAI `{choices:[{message:{content}}]}` (o anidado en
+// `{result}` vía REST). Así un cambio de modelo no vuelve a romper el bot.
+export function textoDeIA(result) {
+  if (!result || typeof result !== "object") return "";
+  const r = result.result && typeof result.result === "object" ? result.result : result;
+  if (typeof r.response === "string") return r.response;
+  const choice = Array.isArray(r.choices) ? r.choices[0] : null;
+  const content = choice && choice.message && choice.message.content;
+  return typeof content === "string" ? content : "";
+}
+
 // Quita la(s) línea(s) ">>>..." del final del reply y devuelve las sugerencias
 // saneadas. Robusto ante un modelo desobediente: sin marker -> [], JSON roto -> [].
 export function extraerSugerencias(raw) {
@@ -485,14 +497,14 @@ export async function extraerIntencion(env, model, history) {
       max_tokens: 200,
       response_format: { type: "json_schema", json_schema: INTENT_SCHEMA },
     });
-    intent = parseIntentJson((r && r.response) || null);
+    intent = parseIntentJson(textoDeIA(r) || null);
   } catch {
     /* JSON mode no disponible: cae al intento plano */
   }
   if (!intent) {
     try {
       const r = await env.AI.run(model, { messages, max_tokens: 200 });
-      intent = parseIntentJson((r && r.response) || null);
+      intent = parseIntentJson(textoDeIA(r) || null);
     } catch {
       return null;
     }

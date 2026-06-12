@@ -17,6 +17,7 @@ import {
   extraerSugerencias,
   limpiarFugasDeJson,
   sugerenciasFallback,
+  textoDeIA,
   SUGERENCIAS_PROMPT,
   VISTA_LABELS,
 } from "./chatData.js";
@@ -126,7 +127,10 @@ export default {
 
 // --- Asistente / tutor hidrológico (Workers AI) -------------------------------
 
-const CHAT_MODEL = "@cf/meta/llama-3.1-8b-instruct";
+// El modelo base @cf/meta/llama-3.1-8b-instruct fue DEPRECADO por Cloudflare el
+// 2026-05-30 (devolvía AiError 5028 → todo chat daba 502). Se usa la variante
+// fp8 vigente: mismo 8B para el que está afinado el prompt, en el tier gratis.
+const CHAT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8";
 
 const CHAT_SYSTEM = `Eres "Asistente Hídrico", el asistente de la plataforma web IDEAM Hydrology Data Automator (ideam.sergiobc.com), de datos hidrometeorológicos del IDEAM (Colombia), creada como tesis de Ingeniería Civil de la Universidad de la Costa (CUC).
 
@@ -528,7 +532,7 @@ async function handleChat(request, env) {
       messages: [{ role: "system", content: systemParts.join("\n\n") }, ...history],
       max_tokens: 900,
     });
-    const extraido = extraerSugerencias((result && result.response) || "");
+    const extraido = extraerSugerencias(textoDeIA(result));
     let reply = limpiarFugasDeJson(extraido.reply); // el bloque interno de datos jamás se muestra
     reply = ensureDisclaimer(reply); // ⚠️ orientativo / verifica constantes en fórmulas
     reply = ensureReferencia(reply); // anexa "📚 Referencia" si citó y faltaba (antes del dato curioso)
