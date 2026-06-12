@@ -137,7 +137,7 @@ test("consultarDatos dato_puntual arma timeseries y resume por año", async () =
   assert.equal(r.datos.unidad, "mm");
 });
 
-test("consultarDatos dato_puntual con cobertura municipal escasa amplía al departamento con nota honesta", async () => {
+test("consultarDatos dato_puntual con cobertura municipal escasa usa la mejor estación de la zona", async () => {
   const env = { API_ORIGIN: "https://box" };
   globalThis.fetch = async (url, init) => {
     const path = new URL(url, "https://x").pathname;
@@ -146,12 +146,12 @@ test("consultarDatos dato_puntual con cobertura municipal escasa amplía al depa
     if (path === "/api/analytics/idf-stations") return new Response(JSON.stringify(IDF_CAT));
     if (path === "/api/analytics/timeseries") {
       const body = JSON.parse(init.body);
-      if (body.catalogFilters && body.catalogFilters.municipalities) {
-        // Escala municipio: cobertura pobrísima (el caso Barranquilla: pocas obs).
-        return new Response(JSON.stringify({ points: [{ bucket: "2023-01-01", value: 9, n: 800 }] }));
+      if (body.catalogFilters && body.catalogFilters.stations) {
+        // Escala estación: el total anual de UNA estación es real.
+        return new Response(JSON.stringify({ points: [{ bucket: "2023-01-01", value: 812.5, n: 48000 }] }));
       }
-      // Escala departamento: datos sanos.
-      return new Response(JSON.stringify({ points: [{ bucket: "2023-01-01", value: 812.5, n: 220000 }] }));
+      // Escala municipio: cobertura pobrísima (el caso Barranquilla real).
+      return new Response(JSON.stringify({ points: [{ bucket: "2023-01-01", value: 9, n: 800 }] }));
     }
     return new Response("{}", { status: 404 });
   };
@@ -161,8 +161,8 @@ test("consultarDatos dato_puntual con cobertura municipal escasa amplía al depa
   });
   assert.equal(r.ok, true);
   assert.equal(r.datos.serie[0].valor, 812.5);
-  assert.equal(r.datos.lugar.includes("ATLANTICO"), true);
-  assert.equal(typeof r.datos.nota, "string"); // advierte la ampliación de escala
+  assert.equal(r.datos.lugar.includes("AEROPUERTO EC"), true); // estación IDF de Barranquilla en el fixture
+  assert.equal(typeof r.datos.nota, "string"); // advierte el cambio de escala
   assert.equal(r.datos.nota.includes("BARRANQUILLA"), true);
 });
 

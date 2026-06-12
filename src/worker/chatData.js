@@ -212,21 +212,27 @@ async function datoPuntual(env, intent) {
   if (!r) return { ok: false, errorTipo: "espejo_no_disponible" };
   let serie = resumirSerie(r.points);
 
-  // Cobertura municipal escasa -> reintento honesto a escala departamental.
+  // Cobertura municipal escasa -> reintento honesto con la MEJOR ESTACIÓN de
+  // la zona (catálogo IDF). El total anual de UNA estación es hidrológicamente
+  // real; el agregado del municipio con huecos (o la suma del departamento)
+  // engaña con cifras absurdas.
   const coberturaAnual = serie.length
     ? serie.reduce((s, p) => s + p.observaciones, 0) / serie.length
     : 0;
   let lugarMostrado = lugar.municipio || lugar.departamento || "Colombia (nacional)";
   let nota;
-  if (lugar.municipio && lugar.departamento && coberturaAnual < UMBRAL_OBS_ANUAL) {
-    const bodyDep = { ...body };
-    delete bodyDep.catalogFilters;
-    const rDep = await boxJson(env, "/api/analytics/timeseries", postJson(bodyDep));
-    const serieDep = rDep ? resumirSerie(rDep.points) : [];
-    if (serieDep.length) {
-      serie = serieDep;
-      lugarMostrado = `${lugar.departamento} (departamento)`;
-      nota = `La cobertura de estaciones en ${lugar.municipio} es escasa para este periodo; se muestra el agregado del departamento ${lugar.departamento}. Acláralo al responder.`;
+  if (lugar.municipio && coberturaAnual < UMBRAL_OBS_ANUAL) {
+    const cat = await boxJson(env, "/api/analytics/idf-stations");
+    const est = cat ? elegirEstacion(cat.stations || [], lugar.municipio) : null;
+    if (est) {
+      const bodyEst = { ...body, departments: [], catalogFilters: { stations: [est.codigo] } };
+      const rEst = await boxJson(env, "/api/analytics/timeseries", postJson(bodyEst));
+      const serieEst = rEst ? resumirSerie(rEst.points) : [];
+      if (serieEst.length) {
+        serie = serieEst;
+        lugarMostrado = `estación ${est.nombre} (${est.municipio})`;
+        nota = `La cobertura agregada del municipio ${lugar.municipio} es escasa para este periodo; se muestran los datos de la estación con mejor registro de la zona. Menciónalo al responder.`;
+      }
     }
   }
 
