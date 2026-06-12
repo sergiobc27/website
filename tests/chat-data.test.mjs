@@ -582,8 +582,12 @@ test("construirAcciones: dato_puntual -> Analítica (dep+years) y Extractor", ()
   assert.ok(an);
   assert.equal(an.params.dep, "ATLANTICO");
   assert.equal(an.params.years, "2023-2023");
-  assert.equal(an.params.var, undefined, "precipitación es el default: sin var");
-  assert.ok(acc.find((a) => a.view === "extractor" && a.params.dep === "ATLANTICO"));
+  assert.equal(an.params.var, undefined, "Analítica: precipitación es el default → sin var");
+  const ext = acc.find((a) => a.view === "extractor");
+  assert.ok(ext && ext.params.dep === "ATLANTICO");
+  // El Extractor NO tiene precip como default (su default es datasets[0]) →
+  // su acción SIEMPRE lleva var explícito, también para precipitación.
+  assert.equal(ext.params.var, "s54a-sgyg", "Extractor: var explícito incluso en precipitación");
   assert.ok(acc.length <= 3);
 });
 

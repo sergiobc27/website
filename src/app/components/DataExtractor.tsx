@@ -23,6 +23,8 @@ import { toast } from 'sonner';
 import { EmptyState } from './EmptyState';
 import { ApiError, apiJson, apiUrl } from '../lib/ideamApi';
 import { fmt } from '../lib/format';
+import { NAVIGATE_EVENT, pathToView, type NavigateDetail } from '../lib/navigation';
+import { parseSearch } from '../lib/urlState';
 import type {
   CatalogBundleRow,
   CatalogFilterDefinition,
@@ -270,6 +272,16 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   const [animatedRows, setAnimatedRows] = useState(0);
   const handledJobIdsRef = useRef<Set<string>>(new Set());
   const pollFailuresRef = useRef(0);
+  // Restore de deep-link del Asistente: estación/años que deben aplicarse una
+  // vez que el cambio de variable/departamento se asentó y su rango temporal
+  // cargó (los efectos de reset limpian estación y reescriben fechas antes).
+  const pendingRestoreRef = useRef<{ est?: string; years?: string } | null>(null);
+  // Dataset al que pertenece el `dateRange` actual: evita aplicar años contra
+  // un rango viejo en mitad de un cambio de variable (fetch async).
+  const dateRangeForRef = useRef<string>('');
+  // Espejo de aplicarDeepLink para que el listener del evento (deps []) llame
+  // siempre a la versión con el estado más reciente sin re-suscribirse.
+  const aplicarDeepLinkRef = useRef<(params: Record<string, string>) => void>(() => {});
 
   const steps = useMemo(
     () => [
@@ -324,6 +336,45 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       return [...current.slice(-(MAX_OPERATION_LOGS - 1)), { type, message }];
     });
   }, []);
+
+  // Aplica estación (un código en el textarea) y años del deep-link. Los años
+  // (formato "aaaa-aaaa") activan modo personalizado y se clampan al rango
+  // disponible. Solo usa setters estables → callback estable.
+  const aplicarEstYears = useCallback((est?: string, years?: string, rango?: DateRangeResponse | null) => {
+    if (est) setStationCodesText(est);
+    const m = years ? /^(\d{4})-(\d{4})$/.exec(years) : null;
+    if (m) {
+      const desdeReq = `${m[1]}-01-01`;
+      const hastaReq = `${m[2]}-12-31`;
+      const lo = rango?.startDate || desdeReq;
+      const hi = rango?.endDate || hastaReq;
+      setTimeMode('custom');
+      setStartDate(desdeReq < lo ? lo : desdeReq);
+      setEndDate(hastaReq > hi ? hi : hastaReq);
+    }
+  }, []);
+
+  // Precarga los filtros desde un deep-link del Asistente ({var,dep,est,years}).
+  // Si var/dep cambian, los efectos de reset limpiarán estación y recargarán el
+  // rango → estación/años quedan pendientes y se aplican cuando el nuevo rango
+  // llega (efecto de abajo). Si nada se resetea, aplica de una vez. No tocamos
+  // el aviso legal: solo saltamos al paso de descarga si YA estaba aceptado.
+  const aplicarDeepLink = (params: Record<string, string>) => {
+    if (!params || !(params.var || params.dep || params.est || params.years)) return;
+    const datasetCambia = Boolean(params.var) && params.var !== datasetId;
+    const depCambia =
+      Boolean(params.dep) && !(selectedDepartments.length === 1 && selectedDepartments[0] === params.dep);
+    if (params.var) setDatasetId(params.var);
+    if (params.dep) setSelectedDepartments([params.dep]);
+    if (datasetCambia || depCambia) {
+      pendingRestoreRef.current = { est: params.est, years: params.years };
+    } else {
+      aplicarEstYears(params.est, params.years, dateRange);
+    }
+    if (acceptedTerms) setStep('execute');
+    appendLog('INFO', 'Filtros precargados desde el Asistente.');
+  };
+  aplicarDeepLinkRef.current = aplicarDeepLink;
 
   const triggerBrowserDownload = useCallback(async (downloadPath: string, fileName: string) => {
     // Sonda HEAD antes del <a download>: si el ZIP expiró (410/404), el error
@@ -458,6 +509,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           'No fue posible cargar el rango temporal.'
         );
         if (cancelled) return;
+        dateRangeForRef.current = datasetId;
         setDateRange(data);
         setStartDate(data.startDate || '');
         setEndDate(data.endDate || '');
@@ -491,6 +543,36 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     setPreview(null);
     setDownloadMetrics(null);
   }, [datasetId, selectedDepartments.join('|')]);
+
+  // Deep-links del Asistente: por evento (navegación in-app, vía
+  // aplicarDeepLinkRef para no re-suscribir) y por URL al montar (refresh o
+  // enlace pegado en /extractor). NO escribimos la URL de forma continua: el
+  // Extractor está SIEMPRE montado y pisaría la query de la vista activa cuando
+  // está oculto, así que el restore es de entrada, no un useUrlSync completo.
+  useEffect(() => {
+    const onNav = (event: Event) => {
+      const detail = (event as CustomEvent<NavigateDetail>).detail;
+      if (detail && detail.view === 'extractor') aplicarDeepLinkRef.current(detail.params || {});
+    };
+    window.addEventListener(NAVIGATE_EVENT, onNav);
+    if (pathToView(window.location.pathname) === 'extractor') {
+      const params = parseSearch(window.location.search);
+      if (params.var || params.dep || params.est || params.years) aplicarDeepLinkRef.current(params);
+    }
+    return () => window.removeEventListener(NAVIGATE_EVENT, onNav);
+  }, []);
+
+  // Aplica estación/años pendientes de un deep-link una vez que el rango
+  // temporal corresponde al dataset destino (tras el reset por cambio de
+  // variable/departamento). Así la estación no la borra el efecto de reset ni
+  // los años los pisa la recarga del rango.
+  useEffect(() => {
+    const pending = pendingRestoreRef.current;
+    if (!pending || !dateRange || dateRangeForRef.current !== datasetId) return;
+    pendingRestoreRef.current = null;
+    aplicarEstYears(pending.est, pending.years, dateRange);
+    if (acceptedTerms) setStep('execute');
+  }, [dateRange, datasetId, acceptedTerms, aplicarEstYears]);
 
   const loadCatalogOptions = useCallback(async (definition: CatalogFilterDefinition, force = false, cacheOnly = false) => {
     if (!datasetId || !selectedDepartments.length) {

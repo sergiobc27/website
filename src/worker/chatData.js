@@ -445,7 +445,9 @@ export function construirAcciones(intent, resultado) {
     acc.push({
       label: "Descargar estos datos en el Extractor →",
       view: "extractor",
-      params: limpiarParams({ var: varParam, dep: ref.departamento || undefined, est: ref.estacionCodigo || undefined, years }),
+      // var SIEMPRE explícito: el Extractor no tiene precip como default (su
+      // default es el primer dataset del catálogo), a diferencia de Analítica.
+      params: limpiarParams({ var: datasetId, dep: ref.departamento || undefined, est: ref.estacionCodigo || undefined, years }),
     });
   }
   return acc.filter((a) => ACCION_VIEWS.has(a.view)).slice(0, 3);
