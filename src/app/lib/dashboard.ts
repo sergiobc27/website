@@ -41,13 +41,16 @@ export function matrizCalendario(points: AnalyticsTimeseriesPoint[]): { anios: F
   return { anios, max };
 }
 
-// Escala azul (seco) → oro de marca (lluvioso). Interpolación simple en HSL.
+// Escala institucional CUC: oro pálido (seco) → rojo CUC profundo (lluvioso).
+// Endpoints de marca: oro #C9A227 (~hue 43) y rojo #A3161A (~hue 358).
+// Interpolación en HSL recorriendo oro → naranja → rojo.
 export function colorCalendario(valor: number | null, max: number): string {
   if (valor === null || !Number.isFinite(valor) || max <= 0) return 'transparent';
   const t = Math.max(0, Math.min(1, valor / max));
-  const hue = 215 - t * (215 - 43); // azul → oro
-  const luz = 88 - t * 40; // claro (seco) → medio (lluvioso)
-  return `hsl(${Math.round(hue)} 75% ${Math.round(luz)}%)`;
+  const hue = (43 - t * 45 + 360) % 360; // oro (43) → rojo CUC (358)
+  const sat = 65 + t * 11; // 65% → 76%
+  const luz = 90 - t * 54; // pálido (seco) → rojo profundo (lluvioso)
+  return `hsl(${Math.round(hue)} ${Math.round(sat)}% ${Math.round(luz)}%)`;
 }
 
 export function mesVsHistorico(

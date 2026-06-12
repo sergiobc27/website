@@ -136,7 +136,7 @@ export function SidebarContent({
       <div className="p-4 border-t border-[#8a1216]">
         {!isCollapsed ? (
           <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
-            <img src={logoIdeam} alt="IDEAM" className="w-full h-auto" />
+            <img src={logoIdeam} alt="IDEAM" className="mx-auto w-3/5 h-auto" />
             <p className="text-white/60 text-xs text-center mt-2 leading-5">Instituto de Hidrologia, Meteorologia y Estudios Ambientales</p>
           </div>
         ) : (
@@ -167,7 +167,7 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
     });
 
   return (
-    <div className={`${isCollapsed ? 'w-20' : 'w-72'} h-screen bg-[#A3161A] border-r border-[#8a1216] hidden lg:flex flex-col flex-shrink-0 transition-[width] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]`}>
+    <div className={`${isCollapsed ? 'w-20' : 'w-72'} relative z-20 h-screen bg-[#A3161A] border-r border-[#8a1216] hidden lg:flex flex-col flex-shrink-0 transition-[width] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]`}>
       <SidebarContent
         currentView={currentView}
         onNavigate={onNavigate}
