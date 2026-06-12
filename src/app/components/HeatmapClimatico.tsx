@@ -24,7 +24,7 @@ const CELDA_PX: Record<Tamano, number> = { s: 10, m: 16, l: 24 };
 const VISTAS: Array<{ value: Vista; label: string; diaria: boolean }> = [
   { value: 'anios-meses', label: 'Años × meses', diaria: false },
   { value: 'anio-meses', label: '1 año × meses', diaria: false },
-  { value: 'dias-semana', label: 'Días × día de semana', diaria: true },
+  { value: 'dias-semana', label: 'Año completo · días', diaria: true },
   { value: 'mes-dias', label: 'Mes × día', diaria: true },
 ];
 
@@ -32,15 +32,18 @@ interface Props {
   datasetId: string;
   department: string;
   metric: string;
+  anioMin?: number;
+  anioMax?: number;
 }
 
-export function HeatmapClimatico({ datasetId, department, metric }: Props) {
+export function HeatmapClimatico({ datasetId, department, metric, anioMin, anioMax }: Props) {
   const gridRef = useRef<HTMLDivElement>(null);
   const ahora = new Date().getUTCFullYear();
   const [vista, setVista] = useState<Vista>('anios-meses');
-  const [anio, setAnio] = useState(ahora - 1);
+  const [anio, setAnio] = useState(() => Math.min(anioMax ?? ahora, ahora - 1));
   const [mes, setMes] = useState(1);
   const [tamano, setTamano] = useState<Tamano>('m');
+  const [layoutAnual, setLayoutAnual] = useState<'github' | 'calendario'>('github');
   const [expandido, setExpandido] = useState(false);
   const [data, setData] = useState<AnalyticsTimeseriesResponse | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -94,12 +97,15 @@ export function HeatmapClimatico({ datasetId, department, metric }: Props) {
   }, [datasetId, department, metric, vista, anio, mes, esDiaria, faltaDepto]);
 
   const points = useMemo(() => data?.points ?? [], [data]);
+  // Todos los años del dataset (no solo los que devolvió el fetch): el filtro de
+  // año debe ofrecer cualquier año aunque la vista actual aún no tenga datos.
   const aniosDisponibles = useMemo(() => {
-    const ys = new Set<number>();
-    for (const pt of points) ys.add(Number(pt.bucket.slice(0, 4)));
-    const arr = [...ys].filter((y) => Number.isFinite(y)).sort((a, b) => b - a);
-    return arr.length ? arr : [anio];
-  }, [points, anio]);
+    const max = anioMax ?? ahora;
+    const min = Math.min(anioMin ?? 2003, max);
+    const arr: number[] = [];
+    for (let y = max; y >= min; y--) arr.push(y);
+    return arr;
+  }, [anioMin, anioMax, ahora]);
 
   const px = CELDA_PX[tamano];
 
@@ -154,7 +160,34 @@ export function HeatmapClimatico({ datasetId, department, metric }: Props) {
       );
     }
     if (vista === 'dias-semana') {
-      const m = matrizDiasSemana(points, anio);
+      const m = matrizDiasSemana(points, anio); // .max sirve de escala común a todo el año
+      if (layoutAnual === 'calendario') {
+        return (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {MES_LARGO.map((nombre, idx) => {
+              const mm = matrizMesDias(points, anio, idx + 1);
+              return (
+                <div key={idx}>
+                  <p className="mb-1 text-xs font-semibold capitalize text-muted-foreground">{nombre}</p>
+                  <div className="inline-grid gap-[2px]" style={{ gridTemplateColumns: `repeat(7, ${px}px)` }}>
+                    {DIAS_SEMANA.map((d, i) => (
+                      <span key={i} className="text-center text-[8px] text-muted-foreground">{d}</span>
+                    ))}
+                    {mm.semanas.flat().map((d, i) => (
+                      <span
+                        key={i}
+                        className="block rounded-[2px] border border-border/20"
+                        style={{ width: px, height: px, backgroundColor: d ? colorCalendario(d.valor, m.max) : 'transparent' }}
+                        title={d ? `${d.fecha} — ${d.valor !== null ? fmt(d.valor, 2) : 'sin datos'}` : ''}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      }
       return (
         <div className="flex gap-[3px] overflow-x-auto">
           {m.columnas.map((col, ci) => (
@@ -215,6 +248,26 @@ export function HeatmapClimatico({ datasetId, department, metric }: Props) {
           onChange={(v) => setMes(Number(v))}
           options={MES_LARGO.map((m, i) => ({ value: String(i + 1), label: m }))}
         />
+      )}
+      {vista === 'dias-semana' && (
+        <div className="flex items-center gap-1" role="group" aria-label="Disposición">
+          {([
+            ['github', 'GitHub'],
+            ['calendario', 'Meses'],
+          ] as Array<['github' | 'calendario', string]>).map(([val, etiqueta]) => (
+            <button
+              key={val}
+              type="button"
+              onClick={() => setLayoutAnual(val)}
+              aria-pressed={layoutAnual === val}
+              className={`h-8 rounded-md border px-2.5 text-xs font-semibold transition-colors ${
+                layoutAnual === val ? 'border-accent bg-accent/15 text-accent' : 'border-border text-muted-foreground hover:bg-muted/60'
+              }`}
+            >
+              {etiqueta}
+            </button>
+          ))}
+        </div>
       )}
       <div className="flex items-center gap-1" role="group" aria-label="Tamaño">
         {(['s', 'm', 'l'] as Tamano[]).map((t) => (

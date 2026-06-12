@@ -491,7 +491,7 @@ export function Analytics() {
         )}
       </div>
 
-      <HeatmapClimatico datasetId={datasetId} department={department} metric={metric} />
+      <HeatmapClimatico datasetId={datasetId} department={department} metric={metric} anioMin={datasetBounds.start} anioMax={datasetBounds.end} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="rounded-xl border border-border bg-card p-6">
