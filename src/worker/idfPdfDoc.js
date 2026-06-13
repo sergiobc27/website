@@ -211,7 +211,7 @@ export async function buildIdfPdf(idf, station) {
   // --- Pie ---
   const footTop = H - 70; // 70 pt desde abajo
   page.drawLine({ start: { x: M, y: 70 }, end: { x: W - M, y: 70 }, thickness: 0.5, color: GOLD });
-  text("Metodos: Gumbel (momentos) · datos 10-min IDEAM.", M, footTop, 8, font, MUTED);
+  text("Ajuste por duracion: Gumbel/GEV/Log-Pearson III (mejor por AIC) · datos 10-min IDEAM.", M, footTop, 8, font, MUTED);
   text("Ingeniero Civil Sergio Beltran Coley · Universidad de la Costa (CUC)", M, footTop + 11, 8, font, MUTED);
   text("ideam.sergiobc.com", M, footTop + 22, 8, font, MUTED);
   textRight(station.fecha, W - M, footTop + 22, 8, font, MUTED);

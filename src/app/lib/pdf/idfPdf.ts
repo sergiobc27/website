@@ -85,7 +85,7 @@ export function buildIdfPdfModel(
     cabecera: ['Dur. (min)', ...trs.map((tr) => `Tr ${tr}a`)],
     filas,
     credito: 'Ingeniero Civil Sergio Beltrán Coley · Universidad de la Costa (CUC)',
-    pie: 'Métodos: Gumbel (momentos) · datos 10-min IDEAM.',
+    pie: 'Ajuste por duración: Gumbel/GEV/Log-Pearson III (mejor por AIC) · datos 10-min IDEAM.',
     fechaTexto: fecha,
     filename: `curva-idf-${slugify(station.nombre)}-${now.toISOString().slice(0, 10)}.pdf`,
   };

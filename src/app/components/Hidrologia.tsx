@@ -917,7 +917,7 @@ export function Hidrologia() {
               <div className="mb-4 flex items-center justify-between gap-4">
                 <div>
                   <h3 className="font-bold text-card-foreground">Períodos de retorno · lluvia máxima diaria</h3>
-                  <p className="text-sm text-muted-foreground">Gumbel (método de momentos) sobre {returnPeriods?.n ?? 0} máximos anuales</p>
+                  <p className="text-sm text-muted-foreground">{returnPeriods?.recommended ?? 'Ajuste de extremos'} sobre {returnPeriods?.n ?? 0} máximos anuales{returnPeriods?.recommended ? ' · recomendada por AIC' : ''}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
                   {returnPeriods?.reliability && (() => {
@@ -957,20 +957,20 @@ export function Hidrologia() {
                       <span>
                         <strong>Bondad de ajuste (Kolmogorov-Smirnov):</strong>{' '}
                         {returnPeriods.goodnessOfFit.passes
-                          ? 'el ajuste Gumbel es aceptable'
-                          : 'el ajuste Gumbel NO pasa el test; usa los cuantiles con cautela'}{' '}
+                          ? `el ajuste ${returnPeriods.recommended ?? 'recomendado'} es aceptable`
+                          : `el ajuste ${returnPeriods.recommended ?? 'recomendado'} NO pasa el test; usa los cuantiles con cautela`}{' '}
         — <V>D</V> = {fmt(returnPeriods.goodnessOfFit.statistic, 4)} {returnPeriods.goodnessOfFit.passes ? '<' : '≥'} {fmt(returnPeriods.goodnessOfFit.critical, 4)} (crítico, <V>α</V> = {fmt(returnPeriods.goodnessOfFit.alpha, 2)}). Exigido por el Manual de Drenaje INVÍAS.
                       </span>
                     </div>
                   )}
                   {returnPeriods.gumbel && (
                     <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-sm">
-                      <span className="text-muted-foreground">Cuantil de Gumbel:</span>
+                      <span className="text-muted-foreground">Cuantil de Gumbel (referencia, L-momentos):</span>
                       <Formula className="text-base font-semibold text-card-foreground">
                         <V>x</V><Sub>T</Sub>&nbsp;=&nbsp;<V>μ</V> − <V>β</V> · ln(−ln(1 − 1/<V>T</V>))
                       </Formula>
                       <span className="text-xs text-muted-foreground">
-                        (<V>μ</V> = {fmt(returnPeriods.gumbel.mu, 2)}, <V>β</V> = {fmt(returnPeriods.gumbel.beta, 2)} mm/día · método de momentos; <V>T</V> en años)
+                        (<V>μ</V> = {fmt(returnPeriods.gumbel.mu, 2)}, <V>β</V> = {fmt(returnPeriods.gumbel.beta, 2)} mm/día · L-momentos; <V>T</V> en años)
                       </span>
                     </div>
                   )}
@@ -1137,7 +1137,7 @@ export function Hidrologia() {
 
           <p className="text-xs text-muted-foreground">
             <CloudRain className="mr-1 inline h-3.5 w-3.5 text-accent" />
-            Métodos: Gumbel por momentos sobre máximos anuales (años con ≥300 días de datos; Chow, Maidment &amp; Mays) y SPI
+            Métodos: Gumbel/GEV/Log-Pearson III sobre máximos anuales, mejor por AIC (L-momentos; años con ≥300 días de datos; Chow, Maidment &amp; Mays) y SPI
             no-paramétrico por percentiles empíricos (variante de la guía OMM). Estos análisis son orientativos: para diseño
             definitivo valida con los datos crudos y la normativa aplicable.
           </p>

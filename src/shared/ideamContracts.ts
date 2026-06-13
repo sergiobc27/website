@@ -118,6 +118,9 @@ export interface ReturnPeriodsResponse {
   mean?: number;
   std?: number;
   gumbel: { mu: number; beta: number } | null;
+  // Distribución elegida por AIC (Gumbel/GEV/Log-Pearson III) cuyos `quantiles`
+  // y `goodnessOfFit` se muestran. `gumbel{mu,beta}` se conserva como referencia.
+  recommended?: string | null;
   quantiles: ReturnPeriodQuantile[];
   empirical: ReturnPeriodQuantile[];
   goodnessOfFit?: GoodnessOfFit | null;
