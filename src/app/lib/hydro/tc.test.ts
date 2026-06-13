@@ -40,6 +40,24 @@ describe('tiemposConcentracion — piso de diseño 10 min (RAS 0330)', () => {
   });
 });
 
+describe('tiemposConcentracion — dos métodos válidos (mediana = promedio, no el menor)', () => {
+  // A=0 anula Giandotti → quedan Kirpich (15,12) y Témez (31,95). La mediana de
+  // un par es el promedio (≈23,5), NO el menor (15,12) como hacía el bug.
+  const r = tiemposConcentracion(800, 0.02, 0);
+
+  it('Giandotti es null y quedan dos métodos', () => {
+    expect(r.giandotti).toBeNull();
+    expect(r.kirpich).not.toBeNull();
+    expect(r.temez).not.toBeNull();
+  });
+
+  it('recomendado ≈ promedio de los dos (23,5), no el menor', () => {
+    expect(r.recomendado).toBeCloseTo(23.5, 0);
+    expect(r.recomendado).not.toBeCloseTo(15.12, 1);
+    expect(r.pisoAplicado).toBe(false);
+  });
+});
+
 describe('tiemposConcentracion — entradas inválidas', () => {
   it('devuelve null en los métodos cuando L o S no son positivos', () => {
     const r = tiemposConcentracion(0, 0.02, 5);

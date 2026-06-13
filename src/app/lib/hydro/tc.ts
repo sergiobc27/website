@@ -13,7 +13,7 @@ export interface TiemposTc {
   giandotti: number | null;
   /** Mediana de los métodos válidos, elevada al piso de diseño de 10 min. */
   recomendado: number | null;
-  /** Método cuyo valor coincide con la mediana (antes del piso). */
+  /** Método más cercano a la mediana (para n par, al promedio de los centrales). */
   metodoRecomendado: MetodoTc | null;
   /** true si el piso de 10 min elevó el valor recomendado. */
   pisoAplicado: boolean;
@@ -57,13 +57,22 @@ export function tiemposConcentracion(L: number, S: number, A_ha: number): Tiempo
 
   if (pares.length > 0) {
     const ordenado = [...pares].sort((a, b) => a.v - b.v);
-    const mediana = ordenado[Math.floor((ordenado.length - 1) / 2)];
-    metodoRecomendado = mediana.m;
-    if (mediana.v < MIN_DISENO) {
+    const n = ordenado.length;
+    // Mediana real: para n impar, el valor central; para n par (p. ej. cuando un
+    // método queda null), el PROMEDIO de los dos centrales (no el menor, que era
+    // el bug: subestimaba Tc → sobreestimaba la intensidad y el caudal).
+    const medV =
+      n % 2 === 1 ? ordenado[(n - 1) / 2].v : (ordenado[n / 2 - 1].v + ordenado[n / 2].v) / 2;
+    // Método representativo = el más cercano a la mediana (coincide con el central
+    // si n es impar).
+    metodoRecomendado = ordenado.reduce((best, cur) =>
+      Math.abs(cur.v - medV) < Math.abs(best.v - medV) ? cur : best,
+    ).m;
+    if (medV < MIN_DISENO) {
       recomendado = MIN_DISENO;
       pisoAplicado = true;
     } else {
-      recomendado = mediana.v;
+      recomendado = medV;
     }
   }
 
