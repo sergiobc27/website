@@ -1,7 +1,7 @@
 // Lógica pura del dashboard bento (testeable sin DOM ni red).
-// OJO unidades: la serie mensual nacional usa metric 'avg' = mm POR OBSERVACIÓN
-// de 10 minutos (~0,05). Estas funciones son agnósticas a la unidad; la capa de
-// presentación convierte a intensidad (mm/h = valor × 6) para mostrar.
+// OJO unidades: la serie mensual nacional de precipitación usa metric 'sum' =
+// LÁMINA MENSUAL (mm/mes). Estas funciones son agnósticas a la unidad; la capa
+// de presentación muestra el valor tal cual (mm/mes), sin reescalar.
 import type { AnalyticsDatasetOverview, AnalyticsTimeseriesPoint } from '../../shared/ideamContracts';
 
 export function sumarObservaciones(datasets: AnalyticsDatasetOverview[]): number | null {
@@ -55,13 +55,18 @@ export function colorCalendario(valor: number | null, max: number): string {
 
 export function mesVsHistorico(
   actual: AnalyticsTimeseriesPoint | null,
-  climatologia: Array<{ month: number; mean: number | null }>,
+  climatologia: Array<{ month: number; mean: number | null; monthlyDepth?: number | null }>,
 ): { pct: number; direccion: 'arriba' | 'abajo' } | null {
   if (!actual || actual.value === null) return null;
   const mes = Number(actual.bucket.slice(5, 7));
   const ref = climatologia.find((c) => c.month === mes);
-  if (!ref || ref.mean === null || ref.mean === 0) return null;
-  const pct = Math.round(((actual.value - ref.mean) / ref.mean) * 100);
+  if (!ref) return null;
+  // Precip: el punto actual es lámina mensual (mm/mes) y debe compararse contra
+  // la lámina histórica (monthlyDepth), no contra el avg por lectura de 10 min.
+  // El resto de variables no traen monthlyDepth → se usa la media.
+  const referencia = ref.monthlyDepth ?? ref.mean;
+  if (referencia === null || referencia === 0) return null;
+  const pct = Math.round(((actual.value - referencia) / referencia) * 100);
   return { pct: Math.abs(pct), direccion: pct >= 0 ? 'arriba' : 'abajo' };
 }
 

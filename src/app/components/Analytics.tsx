@@ -23,6 +23,8 @@ import { Slider } from './ui/slider';
 import { Bar as MeanBar, Formula, Frac, V } from './Formula';
 import { apiJson } from '../lib/ideamApi';
 import { metricUnit, unitSuffix } from '../lib/units';
+import { formatValue } from '../lib/format';
+import { MONTH_NAMES, PRECIP_DATASET } from '../lib/constants';
 import type {
   AnalyticsByRegionResponse,
   AnalyticsByStationResponse,
@@ -35,8 +37,6 @@ import type {
   MetaResponse,
 } from '../../shared/ideamContracts';
 
-const PRECIP_DATASET = 's54a-sgyg';
-
 const METRIC_LABELS: Record<AnalyticsMetric, string> = {
   avg: 'Promedio',
   sum: 'Suma',
@@ -44,17 +44,6 @@ const METRIC_LABELS: Record<AnalyticsMetric, string> = {
   max: 'Máximo',
   count: 'Observaciones',
 };
-
-const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-
-function formatValue(value: number | null | undefined) {
-  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
-  const abs = Math.abs(value);
-  if (abs >= 1_000_000) return value.toLocaleString('es-CO', { notation: 'compact', maximumFractionDigits: 1 });
-  if (abs >= 100) return value.toLocaleString('es-CO', { maximumFractionDigits: 1 });
-  if (abs >= 1) return value.toLocaleString('es-CO', { maximumFractionDigits: 2 });
-  return value.toLocaleString('es-CO', { maximumFractionDigits: 4 });
-}
 
 function formatCount(value: number) {
   return value.toLocaleString('es-CO');

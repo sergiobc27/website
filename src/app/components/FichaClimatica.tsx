@@ -6,23 +6,14 @@ import { SkeletonLoader } from './SkeletonLoader';
 import { useUrlSync } from '../lib/urlState';
 import { apiJson } from '../lib/ideamApi';
 import { datasetUnit, unitSuffix } from '../lib/units';
+import { formatValue } from '../lib/format';
+import { MONTH_NAMES, PRECIP_DATASET } from '../lib/constants';
 import type {
   AnalyticsByStationResponse,
   AnalyticsClimatologyResponse,
   AnalyticsTimeseriesResponse,
   MetaResponse,
 } from '../../shared/ideamContracts';
-
-const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-const PRECIP_DATASET = 's54a-sgyg';
-
-function formatValue(value: number | null | undefined) {
-  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
-  const abs = Math.abs(value);
-  if (abs >= 100) return value.toLocaleString('es-CO', { maximumFractionDigits: 1 });
-  if (abs >= 1) return value.toLocaleString('es-CO', { maximumFractionDigits: 2 });
-  return value.toLocaleString('es-CO', { maximumFractionDigits: 4 });
-}
 
 export function FichaClimatica({ initialDepartment = '', initialMunicipality = '' }: { initialDepartment?: string; initialMunicipality?: string }) {
   const chartRef = useRef<HTMLDivElement>(null);
@@ -306,7 +297,7 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
             </div>
 
             <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
-              <h3 className="mb-6 font-bold text-card-foreground">{isPrecip ? 'Total anual' : 'Promedio anual'}{unitSuffix(unidad)}</h3>
+              <h3 className="mb-6 font-bold text-card-foreground">{isPrecip ? 'Total anual (mm/año)' : `Promedio anual${unitSuffix(unidad)}`}</h3>
               {isLoading ? (
                 <SkeletonLoader rows={4} />
               ) : yearlyData.length === 0 ? (

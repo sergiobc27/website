@@ -32,7 +32,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ datasetId: 's54a-sgyg', departments: [], interval: 'month', metric: 'avg' }),
+        body: JSON.stringify({ datasetId: 's54a-sgyg', departments: [], interval: 'month', metric: 'sum' }),
       },
       'sin serie nacional',
     )

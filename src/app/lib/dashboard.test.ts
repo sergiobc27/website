@@ -60,6 +60,20 @@ describe('mesVsHistorico', () => {
     expect(mesVsHistorico(P('2026-02-01', 12), clima)).toBeNull();
     expect(mesVsHistorico(null, clima)).toBeNull();
   });
+  // Precip migrado a lámina mensual (mm/mes): el punto actual es mm/mes y la
+  // referencia debe ser monthlyDepth (mismas unidades), NO el avg por lectura.
+  it('prefiere monthlyDepth de la climatología cuando existe (mismas unidades mm/mes)', () => {
+    const climaPrecip = [{ month: 1, mean: 0.05, monthlyDepth: 200 }] as never;
+    const r = mesVsHistorico(P('2026-01-01', 250), climaPrecip);
+    // 250 vs 200 -> +25% (usando monthlyDepth, no mean 0.05)
+    expect(r).toMatchObject({ pct: 25, direccion: 'arriba' });
+  });
+  it('cae a mean cuando monthlyDepth es null/ausente (variables no-precip)', () => {
+    const climaTemp = [{ month: 3, mean: 20, monthlyDepth: null }] as never;
+    const r = mesVsHistorico(P('2026-03-01', 18), climaTemp);
+    // 18 vs 20 -> -10%
+    expect(r).toMatchObject({ pct: 10, direccion: 'abajo' });
+  });
 });
 
 describe('frescuraRelativa', () => {

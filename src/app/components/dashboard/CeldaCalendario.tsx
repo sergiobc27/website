@@ -24,8 +24,8 @@ export function CeldaCalendario({ serie, cargando, error, onClick, indice, class
 
   return (
     <Celda
-      titulo="Calendario climático · intensidad de lluvia nacional por mes"
-      ariaLabel="Ver analítica: calendario climático de la lluvia nacional por años y meses; los meses históricamente más lluviosos son abril, mayo, octubre y noviembre"
+      titulo="Calendario climático · lámina de lluvia nacional por mes"
+      ariaLabel="Ver analítica: calendario climático de la lámina mensual de lluvia nacional (mm/mes) por años y meses; los meses históricamente más lluviosos son abril, mayo, octubre y noviembre"
       onClick={onClick}
       cargando={cargando}
       error={error || !anios.length}
@@ -61,7 +61,7 @@ function Fila({ fila, max }: { fila: { anio: number; meses: Array<number | null>
       {fila.meses.map((valor, mes) => (
         <span
           key={mes}
-          title={valor !== null ? `${MES_LARGO[mes]} ${fila.anio} — ${fmt(valor * 6, 2)} mm/h prom.` : `${MES_LARGO[mes]} ${fila.anio} — sin datos`}
+          title={valor !== null ? `${MES_LARGO[mes]} ${fila.anio} — ${fmt(valor, 1)} mm/mes` : `${MES_LARGO[mes]} ${fila.anio} — sin datos`}
           className="block min-h-[10px] w-full rounded-[2px] border border-border/30"
           style={{ backgroundColor: colorCalendario(valor, max) }}
         />

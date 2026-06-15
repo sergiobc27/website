@@ -6,6 +6,8 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 import { SkeletonLoader } from './SkeletonLoader';
 import { apiJson, apiUrl } from '../lib/ideamApi';
 import { datasetUnit, unitSuffix } from '../lib/units';
+import { formatValue } from '../lib/format';
+import { PRECIP_DATASET } from '../lib/constants';
 import type {
   AnalyticsByStationResponse,
   AnalyticsStationRow,
@@ -13,8 +15,6 @@ import type {
   IdfResponse,
   MetaResponse,
 } from '../../shared/ideamContracts';
-
-const PRECIP_DATASET = 's54a-sgyg';
 
 export const COMPARADOR_STORAGE_KEY = 'ideam-comparador';
 const MAX_STATIONS = 5;
@@ -34,14 +34,6 @@ function readStoredCodes(): string[] {
   } catch {
     return [];
   }
-}
-
-function formatValue(value: number | null | undefined) {
-  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
-  const abs = Math.abs(value);
-  if (abs >= 100) return value.toLocaleString('es-CO', { maximumFractionDigits: 1 });
-  if (abs >= 1) return value.toLocaleString('es-CO', { maximumFractionDigits: 2 });
-  return value.toLocaleString('es-CO', { maximumFractionDigits: 4 });
 }
 
 export function ComparadorEstaciones() {

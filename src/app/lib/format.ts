@@ -11,3 +11,15 @@ export function fmt(value: number | null | undefined, decimals = 1): string {
 export function fmtInt(value: number | null | undefined): string {
   return fmt(value, 0);
 }
+
+// Formato adaptativo por magnitud para ejes/tooltips de gráficas (es-CO):
+// millones → notación compacta (764,7 M); ≥100 → 1 decimal; ≥1 → 2; <1 → 4.
+// Compartido por Analytics, FichaClimatica y ComparadorEstaciones.
+export function formatValue(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) return value.toLocaleString('es-CO', { notation: 'compact', maximumFractionDigits: 1 });
+  if (abs >= 100) return value.toLocaleString('es-CO', { maximumFractionDigits: 1 });
+  if (abs >= 1) return value.toLocaleString('es-CO', { maximumFractionDigits: 2 });
+  return value.toLocaleString('es-CO', { maximumFractionDigits: 4 });
+}

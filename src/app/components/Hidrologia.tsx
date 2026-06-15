@@ -29,6 +29,7 @@ import { SkeletonLoader } from './SkeletonLoader';
 import { CalculadoraCaudal } from './CalculadoraCaudal';
 import { Formula, Frac, Sub, Sup, V } from './Formula';
 import { fmt } from '../lib/format';
+import { MONTH_NAMES, PRECIP_DATASET } from '../lib/constants';
 import { apiJson, apiUrl } from '../lib/ideamApi';
 import type {
   AnalyticsTimeseriesResponse,
@@ -49,9 +50,6 @@ const IDF_COLORS = ['#60a5fa', '#34d399', '#C9A227', '#f59e0b', '#A3161A', '#7f1
 const ALT_WARN_M = 300;
 const fmtAltDiff = (d: number | null) =>
   d == null ? null : d === 0 ? '±0 m' : `${d > 0 ? '+' : '−'}${Math.abs(d)} m`;
-
-const PRECIP_DATASET = 's54a-sgyg';
-const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
 interface StationLite {
   codigo: string;
