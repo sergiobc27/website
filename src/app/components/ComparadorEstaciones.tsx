@@ -150,7 +150,8 @@ export function ComparadorEstaciones() {
                   departments: [],
                   catalogFilters: { stations: [code] },
                   interval: 'year',
-                  metric: 'avg',
+                  // Precip: total anual (lámina, sum) en vez del avg-por-lectura.
+                  metric: datasetId === PRECIP_DATASET ? 'sum' : 'avg',
                 }),
                 signal: controller.signal,
               },
@@ -364,7 +365,7 @@ export function ComparadorEstaciones() {
         <>
           <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
             <div className="mb-6 flex items-center justify-between gap-4">
-              <h3 className="font-bold text-card-foreground">Promedio anual de {datasetName}{unitSuffix(datasetUnit(datasetId))} · series superpuestas</h3>
+              <h3 className="font-bold text-card-foreground">{datasetId === PRECIP_DATASET ? 'Total anual' : 'Promedio anual'} de {datasetName}{unitSuffix(datasetUnit(datasetId))} · series superpuestas</h3>
               {!isLoading && chartData.length > 0 && (
                 <ChartDownloadButton
                   targetRef={chartRef}
@@ -492,7 +493,7 @@ export function ComparadorEstaciones() {
                       <th className="py-2 pr-3 font-semibold">Estación</th>
                       <th className="py-2 pr-3 font-semibold">Ubicación</th>
                       <th className="py-2 pr-3 text-right font-semibold">Observaciones</th>
-                      <th className="py-2 pr-3 text-right font-semibold">Media</th>
+                      <th className="py-2 pr-3 text-right font-semibold">{datasetId === PRECIP_DATASET ? 'Lámina (mm/mes)' : 'Media'}</th>
                       <th className="py-2 text-right font-semibold">Período</th>
                     </tr>
                   </thead>
@@ -504,7 +505,7 @@ export function ComparadorEstaciones() {
                           <td className="py-2.5 pr-3 font-semibold" style={{ color: SERIES_COLORS[index] }}>{stationLabel(code)}</td>
                           <td className="py-2.5 pr-3 text-muted-foreground">{row ? `${row.municipality || 'N/D'}, ${row.department || 'N/D'}` : '—'}</td>
                           <td className="py-2.5 pr-3 text-right font-mono text-card-foreground">{row ? row.rowCount.toLocaleString('es-CO') : 'sin datos'}</td>
-                          <td className="py-2.5 pr-3 text-right font-mono text-card-foreground">{formatValue(row?.mean)}</td>
+                          <td className="py-2.5 pr-3 text-right font-mono text-card-foreground">{formatValue(datasetId === PRECIP_DATASET ? row?.monthlyDepth : row?.mean)}</td>
                           <td className="py-2.5 text-right text-muted-foreground">
                             {row?.firstObservation && row?.lastObservation
                               ? `${row.firstObservation.slice(0, 4)} – ${row.lastObservation.slice(0, 7)}`

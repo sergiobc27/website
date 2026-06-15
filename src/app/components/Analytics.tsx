@@ -35,6 +35,8 @@ import type {
   MetaResponse,
 } from '../../shared/ideamContracts';
 
+const PRECIP_DATASET = 's54a-sgyg';
+
 const METRIC_LABELS: Record<AnalyticsMetric, string> = {
   avg: 'Promedio',
   sum: 'Suma',
@@ -155,6 +157,13 @@ export function Analytics() {
     [datasetId, department, dateParams]
   );
 
+  // Precipitación: la métrica con sentido es la LÁMINA acumulada (mm), no el
+  // promedio por lectura de 10 min (~0,05 mm). Forzamos 'sum' en la serie y el
+  // heatmap, y mostramos la lámina mensual (mm/mes) en climatología y por
+  // departamento. El resto de variables conserva la métrica elegida.
+  const isPrecip = datasetId === PRECIP_DATASET;
+  const effectiveMetric: AnalyticsMetric = isPrecip ? 'sum' : metric;
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -186,7 +195,7 @@ export function Analytics() {
           {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ ...scopePayload, interval, metric }),
+            body: JSON.stringify({ ...scopePayload, interval, metric: effectiveMetric }),
             signal: controller.signal,
           },
           'No fue posible cargar la serie temporal.'
@@ -202,7 +211,7 @@ export function Analytics() {
     };
     void load();
     return () => controller.abort();
-  }, [scopePayload, interval, metric]);
+  }, [scopePayload, interval, effectiveMetric]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -262,7 +271,9 @@ export function Analytics() {
               body: JSON.stringify({
                 ...scopePayload,
                 interval: 'month',
-                metric: 'avg',
+                // Precip: lámina mensual (sum) para que la anomalía compare
+                // mm/mes vs mm/mes; el resto mantiene avg.
+                metric: isPrecip ? 'sum' : 'avg',
                 startDate: since.toISOString().slice(0, 10),
               }),
               signal: controller.signal,
@@ -294,9 +305,9 @@ export function Analytics() {
   }, [scopePayload]);
 
   const selectedDataset = overview.find((item) => item.id === datasetId);
-  const metricLabel = METRIC_LABELS[metric];
+  const metricLabel = isPrecip ? 'Lámina' : METRIC_LABELS[metric];
   const scopeLabel = department || 'Todo el país';
-  const seriesUnit = metricUnit(datasetId, metric); // unidad de la métrica (mm, °C, obs...)
+  const seriesUnit = metricUnit(datasetId, effectiveMetric); // unidad de la métrica (mm, °C, obs...)
   const varUnit = metricUnit(datasetId, 'avg'); // unidad física de la variable
 
   const seriesData = useMemo(
@@ -315,11 +326,12 @@ export function Analytics() {
     () =>
       (climatology?.months || []).map((item) => ({
         label: MONTH_NAMES[item.month - 1],
-        media: item.mean,
-        mínimo: item.min,
-        máximo: item.max,
+        // Precip: lámina mensual media (mm/mes) y su mín/máx histórico; resto: avg/min/max.
+        media: isPrecip ? item.monthlyDepth ?? null : item.mean,
+        mínimo: isPrecip ? item.monthlyDepthMin ?? null : item.min,
+        máximo: isPrecip ? item.monthlyDepthMax ?? null : item.max,
       })),
-    [climatology]
+    [climatology, isPrecip]
   );
 
   const regionData = useMemo(
@@ -329,10 +341,11 @@ export function Analytics() {
         .map((item) => ({
           label: item.department,
           observaciones: item.rowCount,
-          media: item.mean,
+          // Precip: lámina mensual media (mm/mes); resto: avg por lectura.
+          media: isPrecip ? item.monthlyDepth ?? null : item.mean,
           estaciones: item.stationCount,
         })),
-    [regions]
+    [regions, isPrecip]
   );
 
   // Anomalía = desviación % del mes observado frente a su media climatológica
@@ -340,7 +353,9 @@ export function Analytics() {
   // ya están cargadas.
   const anomalyData = useMemo(() => {
     if (!monthlySeries || !climatology) return [];
-    const climByMonth = new Map(climatology.months.map((m) => [m.month, m.mean]));
+    const climByMonth = new Map(
+      climatology.months.map((m) => [m.month, isPrecip ? m.monthlyDepth ?? null : m.mean])
+    );
     return monthlySeries.points
       .filter((point) => point.value !== null)
       .slice(-24)
@@ -351,7 +366,7 @@ export function Analytics() {
         const pct = (((point.value as number) - clim) / clim) * 100;
         return [{ label: formatBucketLabel(point.bucket, 'month'), anomalia: Math.round(pct * 10) / 10 }];
       });
-  }, [monthlySeries, climatology]);
+  }, [monthlySeries, climatology, isPrecip]);
 
   const stationRows = (topStations?.stations || []).slice(0, 10);
 
@@ -396,12 +411,18 @@ export function Analytics() {
           />
           <ControlSelect
             label="Métrica"
-            value={metric}
+            value={isPrecip ? 'sum' : metric}
             onChange={(value) => setMetric(value as AnalyticsMetric)}
-            options={(Object.keys(METRIC_LABELS) as AnalyticsMetric[]).map((key) => ({
-              value: key,
-              label: METRIC_LABELS[key],
-            }))}
+            options={
+              // Para precipitación la única métrica con sentido es la lámina
+              // acumulada (mm); ocultamos el promedio-por-lectura.
+              isPrecip
+                ? [{ value: 'sum', label: 'Lámina (mm)' }]
+                : (Object.keys(METRIC_LABELS) as AnalyticsMetric[]).map((key) => ({
+                    value: key,
+                    label: METRIC_LABELS[key],
+                  }))
+            }
           />
         </div>
 
@@ -491,14 +512,16 @@ export function Analytics() {
         )}
       </div>
 
-      <HeatmapClimatico datasetId={datasetId} department={department} metric={metric} anioMin={datasetBounds.start} anioMax={datasetBounds.end} />
+      <HeatmapClimatico datasetId={datasetId} department={department} metric={effectiveMetric} anioMin={datasetBounds.start} anioMax={datasetBounds.end} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="rounded-xl border border-border bg-card p-6">
           <div className="mb-6 flex items-center justify-between gap-4">
             <div>
               <h3 className="font-bold text-card-foreground">Climatología mensual{unitSuffix(varUnit)}</h3>
-              <p className="text-sm text-muted-foreground">Promedio histórico y extremos por mes · {scopeLabel}</p>
+              <p className="text-sm text-muted-foreground">
+                {isPrecip ? 'Lámina mensual media y extremos por mes' : 'Promedio histórico y extremos por mes'} · {scopeLabel}
+              </p>
             </div>
           </div>
           {isLoadingPanels ? (
@@ -541,7 +564,7 @@ export function Analytics() {
                   <Tooltip
                     contentStyle={tooltipStyle}
                     formatter={(value: number, name: string, item: { payload?: { label?: string; media?: number | null; estaciones?: number } }) => [
-                      `${formatCount(value)} obs. · media ${formatValue(item.payload?.media)}${varUnit ? ' ' + varUnit : ''} · ${formatCount(item.payload?.estaciones ?? 0)} estaciones`,
+                      `${formatCount(value)} obs. · ${isPrecip ? 'lámina' : 'media'} ${formatValue(item.payload?.media)}${isPrecip ? ' mm/mes' : varUnit ? ' ' + varUnit : ''} · ${formatCount(item.payload?.estaciones ?? 0)} estaciones`,
                       item.payload?.label ?? '',
                     ]}
                   />

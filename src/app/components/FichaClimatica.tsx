@@ -14,6 +14,7 @@ import type {
 } from '../../shared/ideamContracts';
 
 const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+const PRECIP_DATASET = 's54a-sgyg';
 
 function formatValue(value: number | null | undefined) {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
@@ -115,7 +116,12 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
       try {
         const [clim, serie, byStation] = await Promise.all([
           apiJson<AnalyticsClimatologyResponse>('/api/analytics/monthly-climatology', post(scope), 'Sin climatología.'),
-          apiJson<AnalyticsTimeseriesResponse>('/api/analytics/timeseries', post({ ...scope, interval: 'year', metric: 'avg' }), 'Sin serie.'),
+          // Precip: total anual (lámina, sum); el resto, promedio anual (avg).
+          apiJson<AnalyticsTimeseriesResponse>(
+            '/api/analytics/timeseries',
+            post({ ...scope, interval: 'year', metric: datasetId === PRECIP_DATASET ? 'sum' : 'avg' }),
+            'Sin serie.'
+          ),
           apiJson<AnalyticsByStationResponse>('/api/analytics/by-station', post(scope), 'Sin estaciones.'),
         ]);
         if (controller.signal.aborted) return;
@@ -144,9 +150,18 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
     };
   }, [stations]);
 
+  // Precip: la climatología y la serie anual se muestran como LÁMINA acumulada
+  // (mm/mes y mm/año), no como promedio por lectura de 10 min.
+  const isPrecip = datasetId === PRECIP_DATASET;
   const climatologyData = useMemo(
-    () => (climatology?.months || []).map((m) => ({ label: MONTH_NAMES[m.month - 1], media: m.mean, máximo: m.max, mínimo: m.min })),
-    [climatology]
+    () =>
+      (climatology?.months || []).map((m) => ({
+        label: MONTH_NAMES[m.month - 1],
+        media: isPrecip ? m.monthlyDepth ?? null : m.mean,
+        máximo: isPrecip ? m.monthlyDepthMax ?? null : m.max,
+        mínimo: isPrecip ? m.monthlyDepthMin ?? null : m.min,
+      })),
+    [climatology, isPrecip]
   );
   const yearlyData = useMemo(
     () =>
@@ -291,7 +306,7 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
             </div>
 
             <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
-              <h3 className="mb-6 font-bold text-card-foreground">Promedio anual{unitSuffix(unidad)}</h3>
+              <h3 className="mb-6 font-bold text-card-foreground">{isPrecip ? 'Total anual' : 'Promedio anual'}{unitSuffix(unidad)}</h3>
               {isLoading ? (
                 <SkeletonLoader rows={4} />
               ) : yearlyData.length === 0 ? (
@@ -309,7 +324,7 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
                       <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
                       <XAxis dataKey="year" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} minTickGap={24} />
                       <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} tickFormatter={(v: number) => formatValue(v)} width={64} />
-                      <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [formatValue(value), 'Promedio']} />
+                      <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [formatValue(value), isPrecip ? 'Total anual' : 'Promedio']} />
                       <Area type="monotone" dataKey="valor" stroke="var(--accent)" strokeWidth={2} fill="url(#fichaGradient)" isAnimationActive animationDuration={550} />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -331,7 +346,7 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
                     <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
                       <th className="py-2 pr-3 font-semibold">Código</th>
                       <th className="py-2 pr-3 text-right font-semibold">Observaciones</th>
-                      <th className="py-2 pr-3 text-right font-semibold">Media</th>
+                      <th className="py-2 pr-3 text-right font-semibold">{isPrecip ? 'Lámina (mm/mes)' : 'Media'}</th>
                       <th className="py-2 text-right font-semibold">Período</th>
                     </tr>
                   </thead>
@@ -340,7 +355,7 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
                       <tr key={s.code} className="border-b border-border/60">
                         <td className="py-2.5 pr-3 font-mono text-card-foreground">{s.code}</td>
                         <td className="py-2.5 pr-3 text-right font-mono text-card-foreground">{s.rowCount.toLocaleString('es-CO')}</td>
-                        <td className="py-2.5 pr-3 text-right font-mono text-card-foreground">{formatValue(s.mean)}</td>
+                        <td className="py-2.5 pr-3 text-right font-mono text-card-foreground">{formatValue(isPrecip ? s.monthlyDepth : s.mean)}</td>
                         <td className="py-2.5 text-right text-muted-foreground">
                           {s.firstObservation && s.lastObservation ? `${s.firstObservation.slice(0, 4)} – ${s.lastObservation.slice(0, 7)}` : '—'}
                         </td>

@@ -52,6 +52,9 @@ export interface AnalyticsRegionRow {
   rowCount: number;
   mean: number | null;
   stationCount: number;
+  // Solo precipitación: lámina mensual media (mm/mes) = media del acumulado
+  // mensual por estación. null para el resto de variables (usar `mean`).
+  monthlyDepth?: number | null;
 }
 
 export interface AnalyticsByRegionResponse {
@@ -65,6 +68,11 @@ export interface AnalyticsClimatologyMonth {
   min: number | null;
   max: number | null;
   n: number;
+  // Solo precipitación: lámina mensual media del mes calendario (mm/mes) y su
+  // mínimo/máximo histórico (mes más seco / más lluvioso). null en el resto.
+  monthlyDepth?: number | null;
+  monthlyDepthMin?: number | null;
+  monthlyDepthMax?: number | null;
 }
 
 export interface AnalyticsClimatologyResponse {
@@ -80,6 +88,9 @@ export interface AnalyticsStationRow {
   mean: number | null;
   firstObservation: string | null;
   lastObservation: string | null;
+  // Solo precipitación: lámina mensual media de la estación (mm/mes). null en
+  // el resto de variables (usar `mean`).
+  monthlyDepth?: number | null;
 }
 
 export interface AnalyticsByStationResponse {
