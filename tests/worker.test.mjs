@@ -7,6 +7,7 @@ import worker, {
   ensureReferencia,
   ensureDatoCurioso,
   cifrasConUnidadFueraDe,
+  buildUpstreamHeaders,
 } from '../src/worker/index.js';
 import { VISTA_LABELS } from '../src/worker/chatData.js';
 
@@ -709,4 +710,84 @@ test('chat: el cupo global diario se descuenta con peso 3 (llamadas IA), no 1', 
   });
   await worker.fetch(req, env);
   assert.equal(Number(kv.store.get('rlc:global:day')), 3);
+});
+
+// --- Fixes de seguridad 2026-06-15 -------------------------------------------
+
+// #2 — allowlist de headers reenviados al box (no clonar TODO el header bag del
+// cliente). buildUpstreamHeaders es la función pura extraída para este fin.
+test('buildUpstreamHeaders: descarta el x-ideam-proxy-secret enviado por el cliente', () => {
+  const reqHeaders = new Headers({ 'x-ideam-proxy-secret': 'falsificado-por-el-cliente' });
+  const out = buildUpstreamHeaders(reqHeaders, { IDEAM_PROXY_SECRET: 'real' }, 'ideam-api.sergiobc.com');
+  // El secreto inyectado es el del env, jamás el que mandó el cliente.
+  assert.equal(out.get('x-ideam-proxy-secret'), 'real');
+});
+
+test('buildUpstreamHeaders: NO reenvía un header arbitrario del cliente (x-evil)', () => {
+  const reqHeaders = new Headers({ 'x-evil': 'data-robada', 'cookie': 'sesion=secreta', 'authorization': 'Bearer x' });
+  const out = buildUpstreamHeaders(reqHeaders, {}, 'ideam-api.sergiobc.com');
+  assert.equal(out.get('x-evil'), null);
+  assert.equal(out.get('cookie'), null);
+  assert.equal(out.get('authorization'), null);
+});
+
+test('buildUpstreamHeaders: SÍ reenvía content-type, accept, content-length y user-agent', () => {
+  const reqHeaders = new Headers({
+    'content-type': 'application/json',
+    'accept': 'application/json',
+    'content-length': '42',
+    'user-agent': 'Mozilla/5.0',
+  });
+  const out = buildUpstreamHeaders(reqHeaders, {}, 'ideam-api.sergiobc.com');
+  assert.equal(out.get('content-type'), 'application/json');
+  assert.equal(out.get('accept'), 'application/json');
+  assert.equal(out.get('content-length'), '42');
+  assert.equal(out.get('user-agent'), 'Mozilla/5.0');
+});
+
+test('buildUpstreamHeaders: inyecta el secreto del proxy desde env y fija el host', () => {
+  const reqHeaders = new Headers();
+  const out = buildUpstreamHeaders(reqHeaders, { IDEAM_PROXY_SECRET: 'super-secreto' }, 'ideam-api.sergiobc.com');
+  assert.equal(out.get('x-ideam-proxy-secret'), 'super-secreto');
+  assert.equal(out.get('host'), 'ideam-api.sergiobc.com');
+});
+
+test('buildUpstreamHeaders: sin secreto en env no inyecta el header (pero igual fija host)', () => {
+  const out = buildUpstreamHeaders(new Headers(), {}, 'ideam-api.sergiobc.com');
+  assert.equal(out.get('x-ideam-proxy-secret'), null);
+  assert.equal(out.get('host'), 'ideam-api.sergiobc.com');
+});
+
+test('buildUpstreamHeaders: propaga la cf-connecting-ip de confianza del borde', () => {
+  const reqHeaders = new Headers({ 'cf-connecting-ip': '203.0.113.7' });
+  const out = buildUpstreamHeaders(reqHeaders, {}, 'ideam-api.sergiobc.com');
+  assert.equal(out.get('cf-connecting-ip'), '203.0.113.7');
+});
+
+// #1 — sin RESEND_API_KEY, email-idf corta TEMPRANO (503) sin tocar Turnstile,
+// PDF ni rate-limit. Antes disparaba a Resend con "Bearer undefined".
+test('email-idf devuelve 503 si falta RESEND_API_KEY, sin llamar a nada externo', async () => {
+  const stub = stubFetch();
+  try {
+    const env = emailEnv({ RESEND_API_KEY: undefined });
+    const res = await worker.fetch(emailRequest(VALID_BODY), env);
+    assert.equal(res.status, 503);
+    // No verifica Turnstile, no genera PDF, no quema cupo: 0 llamadas externas.
+    assert.equal(stub.calls.length, 0);
+  } finally {
+    stub.restore();
+  }
+});
+
+// #3 — verifyTurnstile falla CERRADO si el fetch a siteverify lanza (red caída),
+// no solo si el JSON es inválido.
+test('email-idf: si la red de Turnstile falla (fetch lanza), responde 403 (fail-closed)', async () => {
+  const original = global.fetch;
+  global.fetch = async () => { throw new Error('network down'); };
+  try {
+    const res = await worker.fetch(emailRequest(VALID_BODY), emailEnv());
+    assert.equal(res.status, 403);
+  } finally {
+    global.fetch = original;
+  }
 });

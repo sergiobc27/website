@@ -77,7 +77,43 @@ function isPublicApiPath(pathname) {
   return PUBLIC_API_ROUTES.has(pathname) || pathname.startsWith("/api/jobs/");
 }
 
-export { looksLikeManipulation, ensureDisclaimer, ensureReferencia, ensureDatoCurioso, cifrasConUnidadFueraDe };
+// Allowlist de headers reenviados al box (hallazgo de auditoría): clonar TODO el
+// header bag del cliente filtraba a la API privada cookies, Authorization y
+// cabeceras arbitrarias. Solo dejamos pasar lo que la API necesita; el resto se
+// descarta. `cf-connecting-ip` es de CONFIANZA del borde (Cloudflare la fija),
+// se propaga aparte para el rate-limit de la API.
+const FORWARDED_HEADERS = new Set([
+  "content-type",
+  "accept",
+  "content-length",
+  "user-agent",
+]);
+
+// Construye los headers salientes hacia el box a partir de una allowlist (NO
+// clona el header bag del cliente). Inyecta el secreto del proxy desde el env y
+// fija el host del upstream. Pura y exportada para poder testearla aislada.
+function buildUpstreamHeaders(requestHeaders, env, upstreamHost) {
+  const headers = new Headers();
+  for (const name of FORWARDED_HEADERS) {
+    const v = requestHeaders.get(name);
+    if (v != null) headers.set(name, v);
+  }
+  // La IP real del cliente la fija el borde (Cloudflare); es de confianza y la
+  // API la usa para su rate-limiting.
+  const clientIp = requestHeaders.get("cf-connecting-ip");
+  if (clientIp) headers.set("cf-connecting-ip", clientIp);
+
+  headers.set("host", upstreamHost);
+  // Nunca dejar pasar un secreto falsificado por el cliente: al construir desde
+  // cero la allowlist ya lo excluye, pero el secreto del Worker se inyecta
+  // SIEMPRE desde el env (jamás el que pudiera mandar el cliente).
+  if (env.IDEAM_PROXY_SECRET) {
+    headers.set("x-ideam-proxy-secret", env.IDEAM_PROXY_SECRET);
+  }
+  return headers;
+}
+
+export { looksLikeManipulation, ensureDisclaimer, ensureReferencia, ensureDatoCurioso, cifrasConUnidadFueraDe, buildUpstreamHeaders };
 
 export default {
   async fetch(request, env) {
@@ -103,17 +139,10 @@ export default {
         });
       }
       const upstream = new URL(url.pathname + url.search, env.API_ORIGIN);
-      const headers = new Headers(request.headers);
-      headers.set("host", upstream.host);
-      // Nunca dejar pasar un secreto falsificado por el cliente: se elimina
-      // SIEMPRE, incluso si el Worker no tiene el secreto configurado.
-      headers.delete("x-ideam-proxy-secret");
-      if (env.IDEAM_PROXY_SECRET) {
-        headers.set("x-ideam-proxy-secret", env.IDEAM_PROXY_SECRET);
-      }
-      // La IP real del cliente, para el rate limiting de la API.
-      const clientIp = request.headers.get("cf-connecting-ip");
-      if (clientIp) headers.set("cf-connecting-ip", clientIp);
+      // Allowlist de headers (no se clona el header bag del cliente): inyecta el
+      // secreto del proxy desde el env, fija el host del upstream y propaga la
+      // cf-connecting-ip de confianza del borde.
+      const headers = buildUpstreamHeaders(request.headers, env, upstream.host);
 
       const cacheable = request.method === "GET" && CACHEABLE_GET_PATHS.has(url.pathname);
       return fetch(new Request(upstream, {
@@ -627,6 +656,10 @@ async function handleChat(request, env) {
 
 // --- Envío de curvas IDF por correo (Resend) ---------------------------------
 
+// Validación deliberadamente PERMISIVA (cualquier "algo@algo.algo"): solo evita
+// basura obvia, no pretende validar RFC 5322 (intentarlo rechaza correos válidos
+// y nunca atrapa todos los inválidos). La defensa real contra abuso es Turnstile
+// + el rate-limit; la entregabilidad la resuelve el manejo de rebotes de Resend.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const RL_MAX_PER_HOUR = 15;                  // tope relajado por IP (correo)
 const RL_GLOBAL_PER_DAY = 100;               // backstop global (límite gratis de Resend)
@@ -647,12 +680,20 @@ async function verifyTurnstile(token, ip, secret) {
   body.set("secret", secret);
   body.set("response", token || "");
   if (ip) body.set("remoteip", ip);
-  const r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-    method: "POST",
-    body,
-  });
-  const data = await r.json().catch(() => ({ success: false }));
-  return data.success === true;
+  // Fail-CLOSED: si la red a siteverify cae (el fetch lanza) o el JSON es
+  // inválido, tratamos al cliente como NO verificado. Antes el .catch solo
+  // cubría el parseo del JSON, no la excepción del propio fetch (hallazgo de
+  // auditoría): una red caída habría tumbado la request con un 500.
+  try {
+    const r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      body,
+    });
+    const data = await r.json().catch(() => ({ success: false }));
+    return data.success === true;
+  } catch {
+    return false;
+  }
 }
 
 // KV admite ~1 escritura/segundo por clave: bajo ráfaga el put rechaza la
@@ -671,6 +712,22 @@ async function kvPutSafe(env, key, value, expirationTtl) {
 // contadores por feature (correo vs chat). Si no hay binding KV, no limita.
 // `commitGlobal: false` solo CHEQUEA el tope global sin consumirlo (el correo
 // lo consume después de validar la estación, vía bumpGlobalDay).
+//
+// LIMITACIÓN CONOCIDA (carrera read-modify-write, hallazgo de auditoría): el
+// patrón get-luego-put NO es atómico. Bajo una RÁFAGA concurrente desde la misma
+// IP, varias requests leen el mismo `current` antes de que ninguna escriba, así
+// que el contador por IP puede sub-contar (un atacante decidido obtiene un
+// bypass SUAVE del límite por-IP). NO se corrige aquí a propósito: la solución
+// correcta —un Durable Object contador o el binding nativo de Rate Limiting—
+// exige una migración de wrangler.jsonc (riesgo de despliegue) y un rearmado que
+// queda DIFERIDO. Mitigaciones vigentes que ACOTAN el radio de impacto:
+//   1) el tope GLOBAL diario (`perDay`) limita el daño agregado aunque una IP
+//      escape su cupo horario: es el verdadero techo duro y está alineado a las
+//      cuotas free reales (Resend 100/día; Workers AI vía peso 3/mensaje);
+//   2) en el correo (el flujo caro) Turnstile va ANTES del rate-limit, así que
+//      una ráfaga sin token humano ni siquiera llega a esta función;
+//   3) KV es de "consistencia eventual" pero converge en segundos, de modo que
+//      la ventana de sub-conteo es breve, no permanente.
 async function kvRateLimited(env, prefix, perHour, perDay, ip, commitGlobal = true, pesoGlobal = 1) {
   if (!env.EMAIL_RL) return false;
 
@@ -778,6 +835,12 @@ function todayCO() {
 async function handleEmailIdf(request, env) {
   if (request.method !== "POST") {
     return emailJson({ error: "Método no permitido." }, 405);
+  }
+  // Sin el secreto de Resend no hay forma de enviar: cortar TEMPRANO (igual que
+  // el guard de !env.AI del chat), antes de Turnstile, generar el PDF y quemar
+  // cupo de rate-limit. Sin esto, disparábamos a Resend con "Bearer undefined".
+  if (!env.RESEND_API_KEY) {
+    return emailJson({ error: "El envío de correo no está disponible (servicio no configurado)." }, 503);
   }
   let body;
   try {
