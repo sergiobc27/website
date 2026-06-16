@@ -791,31 +791,3 @@ test('email-idf: si la red de Turnstile falla (fetch lanza), responde 403 (fail-
     global.fetch = original;
   }
 });
-
-// --- Cabeceras de seguridad en los assets (defensa en profundidad) ------------
-
-test('los assets se sirven con cabeceras de seguridad (clickjacking, sniffing, referrer, HSTS)', async () => {
-  const assets = createAssetsStub();
-  const env = { API_ORIGIN, ASSETS: assets };
-  const res = await worker.fetch(new Request('https://ideam.test/'), env);
-
-  assert.equal(res.status, 200);
-  assert.equal(await res.text(), 'asset-body');   // sigue sirviendo el asset
-  assert.equal(res.headers.get('x-frame-options'), 'SAMEORIGIN');
-  assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
-  assert.equal(res.headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
-  assert.match(res.headers.get('strict-transport-security') || '', /max-age=\d+/);
-});
-
-test('las cabeceras de seguridad de assets NO reescriben las respuestas de /api (proxy)', async () => {
-  const fetchStub = stubFetch();
-  try {
-    const env = { API_ORIGIN, IDEAM_PROXY_SECRET: 's', ASSETS: createAssetsStub() };
-    const res = await worker.fetch(new Request('https://ideam.test/api/meta'), env);
-    // El proxy devuelve la respuesta del upstream tal cual; los headers de
-    // documento (clickjacking) solo aplican a los assets HTML.
-    assert.equal(res.headers.get('x-frame-options'), null);
-  } finally {
-    fetchStub.restore();
-  }
-});

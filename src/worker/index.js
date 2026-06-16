@@ -153,28 +153,12 @@ export default {
       }), cacheable ? { cf: { cacheEverything: true } } : undefined);
     }
 
-    return env.ASSETS.fetch(request).then(withSecurityHeaders);
+    // Los assets estáticos los sirve Cloudflare directamente (run_worker_first
+    // está acotado a /api/*), así que las cabeceras de seguridad de documento
+    // se definen en el archivo `dist/_headers` (public/_headers), no aquí.
+    return env.ASSETS.fetch(request);
   },
 };
-
-// Cabeceras de seguridad para los assets (defensa en profundidad): evita
-// clickjacking (X-Frame-Options), MIME sniffing (X-Content-Type-Options),
-// fuga de referer (Referrer-Policy) y downgrade a HTTP (HSTS). La CSP se deja
-// para un seguimiento aparte (requiere inventariar orígenes de script/estilo:
-// Cloudflare Insights, KaTeX, Turnstile, maplibre) y conviene arrancarla en
-// modo Report-Only.
-function withSecurityHeaders(response) {
-  const headers = new Headers(response.headers);
-  headers.set("X-Frame-Options", "SAMEORIGIN");
-  headers.set("X-Content-Type-Options", "nosniff");
-  headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
-}
 
 // --- Asistente / tutor hidrológico (Workers AI) -------------------------------
 
