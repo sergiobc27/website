@@ -10,6 +10,7 @@ on:
     paths:
       - "index.html"
       - "src/**"
+      - "public/**"
       - "tests/**"
       - "wrangler.jsonc"
       - "cloudflare/**"
