@@ -1,32 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Calendar, Clock3, Database, Download, MapPin, Trash2 } from 'lucide-react';
 import { fmt } from '../lib/format';
+import { canDownloadAgain, HISTORY_KEY, type HistoryEntry, readHistory } from '../lib/downloadHistory';
 
-const HISTORY_KEY = 'ideam-history';
 const PRODUCTION_API_ORIGIN = 'https://ideam.sergiobc.com';
-
-interface HistoryEntry {
-  timestamp: string;
-  variable: string;
-  format: string;
-  rowCount: number;
-  stationCount: number;
-  municipalityCount: number;
-  zoneCount: number;
-  processingMs: number;
-  sizeBytes: number;
-  fileName: string;
-  downloadPath?: string;
-  availableUntil?: string;
-}
-
-function readHistory(): HistoryEntry[] {
-  try {
-    return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
-  } catch {
-    return [];
-  }
-}
 
 function formatBytes(value: number) {
   if (!Number.isFinite(value) || value <= 0) return '0 B';
@@ -46,12 +23,6 @@ function apiUrl(path: string) {
   if (path.startsWith('http')) return path;
   if (typeof window === 'undefined') return path;
   return window.location.hostname === 'ideam.sergiobc.com' ? path : `${PRODUCTION_API_ORIGIN}${path}`;
-}
-
-function canDownloadAgain(item: HistoryEntry) {
-  if (!item.downloadPath || !item.availableUntil) return false;
-  const expiresAt = new Date(item.availableUntil).valueOf();
-  return Number.isFinite(expiresAt) && expiresAt > Date.now();
 }
 
 export function DownloadHistory() {

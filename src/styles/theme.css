@@ -250,6 +250,21 @@
     animation: glow-pulse 2s ease-in-out infinite;
   }
 
+  /* Pulso verde para el éxito de la exportación (check del ZIP listo). El
+     bloque global de prefers-reduced-motion lo neutraliza. */
+  @keyframes glow-pulse-success {
+    0%, 100% {
+      box-shadow: 0 0 14px rgba(7, 137, 48, 0.35);
+    }
+    50% {
+      box-shadow: 0 0 24px rgba(7, 137, 48, 0.6);
+    }
+  }
+
+  .glow-success {
+    animation: glow-pulse-success 2s ease-in-out infinite;
+  }
+
   @keyframes float {
     0%, 100% {
       transform: translateY(0px);
