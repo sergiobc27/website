@@ -13,6 +13,7 @@ import {
   Gauge,
   Info,
   Layers,
+  Link2,
   LoaderCircle,
   MapPin,
   Rocket,
@@ -24,8 +25,9 @@ import { toast } from 'sonner';
 import { EmptyState } from './EmptyState';
 import { ApiError, apiJson, apiUrl } from '../lib/ideamApi';
 import { fmt } from '../lib/format';
+import { canDownloadAgain, type HistoryEntry, readHistory, saveHistory } from '../lib/downloadHistory';
 import { NAVIGATE_EVENT, pathToView, type NavigateDetail } from '../lib/navigation';
-import { parseSearch } from '../lib/urlState';
+import { buildSearch, parseSearch } from '../lib/urlState';
 import type {
   CatalogBundleRow,
   CatalogFilterDefinition,
@@ -44,7 +46,6 @@ import type {
   StationHelperRow,
 } from '../../shared/ideamContracts';
 
-const HISTORY_KEY = 'ideam-history';
 const CONFIG_KEY = 'ideam-extractor-config';
 const ACTIVE_JOB_KEY = 'ideam-extractor-active-job';
 const MAX_OPERATION_LOGS = 80;
@@ -101,33 +102,6 @@ export interface ExtractorRuntimeState {
   totalRows: number;
 }
 
-interface HistoryEntry extends DownloadMetrics {
-  timestamp: string;
-  variable: string;
-  format: string;
-  departments: string[];
-  catalogFilters: Record<string, string[]>;
-  jobId?: string;
-  downloadPath?: string;
-  availableUntil?: string;
-}
-
-function readHistory(): HistoryEntry[] {
-  try {
-    return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
-  } catch {
-    return [];
-  }
-}
-
-function saveHistory(entry: HistoryEntry) {
-  const history = readHistory();
-  // Dedup por jobId: una recarga (o 2 pestañas) en la ventana de carrera del
-  // finalize creaba entradas duplicadas del mismo export (auditoría #4).
-  const deduped = entry.jobId ? history.filter((item) => item.jobId !== entry.jobId) : history;
-  deduped.unshift(entry);
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(deduped.slice(0, 30)));
-}
 
 function formatDateLabel(value: string | null | undefined) {
   if (!value) return 'Sin dato';
@@ -309,6 +283,12 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   const [operationStartedAt, setOperationStartedAt] = useState<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [animatedRows, setAnimatedRows] = useState(0);
+  // Se incrementa al guardar una descarga para refrescar el centro de descargas
+  // inline (que lee del historial local).
+  const [historyTick, setHistoryTick] = useState(0);
+  // Estimación en vivo (debounced) del volumen antes de descargar.
+  const [liveEstimate, setLiveEstimate] = useState<ExportPlanResponse | null>(null);
+  const [estimating, setEstimating] = useState(false);
   const handledJobIdsRef = useRef<Set<string>>(new Set());
   const pollFailuresRef = useRef(0);
   // Restore de deep-link del Asistente: estación/años que deben aplicarse una
@@ -392,25 +372,30 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     }
   }, []);
 
-  // Precarga los filtros desde un deep-link del Asistente ({var,dep,est,years}).
-  // Si var/dep cambian, los efectos de reset limpiarán estación y recargarán el
-  // rango → estación/años quedan pendientes y se aplican cuando el nuevo rango
-  // llega (efecto de abajo). Si nada se resetea, aplica de una vez. No tocamos
-  // el aviso legal: solo saltamos al paso de descarga si YA estaba aceptado.
+  // Precarga los filtros desde un deep-link ({var,dep,est,years}). El Asistente
+  // envía un solo `dep`; "Compartir configuración" puede enviar varios separados
+  // por coma (retrocompatible: un valor sin coma = arreglo de uno). Si var/dep
+  // cambian, los efectos de reset limpiarán estación y recargarán el rango →
+  // estación/años quedan pendientes y se aplican cuando el nuevo rango llega
+  // (efecto de abajo). No tocamos el aviso legal.
   const aplicarDeepLink = (params: Record<string, string>) => {
     if (!params || !(params.var || params.dep || params.est || params.years)) return;
+    const depList = params.dep
+      ? Array.from(new Set(params.dep.split(',').map((item) => item.trim()).filter(Boolean)))
+      : [];
     const datasetCambia = Boolean(params.var) && params.var !== datasetId;
     const depCambia =
-      Boolean(params.dep) && !(selectedDepartments.length === 1 && selectedDepartments[0] === params.dep);
+      depList.length > 0 &&
+      !(selectedDepartments.length === depList.length && depList.every((item) => selectedDepartments.includes(item)));
     if (params.var) setDatasetId(params.var);
-    if (params.dep) setSelectedDepartments([params.dep]);
+    if (depList.length) setSelectedDepartments(depList);
     if (datasetCambia || depCambia) {
       pendingRestoreRef.current = { est: params.est, years: params.years };
     } else {
       aplicarEstYears(params.est, params.years, dateRange);
     }
     if (acceptedTerms) setStep('execute');
-    appendLog('INFO', 'Filtros precargados desde el Asistente.');
+    appendLog('INFO', 'Filtros precargados desde el enlace compartido.');
   };
   aplicarDeepLinkRef.current = aplicarDeepLink;
 
@@ -467,6 +452,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         availableUntil,
         ...job.metrics,
       });
+      setHistoryTick((tick) => tick + 1);
     }
 
     appendLog(
@@ -895,6 +881,34 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   const selectAllDepartments = (departments: string[]) => setSelectedDepartments(departments);
   const clearDepartments = () => setSelectedDepartments([]);
 
+  // Comparte la configuración actual como deep-link {var,dep,est,years}. dep/est
+  // se serializan separados por coma. Limitación documentada: las fechas custom
+  // se comparten por rango de años (el parser no maneja fechas exactas).
+  const shareConfiguration = async () => {
+    const stationCodes = parseStationCodes(stationCodesText);
+    const years =
+      timeMode === 'custom' && startDate && endDate ? `${startDate.slice(0, 4)}-${endDate.slice(0, 4)}` : undefined;
+    const search = buildSearch({
+      var: datasetId || undefined,
+      dep: selectedDepartments.length ? selectedDepartments.join(',') : undefined,
+      est: stationCodes.length ? stationCodes.join(',') : undefined,
+      years,
+    });
+    const url = `${window.location.origin}/extractor${search ? `?${search}` : ''}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Configuración copiada', {
+        description:
+          timeMode === 'custom'
+            ? 'Enlace listo. Las fechas custom se comparten por rango de años.'
+            : 'Enlace listo para compartir.',
+      });
+      appendLog('SUCCESS', 'Enlace de configuración copiado al portapapeles.');
+    } catch {
+      toast.error('No se pudo copiar el enlace', { description: 'Copia la dirección manualmente.' });
+    }
+  };
+
   const toggleCatalogValue = (filterKey: string, value: string) => {
     setCatalogFilters((current) => {
       const values = current[filterKey] || [];
@@ -1219,6 +1233,40 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     });
   }, [activeTask, elapsedMs, isBusy, onRuntimeChange, progress, runtimeElapsedMs, runtimeRows, runtimeTotalRows]);
 
+  // Estimación en vivo del volumen (debounce 1.5 s). Cuida el box: solo corre con
+  // config válida y sin job activo, cancela en cada cambio y reusa el corte de
+  // 2.5 s de getFastExportPlan (si la planeación tarda, no muestra estimación).
+  useEffect(() => {
+    if (!datasetId || !selectedDepartments.length || !startDate || !endDate || startDate > endDate || isBusy) {
+      setLiveEstimate(null);
+      setEstimating(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setEstimating(true);
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const plan = await getFastExportPlan(executionPayload);
+          if (!cancelled && plan && Number.isFinite(plan.rowCount)) setLiveEstimate(plan);
+          else if (!cancelled) setLiveEstimate(null);
+        } catch {
+          if (!cancelled) setLiveEstimate(null);
+        } finally {
+          if (!cancelled) setEstimating(false);
+        }
+      })();
+    }, 1500);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [executionPayload, datasetId, selectedDepartments, startDate, endDate, isBusy]);
+
+  const estimatedBytes = liveEstimate
+    ? Math.max(0, liveEstimate.rowCount) * 25 * Math.max(selectedFormats.length, 1)
+    : 0;
+
   // Props compartidas por las secciones del acordeón y el CTA de ejecución;
   // `step` se pasa aparte en cada uso.
   const stepPanelProps = {
@@ -1269,9 +1317,21 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         <div className="animate-fade-in-up rounded-2xl border border-border bg-card p-4 shadow-glow">
           <div className="mb-3 flex items-center justify-between gap-3 px-2 pt-1">
             <h2 className="text-lg font-bold text-card-foreground">Configurar descarga</h2>
-            <span className="rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-semibold tabular-nums text-accent">
-              {accordionSections.filter((section) => sectionComplete(section.id)).length}/{accordionSections.length} listas
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-semibold tabular-nums text-accent">
+                {accordionSections.filter((section) => sectionComplete(section.id)).length}/{accordionSections.length} listas
+              </span>
+              <button
+                type="button"
+                onClick={shareConfiguration}
+                disabled={!datasetId}
+                title="Copiar enlace con esta configuración"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-accent/40 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+              >
+                <Link2 className="h-3.5 w-3.5" />
+                Compartir
+              </button>
+            </div>
           </div>
           <div className="space-y-2">
             {accordionSections.map((section) => {
@@ -1326,6 +1386,39 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         {/* Consentimiento (barra no-bloqueante) + ejecución (CTA persistente) */}
         <div className="animate-fade-in-up space-y-5 rounded-2xl border border-border bg-card p-6 shadow-glow">
           <ConsentBar accepted={acceptedTerms} onChange={setAcceptedTerms} />
+          {(estimating || liveEstimate) && (
+            <div className="rounded-xl border border-border bg-background p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Estimación antes de descargar</p>
+              {liveEstimate ? (
+                <>
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <p className="font-mono text-lg font-bold tabular-nums text-card-foreground">
+                        {liveEstimate.rowCount.toLocaleString('es-CO')}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">filas aprox.</p>
+                    </div>
+                    <div>
+                      <p className="font-mono text-lg font-bold tabular-nums text-card-foreground">
+                        {Math.max(liveEstimate.totalPages, 1).toLocaleString('es-CO')}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">página(s)</p>
+                    </div>
+                    <div>
+                      <p className="font-mono text-lg font-bold tabular-nums text-card-foreground">~{formatBytes(estimatedBytes)}</p>
+                      <p className="text-[11px] text-muted-foreground">peso aprox.</p>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-[11px] text-muted-foreground">Estimación rápida; el volumen real puede variar.</p>
+                </>
+              ) : (
+                <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                  <LoaderCircle className="h-4 w-4 animate-spin text-accent" />
+                  Calculando volumen…
+                </p>
+              )}
+            </div>
+          )}
           <StepPanel step="execute" {...stepPanelProps} />
         </div>
       </div>
@@ -1462,6 +1555,13 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
             )}
           </div>
         </div>
+
+        <DownloadCenter
+          tick={historyTick}
+          onRedownload={(entry) => {
+            if (entry.downloadPath) void triggerBrowserDownload(apiUrl(entry.downloadPath), entry.fileName);
+          }}
+        />
       </div>
     </div>
   );
@@ -1944,6 +2044,67 @@ function StepPanel({
         </div>
       )}
     </Section>
+  );
+}
+
+// Centro de descargas inline (Fase 2): historial local compacto con re-descarga
+// dentro de la ventana de 1 h. Se refresca con `tick` al completar una descarga.
+function DownloadCenter({ tick, onRedownload }: { tick: number; onRedownload: (entry: HistoryEntry) => void }) {
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  useEffect(() => {
+    setHistory(readHistory());
+  }, [tick]);
+
+  return (
+    <div className="animate-fade-in-up overflow-hidden rounded-2xl border border-border bg-card shadow-glow">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-4">
+        <h3 className="font-bold text-card-foreground">Centro de descargas</h3>
+        {history.length > 0 && (
+          <span className="text-xs tabular-nums text-muted-foreground">{history.length} en este navegador</span>
+        )}
+      </div>
+      <div className="p-6">
+        {history.length === 0 ? (
+          <EmptyState
+            icon={Download}
+            title="Sin descargas previas"
+            description="Tus descargas recientes aparecerán aquí para volver a guardarlas dentro de su ventana de 1 hora."
+            hint=""
+          />
+        ) : (
+          <ul className="space-y-2">
+            {history.slice(0, 5).map((item, index) => {
+              const available = canDownloadAgain(item);
+              return (
+                <li
+                  key={`${item.jobId || item.fileName}-${index}`}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-card-foreground">{item.variable}</p>
+                    <p className="truncate text-xs tabular-nums text-muted-foreground">
+                      {Number(item.rowCount || 0).toLocaleString('es-CO')} filas · {formatBytes(item.sizeBytes || 0)} · {item.timestamp}
+                    </p>
+                  </div>
+                  {available ? (
+                    <button
+                      type="button"
+                      onClick={() => onRedownload(item)}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs font-semibold text-accent transition-colors hover:bg-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Descargar
+                    </button>
+                  ) : (
+                    <span className="shrink-0 text-xs text-muted-foreground">Expirado</span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
   );
 }
 
