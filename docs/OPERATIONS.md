@@ -45,20 +45,27 @@ npm run e2e:prod
 
 ## Deployment
 
-Push to `main` triggers `.github/workflows/deploy-ideam.yml`.
+Direct pushes to `main` are blocked by a branch ruleset; merging a PR into `main`
+triggers `.github/workflows/deploy-ideam.yml`.
 
-The workflow:
+The workflow has two jobs.
+
+Build:
 
 1. installs dependencies,
-2. checks Worker syntax,
+2. checks Worker syntax (`npm run check`),
 3. typechecks frontend TypeScript,
-4. runs Worker tests,
-5. audits production dependencies,
-6. builds frontend,
-7. applies R2 lifecycle,
-8. deploys the Worker,
-9. warms catalog bundles,
-10. runs a production smoke test.
+4. runs Worker tests (`npm test`),
+5. runs frontend unit tests (`npm run test:unit`),
+6. audits production dependencies (`npm audit --omit=dev`),
+7. builds the frontend,
+8. validates the Worker bundle (`wrangler deploy --dry-run`).
+
+Deploy (only if the Cloudflare secrets are present):
+
+9. syncs the Worker secrets (`IDEAM_PROXY_SECRET`, `RESEND_API_KEY`, `TURNSTILE_SECRET_KEY`),
+10. deploys the Worker to Cloudflare,
+11. runs a production smoke test (non-blocking).
 
 ## Troubleshooting
 

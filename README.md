@@ -1,6 +1,6 @@
 # IDEAM Hydrology Data Web Automator
 
-Repositorio privado del sitio `website`, incluyendo la aplicacion operativa de `ideam.sergiobc.com`.
+Repositorio publico del sitio `website`, incluyendo la aplicacion operativa de `ideam.sergiobc.com`.
 
 ## Superficies
 
@@ -89,4 +89,4 @@ Verificado:
 - exportaciones reales generan ZIP,
 - ZIP incluye CSV, JSON y Parquet,
 - descargas repetidas funcionan durante la ventana de 1 hora,
-- CI ejecuta typecheck, tests, audit, build, deploy, warmup y smoke test productivo.
+- CI ejecuta syntax check, typecheck, tests (Worker + unit), audit de dependencias de produccion, build, validacion dry-run del Worker, deploy y smoke test productivo (no bloqueante).
