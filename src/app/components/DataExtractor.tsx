@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
+  AlertTriangle,
   Calendar,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -10,6 +12,7 @@ import {
   FileArchive,
   FileSearch,
   Filter,
+  Gauge,
   Info,
   Layers,
   LoaderCircle,
@@ -80,6 +83,7 @@ function loadStoredConfig(): StoredExtractorConfig {
 type LogLevel = 'INFO' | 'SUCCESS' | 'ERROR';
 type TimeMode = 'full' | 'custom';
 type CatalogOptionStatus = 'idle' | 'loading' | 'ready' | 'warming' | 'error';
+type ProgressStatusKind = 'idle' | 'running' | 'done' | 'error';
 
 interface TransferProgress {
   totalPages: number;
@@ -157,6 +161,40 @@ function formatRowsPerSecond(value: number) {
 
 function progressLabel(value: number) {
   return `${Math.max(0, Math.min(100, Math.round(value)))}%`;
+}
+
+// Cuenta regresiva mm:ss (o h:mm:ss si pasa de una hora) para la ventana de
+// descarga del ZIP.
+function formatCountdown(ms: number) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const mm = String(minutes).padStart(2, '0');
+  const ss = String(seconds).padStart(2, '0');
+  return hours > 0 ? `${hours}:${mm}:${ss}` : `${minutes}:${ss}`;
+}
+
+// Tick de 1 s hacia una fecha objetivo (ISO). Devuelve los ms restantes (≥0) o
+// null si no hay objetivo válido. Sirve para la ventana real de 1 h del ZIP.
+function useCountdown(targetIso: string | null | undefined) {
+  const [remainingMs, setRemainingMs] = useState<number | null>(null);
+  useEffect(() => {
+    if (!targetIso) {
+      setRemainingMs(null);
+      return undefined;
+    }
+    const target = new Date(targetIso).valueOf();
+    if (Number.isNaN(target)) {
+      setRemainingMs(null);
+      return undefined;
+    }
+    const tick = () => setRemainingMs(Math.max(0, target - Date.now()));
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [targetIso]);
+  return remainingMs;
 }
 
 function parseStationCodes(value: string) {
@@ -266,7 +304,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   const [logs, setLogs] = useState<Array<{ type: LogLevel; message: string }>>([]);
   const [isBusy, setIsBusy] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [activeTask, setActiveTask] = useState('Esperando configuracion');
+  const [activeTask, setActiveTask] = useState('Esperando configuración');
   const [operationStartedAt, setOperationStartedAt] = useState<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [animatedRows, setAnimatedRows] = useState(0);
@@ -290,7 +328,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       { id: 'territory' as StepId, title: 'Territorio', icon: MapPin },
       { id: 'advanced' as StepId, title: 'Filtros avanzados', icon: Filter },
       { id: 'time' as StepId, title: 'Temporalidad', icon: Calendar },
-      { id: 'execute' as StepId, title: 'Ejecucion', icon: Rocket },
+      { id: 'execute' as StepId, title: 'Ejecución', icon: Rocket },
     ],
     []
   );
@@ -318,7 +356,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       .map((item) => ({ label: item.label, values: catalogFilters[item.key] || [] }))
       .filter((item) => item.values.length);
     return {
-      departments: selectedDepartments.join(', ') || 'Sin seleccion',
+      departments: selectedDepartments.join(', ') || 'Sin selección',
       advancedSelections,
       stationCodes: parseStationCodes(stationCodesText),
       formats: selectedFormats,
@@ -384,7 +422,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     try {
       const probe = await fetch(downloadPath, { method: 'HEAD', cache: 'no-store' });
       if (probe.status === 410 || probe.status === 404) {
-        appendLog('ERROR', 'El ZIP expiro en el servidor (la ventana de descarga es de 1 hora). Genera una nueva exportacion.');
+        appendLog('ERROR', 'El ZIP expiró en el servidor (la ventana de descarga es de 1 hora). Genera una nueva exportación.');
         return false;
       }
     } catch {
@@ -434,8 +472,8 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     appendLog(
       job.processedRows > 0 ? 'SUCCESS' : 'INFO',
       job.processedRows > 0
-        ? `Job listo: ZIP unico organizado, ${job.processedRows.toLocaleString('es-CO')} filas y ${formatDuration(job.metrics?.processingMs || 0)}. Usa el boton de descarga para guardarlo.`
-        : 'La consulta no encontro filas con esos filtros. Se genero un ZIP con archivos vacios para dejar evidencia de la ejecucion.'
+        ? `Job listo: ZIP único organizado, ${job.processedRows.toLocaleString('es-CO')} filas y ${formatDuration(job.metrics?.processingMs || 0)}. Usa el boton de descarga para guardarlo.`
+        : 'La consulta no encontró filas con esos filtros. Se generó un ZIP con archivos vacíos para dejar evidencia de la ejecución.'
     );
   }, [appendLog, catalogFilters, datasetId, selectedDataset?.name, selectedDepartments]);
 
@@ -484,7 +522,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     try {
       const savedJobId = window.localStorage.getItem(ACTIVE_JOB_KEY);
       if (savedJobId) {
-        appendLog('INFO', `Reconectando con la exportacion en curso (${savedJobId.slice(0, 8)}...).`);
+        appendLog('INFO', `Reconectando con la exportación en curso (${savedJobId.slice(0, 8)}...).`);
         setIsBusy(true);
         setOperationStartedAt(performance.now());
         setCurrentJobId(savedJobId);
@@ -637,7 +675,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
             datasetId,
             departments: selectedDepartments,
           }),
-        }, 'No fue posible cargar el catalogo de filtros.');
+        }, 'No fue posible cargar el catálogo de filtros.');
 
         if (cancelled) return;
         retryPending = Boolean(data.cachePending);
@@ -711,10 +749,10 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       if (Date.now() - pollStartedAt > 30 * 60_000) {
         setIsBusy(false);
         setCurrentJobId(null);
-        setActiveTask('La exportacion continua en el servidor');
+        setActiveTask('La exportación continúa en el servidor');
         appendLog(
           'INFO',
-          'Se dejo de consultar el job tras 30 minutos. Si termino, el ZIP aparecera disponible al reintentar desde el historial.'
+          'Se dejó de consultar el job tras 30 minutos. Si terminó, el ZIP aparecerá disponible al reintentar desde el historial.'
         );
         return;
       }
@@ -750,7 +788,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         } else if (data.status === 'processing') {
           setIsBusy(true);
           setProgress(data.progressPercent);
-          setActiveTask(`${data.currentStage}: pagina ${data.currentPage}/${Math.max(data.totalPages, 1)}`);
+          setActiveTask(`${data.currentStage}: página ${data.currentPage}/${Math.max(data.totalPages, 1)}`);
           schedule();
         } else if (data.status === 'completed') {
           setProgress(100);
@@ -765,7 +803,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           setActiveTask('Error en descarga');
           setIsBusy(false);
           setCurrentJobId(null);
-          appendLog('ERROR', data.error || 'El job de exportacion fallo.');
+          appendLog('ERROR', data.error || 'El job de exportación falló.');
         } else {
           schedule();
         }
@@ -778,8 +816,8 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         if (error instanceof ApiError && (error.status === 404 || error.status === 410)) {
           setIsBusy(false);
           setCurrentJobId(null);
-          setActiveTask('La exportacion ya no esta disponible');
-          appendLog('ERROR', 'La exportacion expiro o se interrumpio en el servidor. Genera una nueva.');
+          setActiveTask('La exportación ya no esta disponible');
+          appendLog('ERROR', 'La exportación expiró o se interrumpió en el servidor. Genera una nueva.');
           return;
         }
         // Un 502/524 puntual del proxy NO significa que el job murió: seguir
@@ -908,7 +946,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
 
   const loadStationHelper = async () => {
     setStationHelperLoading(true);
-    appendLog('INFO', 'Consultando estaciones del catalogo segun los filtros actuales...');
+    appendLog('INFO', 'Consultando estaciones del catálogo segun los filtros actuales...');
     try {
       const data = await apiJson<{ stations?: StationHelperRow[] }>('/api/stations-helper', {
         method: 'POST',
@@ -982,7 +1020,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       setActiveTask('Estimando volumen de descarga...');
 
       const downloadPayload = executionPayload;
-      appendLog('INFO', `Estimando volumen maximo por ${EXPORT_PLAN_FAST_TIMEOUT_MS / 1000} segundos...`);
+      appendLog('INFO', `Estimando volumen máximo por ${EXPORT_PLAN_FAST_TIMEOUT_MS / 1000} segundos...`);
 
       let exportPlan: ExportPlanResponse | null = null;
       try {
@@ -996,20 +1034,20 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           completedParts: 0,
         });
         setProgress(7);
-        setActiveTask(`Volumen estimado: ${exportPlan.rowCount.toLocaleString('es-CO')} filas en ${Math.max(exportPlan.totalPages, 1)} pagina(s)`);
+        setActiveTask(`Volumen estimado: ${exportPlan.rowCount.toLocaleString('es-CO')} filas en ${Math.max(exportPlan.totalPages, 1)} página(s)`);
         appendLog(
           'SUCCESS',
-          `Plan listo: ${exportPlan.rowCount.toLocaleString('es-CO')} filas, ${Math.max(exportPlan.totalPages, 1)} pagina(s), ${exportPlan.queryPlans} plan(es).`
+          `Plan listo: ${exportPlan.rowCount.toLocaleString('es-CO')} filas, ${Math.max(exportPlan.totalPages, 1)} página(s), ${exportPlan.queryPlans} plan(es).`
         );
       } catch (error) {
         setProgress(6);
         setActiveTask('Plan pesado; iniciando descarga sin bloquear...');
         appendLog(
           'INFO',
-          'La estimacion exacta esta tardando por el volumen de Socrata. Se inicia el job y el progreso se actualizara con paginas reales procesadas.'
+          'La estimación exacta esta tardando por el volumen de Socrata. Se inicia el job y el progreso se actualizará con páginas reales procesadas.'
         );
       }
-      appendLog('INFO', 'Creando job asincrono de exportacion...');
+      appendLog('INFO', 'Creando job asíncrono de exportación...');
 
       const data = await apiJson<ExportJobStatusResponse>('/api/jobs', {
         method: 'POST',
@@ -1019,7 +1057,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           formats: selectedFormats,
           exportPlan: exportPlan || undefined,
         }),
-      }, 'No fue posible crear el job de exportacion.');
+      }, 'No fue posible crear el job de exportación.');
 
       handledJobIdsRef.current.delete(data.jobId);
       setCurrentJobId(data.jobId);
@@ -1034,7 +1072,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       });
       setProgress(5);
       setActiveTask('Job creado, esperando procesamiento...');
-      appendLog('SUCCESS', `Job ${data.jobId.slice(0, 8)} creado. El backend continuara la exportacion por lotes.`);
+      appendLog('SUCCESS', `Job ${data.jobId.slice(0, 8)} creado. El backend continuará la exportación por lotes.`);
     } catch (error) {
       setProgress(100);
       setIsBusy(false);
@@ -1045,9 +1083,9 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         appendLog('ERROR', msg);
         toast.error('Servidor ocupado', { description: msg });
       } else if (error instanceof ApiError && error.status === 413) {
-        setActiveTask('Seleccion demasiado grande');
+        setActiveTask('Selección demasiado grande');
         appendLog('ERROR', error.message);
-        toast.error('Seleccion demasiado grande', { description: error.message });
+        toast.error('Selección demasiado grande', { description: error.message });
       } else {
         setActiveTask('Error en descarga');
         const msg = error instanceof Error ? error.message : 'Error durante la descarga.';
@@ -1089,11 +1127,6 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     : downloadMetrics
       ? `${downloadMetrics.downloadedPages}/${downloadMetrics.downloadedPages}`
       : '0/0';
-  const runtimeParts = transferProgress
-    ? `${transferProgress.completedParts}/${transferProgress.totalParts}`
-    : downloadMetrics
-      ? `${downloadMetrics.archivePartCount}/${downloadMetrics.archivePartCount}`
-      : '0/0';
   const runtimeEta = currentJob?.estimatedRemainingSeconds !== null && currentJob?.estimatedRemainingSeconds !== undefined
     ? formatDuration(currentJob.estimatedRemainingSeconds * 1000)
     : currentJob?.status === 'planning'
@@ -1104,6 +1137,52 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     ? `${currentJob.currentPage}/${Math.max(currentJob.totalPages, 1)}`
     : runtimePages;
   const readyDownloadJob = currentJob?.status === 'completed' && currentJob.parts.length ? currentJob : null;
+
+  // Estado agregado del héroe de progreso: tipo (color/copys), fase del stepper
+  // y textos centrales. La fase se deriva del status del job; "Empacar" se
+  // infiere del texto de la etapa porque la API no expone un status propio para
+  // ese tramo.
+  const jobStatus = currentJob?.status;
+  const stageText = currentJob?.currentStage || activeTask;
+  const isErrorState = jobStatus === 'failed';
+  const isDoneState = Boolean(readyDownloadJob);
+  const isRunningState = isBusy && !isDoneState;
+  const statusKind: ProgressStatusKind = isErrorState
+    ? 'error'
+    : isDoneState
+      ? 'done'
+      : isRunningState
+        ? 'running'
+        : 'idle';
+  const phaseIndex = isDoneState
+    ? 3
+    : jobStatus === 'processing' || jobStatus === 'retrying'
+      ? /empaqu|empac|zip|comprim|pack/i.test(stageText)
+        ? 2
+        : 1
+      : jobStatus === 'queued' || jobStatus === 'planning'
+        ? 0
+        : isRunningState
+          ? 0
+          : -1;
+  const statusPillLabel = isErrorState
+    ? 'Error'
+    : isDoneState
+      ? 'Completado'
+      : isRunningState
+        ? 'En proceso'
+        : progress >= 100
+          ? 'Listo'
+          : 'En espera';
+  const heroCenterCaption = isDoneState
+    ? 'ZIP listo'
+    : isErrorState
+      ? 'Con errores'
+      : isRunningState
+        ? runtimeEta === 'Sin dato' || runtimeEta === 'Calculando'
+          ? 'Calculando ETA'
+          : `ETA · ${runtimeEta}`
+        : 'En espera';
 
   useEffect(() => {
     onRuntimeChange?.({
@@ -1119,7 +1198,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-12 min-h-[calc(100vh-7rem)]">
       <div className="space-y-6 xl:col-span-4 xl:sticky xl:top-6 self-start">
-        <div className="bg-card border border-border rounded-xl p-6 shadow-glow">
+        <div className="animate-fade-in-up bg-card border border-border rounded-2xl p-6 shadow-glow">
           <div className="mb-5 flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Paso {selectedStepIndex + 1} de {steps.length}</p>
@@ -1183,7 +1262,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
               className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold text-card-foreground transition-[border-color,transform] duration-200 hover:border-accent/40 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
             >
               <ChevronLeft className="h-4 w-4" />
-              Atras
+              Atrás
             </button>
             <button
               type="button"
@@ -1199,8 +1278,8 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           </div>
         </div>
 
-        <div className="bg-card border border-border rounded-xl p-4 shadow-glow">
-          <h2 className="text-card-foreground text-sm font-bold mb-3">Navegacion del flujo</h2>
+        <div className="animate-fade-in-up bg-card border border-border rounded-2xl p-4 shadow-glow">
+          <h2 className="text-card-foreground text-sm font-bold mb-3">Navegación del flujo</h2>
           <div className="grid grid-cols-2 gap-2">
             {steps.map((item, index) => {
               const Icon = item.icon;
@@ -1238,114 +1317,29 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       </div>
 
       <div className="xl:col-span-8 space-y-6">
-        <div className="bg-card border border-border rounded-xl p-6 shadow-glow">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-card-foreground font-bold">Estado de ejecucion</h3>
-            <span className="text-sm font-mono text-accent">{progressLabel(progress)}</span>
-          </div>
-          <div
-            className="relative overflow-hidden rounded-full bg-muted h-4 mb-5"
-            role="progressbar"
-            aria-label="Progreso de la descarga"
-            aria-valuenow={Math.round(progress)}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
-            <div
-              className="h-full w-full origin-left bg-gradient-to-r from-primary to-accent transition-transform duration-300 shadow-[0_0_20px] shadow-accent/60"
-              style={{ transform: `scaleX(${progress / 100})` }}
-            />
-          </div>
-
-          <div className="mb-5 rounded-lg border border-border bg-background p-4">
-            <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Filas procesadas</p>
-                <p className="font-mono text-2xl font-bold text-card-foreground">
-                  {runtimeRows.toLocaleString('es-CO')}
-                  <span className="text-sm font-semibold text-muted-foreground">
-                    {' '}de {runtimeTotalRows ? runtimeTotalRows.toLocaleString('es-CO') : 'total pendiente'}
-                  </span>
-                </p>
-              </div>
-              <div className="text-sm text-muted-foreground sm:text-right">
-                <p>{currentJob?.currentStage || activeTask}</p>
-                <p className="font-mono text-accent">{runtimeRate}</p>
-              </div>
-            </div>
-            <div
-              className="h-2 overflow-hidden rounded-full bg-muted"
-              role="progressbar"
-              aria-label="Filas procesadas"
-              aria-valuenow={Math.round(runtimeTotalRows ? Math.min(100, (runtimeRows / runtimeTotalRows) * 100) : progress)}
-              aria-valuemin={0}
-              aria-valuemax={100}
-            >
-              <div
-                className="h-full w-full origin-left rounded-full bg-accent transition-transform duration-500"
-                style={{ transform: `scaleX(${(runtimeTotalRows ? Math.min(100, (runtimeRows / runtimeTotalRows) * 100) : progress) / 100})` }}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            <MetricCard title="Variable" value={selectedDataset?.name || 'Sin seleccion'} icon={Database} />
-            <MetricCard
-              title="Filas estimadas"
-              value={`${runtimeRows.toLocaleString('es-CO')} / ${runtimeTotalRows.toLocaleString('es-CO')}`}
-              icon={FileSearch}
-            />
-            <MetricCard title="Pagina actual" value={runtimeCurrentPage} icon={Layers} />
-            <MetricCard title="ZIP" value={readyDownloadJob ? '1 archivo' : runtimeParts} icon={FileArchive} />
-            <MetricCard title="ETA" value={runtimeEta} icon={TimerReset} />
-            <MetricCard title="Tiempo transcurrido" value={formatDuration(runtimeElapsedMs)} icon={Clock3} />
-            <MetricCard title="Peso" value={formatBytes(downloadMetrics?.sizeBytes || 0)} icon={Download} />
-            <MetricCard title="Proceso" value={activeTask} icon={LoaderCircle} />
-          </div>
-        </div>
+        <ProgressHero
+          progress={progress}
+          statusKind={statusKind}
+          statusPillLabel={statusPillLabel}
+          centerCaption={heroCenterCaption}
+          phaseIndex={phaseIndex}
+          rows={runtimeRows}
+          totalRows={runtimeTotalRows}
+          rate={runtimeRate}
+          page={runtimeCurrentPage}
+          elapsedLabel={formatDuration(runtimeElapsedMs)}
+          task={stageText}
+        />
 
         {readyDownloadJob && (
-          <div className="bg-card border border-success/30 rounded-xl p-6 shadow-[0_0_40px_rgba(32,197,121,0.12)]">
-            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="text-card-foreground font-bold">ZIP listo para descargar</h3>
-                <p className="text-sm text-muted-foreground">
-                  Puedes descargar el ZIP las veces que necesites mientras siga disponible.
-                </p>
-              </div>
-              <span className="rounded-full border border-success/30 bg-success/10 px-3 py-1 text-xs font-semibold text-success">
-                Disponible por 1 hora
-              </span>
-            </div>
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-              {readyDownloadJob.parts.map((part) => {
-                const partKey = `${readyDownloadJob.jobId}:${part.index}`;
-                return (
-                  <button
-                    key={partKey}
-                    type="button"
-                    onClick={() => downloadJobPart(readyDownloadJob, part)}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-4 py-3 text-left transition-all hover:border-accent/40"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold text-card-foreground">{part.fileName}</span>
-                      <span className="block text-xs text-muted-foreground">
-                        {part.rowCount.toLocaleString('es-CO')} filas | {formatBytes(part.sizeBytes)}
-                      </span>
-                    </span>
-                    <Download className="h-4 w-4 shrink-0 text-accent" />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <ReadyDownloadPanel job={readyDownloadJob} onDownloadPart={downloadJobPart} />
         )}
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <div className="bg-card border border-border rounded-xl p-6 shadow-glow">
+          <div className="animate-fade-in-up bg-card border border-border rounded-2xl p-6 shadow-glow">
             <h3 className="text-card-foreground font-bold mb-4">Resumen configurado</h3>
             <div className="space-y-3 text-sm">
-              <SummaryRow label="Variable" value={selectedDataset?.name || 'Sin seleccion'} />
+              <SummaryRow label="Variable" value={selectedDataset?.name || 'Sin selección'} />
               <SummaryRow label="Departamentos" value={selectionSummary.departments} />
               <SummaryRow label="Rango temporal" value={`${startDate || 'N/D'} -> ${endDate || 'N/D'}`} />
               <SummaryRow label="Estaciones manuales" value={String(selectionSummary.stationCodes.length)} />
@@ -1360,11 +1354,11 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
             </div>
           </div>
 
-          <div className="bg-card border border-border rounded-xl p-6 shadow-glow">
+          <div className="animate-fade-in-up bg-card border border-border rounded-2xl p-6 shadow-glow">
             <h3 className="text-card-foreground font-bold mb-4">Salida esperada</h3>
             <div className="space-y-3 text-sm">
-              <SummaryRow label="Entrega" value="ZIP unico organizado por carpetas" />
-              <SummaryRow label="Formatos" value={selectionSummary.formats.length ? selectionSummary.formats.join(', ').toUpperCase() : 'Sin seleccion'} />
+              <SummaryRow label="Entrega" value="ZIP único organizado por carpetas" />
+              <SummaryRow label="Formatos" value={selectionSummary.formats.length ? selectionSummary.formats.join(', ').toUpperCase() : 'Sin selección'} />
               <SummaryRow label="Pool de estaciones" value={String(downloadMetrics?.stationPoolSize || preview?.stationPoolSize || 0)} />
               <SummaryRow label="Planes de consulta" value={String(downloadMetrics?.queryPlans || preview?.queryPlans || 0)} />
               <SummaryRow label="ZIP esperado" value={readyDownloadJob || downloadMetrics ? '1 archivo' : 'Pendiente'} />
@@ -1373,43 +1367,9 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           </div>
         </div>
 
-        <div className="bg-card border border-border rounded-xl overflow-hidden shadow-glow">
-          <div className="px-6 py-4 border-b border-border">
-            <h3 className="text-card-foreground font-bold">Registro operativo</h3>
-          </div>
-          <div className="p-6">
-            {logs.length === 0 ? (
-              <EmptyState
-                icon={FileSearch}
-                title="Sin operaciones registradas"
-                description="Ejecuta una vista previa o una descarga para ver aquí el registro paso a paso."
-                hint=""
-              />
-            ) : (
-              <div
-                className="bg-black rounded-lg p-4 h-[240px] overflow-y-auto font-mono text-sm"
-                role="log"
-                aria-live="polite"
-                aria-label="Registro de operaciones"
-              >
-                {logs.map((log, index) => (
-                  <div key={`${log.type}-${index}`} className="mb-1">
-                    <span
-                      className={`font-bold ${
-                        log.type === 'SUCCESS' ? 'text-success' : log.type === 'ERROR' ? 'text-destructive' : 'text-accent'
-                      }`}
-                    >
-                      [{log.type}]
-                    </span>
-                    <span className="text-gray-200 ml-2">{log.message}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        <OperationTimeline logs={logs} />
 
-        <div className="bg-card border border-border rounded-xl overflow-hidden shadow-glow">
+        <div className="animate-fade-in-up bg-card border border-border rounded-2xl overflow-hidden shadow-glow">
           <div className="flex items-center justify-between px-6 py-4 border-b border-border">
             <h3 className="text-card-foreground font-bold">Vista previa de resultados</h3>
             <span className="text-muted-foreground text-sm font-mono">
@@ -1461,10 +1421,10 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           </div>
         </div>
 
-        <div className="bg-card border border-border rounded-xl overflow-hidden shadow-glow">
+        <div className="animate-fade-in-up bg-card border border-border rounded-2xl overflow-hidden shadow-glow">
           <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-            <h3 className="text-card-foreground font-bold">Metricas de descarga</h3>
-            <span className="text-muted-foreground text-sm font-mono">{downloadMetrics?.fileName || 'Sin ejecucion final'}</span>
+            <h3 className="text-card-foreground font-bold">Métricas de descarga</h3>
+            <span className="text-muted-foreground text-sm font-mono">{downloadMetrics?.fileName || 'Sin ejecución final'}</span>
           </div>
           <div className="p-6">
             {!downloadMetrics ? (
@@ -1579,14 +1539,14 @@ function StepPanel({
     return (
       <Section title="Aviso legal" icon={ShieldCheck}>
         <div className="rounded-lg border border-border bg-background p-4 text-sm leading-6 text-muted-foreground">
-          Esta herramienta fue creada para fines academicos e investigativos. La informacion proviene de IDEAM y
+          Esta herramienta fue creada para fines académicos e investigativos. La información proviene de IDEAM y
           Datos Abiertos Colombia. El usuario conserva responsabilidad sobre el tratamiento posterior de los datos y su
           uso.
         </div>
         <label className="flex items-start gap-3 rounded-lg border border-border bg-background p-4">
           <input type="checkbox" checked={acceptedTerms} onChange={(event) => onAcceptedTermsChange(event.target.checked)} />
           <span className="text-sm text-card-foreground font-medium">
-            Acepto los terminos y entiendo que debo marcar este consentimiento para continuar con la configuracion y la descarga.
+            Acepto los términos y entiendo que debo marcar este consentimiento para continuar con la configuración y la descarga.
           </span>
         </label>
       </Section>
@@ -1596,7 +1556,7 @@ function StepPanel({
   if (step === 'variable') {
     return (
       <Section title="Variable de trabajo" icon={Database}>
-        <SelectInput label="Variable hidrica o meteorologica" value={datasetId} onChange={onDatasetChange}>
+        <SelectInput label="Variable hídrica o meteorológica" value={datasetId} onChange={onDatasetChange}>
           {(meta?.datasets || []).map((dataset) => (
             <option key={dataset.id} value={dataset.id}>
               {dataset.name} · {dataset.category}
@@ -1604,9 +1564,9 @@ function StepPanel({
           ))}
         </SelectInput>
         <div className="rounded-lg border border-border bg-background p-4 text-sm text-muted-foreground">
-          <p className="font-semibold text-card-foreground mb-1">{selectedDataset?.name || 'Sin seleccion'}</p>
+          <p className="font-semibold text-card-foreground mb-1">{selectedDataset?.name || 'Sin selección'}</p>
           <p>Dataset: {selectedDataset?.id || 'N/D'}</p>
-          <p>Categoria: {selectedDataset?.category || 'N/D'}</p>
+          <p>Categoría: {selectedDataset?.category || 'N/D'}</p>
           <p>Columna temporal: {selectedDataset?.dateColumn || 'N/D'}</p>
         </div>
       </Section>
@@ -1636,7 +1596,7 @@ function StepPanel({
           ))}
         </div>
         <div className="rounded-lg border border-border bg-background p-3 text-sm text-muted-foreground">
-          Seleccion actual: {selectedDepartments.length ? selectedDepartments.join(', ') : 'Sin departamentos seleccionados'}
+          Selección actual: {selectedDepartments.length ? selectedDepartments.join(', ') : 'Sin departamentos seleccionados'}
         </div>
       </Section>
     );
@@ -1644,10 +1604,10 @@ function StepPanel({
 
   if (step === 'advanced') {
     return (
-      <Section title="Personalizacion avanzada" icon={Filter}>
+      <Section title="Personalización avanzada" icon={Filter}>
         <div className="rounded-lg border border-border bg-background p-4 text-sm text-muted-foreground">
-          Estos catalogos se precargan por dataset y departamento para que la seleccion sea mas rapida. La descarga
-          final sigue aplicando fechas, municipios, estaciones y demas filtros exactamente como los selecciones.
+          Estos catálogos se precargan por dataset y departamento para que la selección sea más rápida. La descarga
+          final sigue aplicando fechas, municipios, estaciones y demás filtros exactamente como los selecciones.
         </div>
         {(meta?.catalogFilters || []).map((definition) => {
           const status = catalogOptionStatus[definition.key] || 'idle';
@@ -1675,18 +1635,18 @@ function StepPanel({
               <div className="max-h-48 overflow-y-auto rounded-lg border border-border bg-background p-3">
                 {status === 'idle' ? (
                   <p className="text-sm text-muted-foreground">
-                    {canLoadCatalogOptions ? 'Catalogo preparado automaticamente.' : 'Completa variable y departamento.'}
+                    {canLoadCatalogOptions ? 'Catálogo preparado automáticamente.' : 'Completa variable y departamento.'}
                   </p>
                 ) : status === 'loading' && !options.length ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <LoaderCircle className="h-4 w-4 animate-spin text-accent" />
-                    Sincronizando catalogo local...
+                    Sincronizando catálogo local...
                   </div>
                 ) : status === 'warming' ? (
-                  <p className="text-sm text-muted-foreground">Catalogo preparado automaticamente.</p>
+                  <p className="text-sm text-muted-foreground">Catálogo preparado automáticamente.</p>
                 ) : status === 'error' ? (
                   <p className="text-sm text-destructive">
-                    {catalogOptionErrors[definition.key] || 'No fue posible sincronizar este catalogo.'}
+                    {catalogOptionErrors[definition.key] || 'No fue posible sincronizar este catálogo.'}
                   </p>
                 ) : !options.length ? (
                   <p className="text-sm text-muted-foreground">Sin opciones para los filtros actuales.</p>
@@ -1725,7 +1685,7 @@ function StepPanel({
           );
         })}
         <div className="space-y-2">
-          <label className="text-sm font-semibold text-card-foreground">Codigos de estacion manuales</label>
+          <label className="text-sm font-semibold text-card-foreground">Códigos de estación manuales</label>
           <textarea
             value={stationCodesText}
             onChange={(event) => onStationCodesTextChange(event.target.value)}
@@ -1752,7 +1712,7 @@ function StepPanel({
               <table className="w-full text-xs">
                 <thead className="border-b border-border text-muted-foreground">
                   <tr>
-                    <th className="p-2 text-left">Codigo</th>
+                    <th className="p-2 text-left">Código</th>
                     <th className="p-2 text-left">Nombre</th>
                     <th className="p-2 text-left">Municipio</th>
                   </tr>
@@ -1778,7 +1738,7 @@ function StepPanel({
     return (
       <Section title="Marco temporal" icon={Calendar}>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <ChoiceCard active={timeMode === 'full'} onClick={() => setTimeMode('full')} title="Todo el historico" description="Usar todo el rango disponible" />
+          <ChoiceCard active={timeMode === 'full'} onClick={() => setTimeMode('full')} title="Todo el histórico" description="Usar todo el rango disponible" />
           <ChoiceCard active={timeMode === 'custom'} onClick={() => setTimeMode('custom')} title="Rango personalizado" description="Definir fechas exactas" />
         </div>
         <div className="rounded-lg border border-border bg-background p-4 text-sm text-muted-foreground">
@@ -1792,7 +1752,7 @@ function StepPanel({
           </div>
         ) : (
           <div className="rounded-lg border border-success/30 bg-success/10 p-4 text-sm text-success">
-            Se usara automaticamente el rango completo disponible para la variable seleccionada.
+            Se usará automáticamente el rango completo disponible para la variable seleccionada.
           </div>
         )}
       </Section>
@@ -1800,7 +1760,7 @@ function StepPanel({
   }
 
   return (
-    <Section title="Ejecucion y descarga" icon={Rocket}>
+    <Section title="Ejecución y descarga" icon={Rocket}>
       <div className="rounded-lg border border-border bg-background p-4 text-sm text-muted-foreground space-y-2">
         <p>
           <span className="font-semibold text-card-foreground">Departamentos:</span> {selectionSummary.departments}
@@ -1994,12 +1954,359 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 
 function MetricCard({ title, value, icon: Icon }: { title: string; value: string; icon: React.ElementType }) {
   return (
-    <div className="rounded-lg border border-border bg-background p-4 min-h-[96px]">
+    <div className="group min-h-[96px] rounded-2xl border border-border bg-background p-4 shadow-glow transition-[transform,border-color] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] hover:-translate-y-0.5 hover:border-accent/50">
       <div className="mb-2 flex items-center justify-between gap-3">
-        <span className="text-xs font-semibold text-muted-foreground">{title}</span>
-        <Icon className="h-4 w-4 text-accent" />
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</span>
+        <Icon className="anim-bounce h-4 w-4 shrink-0 text-accent" />
       </div>
-      <p className="text-sm font-bold leading-6 text-card-foreground break-words">{value}</p>
+      <p className="text-sm font-bold leading-6 text-card-foreground break-words tabular-nums">{value}</p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Panel de proceso (rediseño Fase 1): anillo + stepper de fases + chips, un
+// único indicador de progreso. Todos los datos llegan ya calculados del padre.
+// ---------------------------------------------------------------------------
+
+const HERO_PILL_TONE: Record<ProgressStatusKind, string> = {
+  idle: 'border-border bg-muted/40 text-muted-foreground',
+  running: 'border-accent/30 bg-accent/10 text-accent',
+  done: 'border-success/30 bg-success/10 text-success',
+  error: 'border-destructive/30 bg-destructive/10 text-destructive',
+};
+
+function ProgressRing({ value, kind }: { value: number; kind: ProgressStatusKind }) {
+  const clamped = Math.max(0, Math.min(100, value));
+  const radius = 52;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference * (1 - clamped / 100);
+  const stroke = kind === 'done' ? 'var(--success)' : kind === 'error' ? 'var(--destructive)' : 'url(#heroGrad)';
+  return (
+    <svg viewBox="0 0 120 120" className="h-full w-full" aria-hidden="true">
+      <defs>
+        <linearGradient id="heroGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="var(--primary)" />
+          <stop offset="100%" stopColor="var(--accent)" />
+        </linearGradient>
+      </defs>
+      <circle cx="60" cy="60" r={radius} fill="none" stroke="var(--muted)" strokeWidth="9" />
+      <circle
+        cx="60"
+        cy="60"
+        r={radius}
+        fill="none"
+        stroke={stroke}
+        strokeWidth="9"
+        strokeLinecap="round"
+        strokeDasharray={circumference}
+        strokeDashoffset={offset}
+        transform="rotate(-90 60 60)"
+        className="transition-[stroke-dashoffset] duration-700 ease-out"
+        style={kind === 'idle' ? { opacity: 0.5 } : undefined}
+      />
+    </svg>
+  );
+}
+
+function HeroChip({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-2.5 rounded-xl border border-border bg-background px-3 py-2">
+      <Icon className="h-4 w-4 shrink-0 text-accent" />
+      <div className="min-w-0">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+        <p className="font-mono text-sm font-bold leading-tight tabular-nums text-card-foreground">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+const EXPORT_PHASES: Array<{ label: string; icon: React.ElementType }> = [
+  { label: 'Planear', icon: FileSearch },
+  { label: 'Descargar', icon: Download },
+  { label: 'Empacar', icon: FileArchive },
+  { label: 'Listo', icon: CheckCircle2 },
+];
+
+function PhaseStepper({ phaseIndex, error }: { phaseIndex: number; error: boolean }) {
+  const lastIndex = EXPORT_PHASES.length - 1;
+  return (
+    <ol className="flex w-full items-start" aria-label="Fases de la exportación">
+      {EXPORT_PHASES.map((phase, index) => {
+        const done = phaseIndex > index;
+        const active = phaseIndex === index;
+        const isErrorHere = error && active;
+        const Icon = isErrorHere ? AlertTriangle : done ? CheckCircle2 : phase.icon;
+        const circleTone = isErrorHere
+          ? 'border-destructive bg-destructive/10 text-destructive'
+          : done
+            ? 'border-success bg-success/10 text-success'
+            : active
+              ? 'border-accent bg-accent/10 text-accent'
+              : 'border-border bg-background text-muted-foreground';
+        const connectorTone = phaseIndex > index ? 'bg-success' : 'bg-border';
+        return (
+          <li key={phase.label} className={`flex items-start ${index < lastIndex ? 'flex-1' : ''}`}>
+            <div className="flex w-9 flex-col items-center gap-1.5">
+              <span
+                className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${circleTone} ${active && !isErrorHere ? 'glow-cyan' : ''}`}
+                aria-current={active ? 'step' : undefined}
+              >
+                <Icon className="h-4 w-4" />
+              </span>
+              <span
+                className={`whitespace-nowrap text-[11px] font-semibold ${active || done ? 'text-card-foreground' : 'text-muted-foreground'}`}
+              >
+                {phase.label}
+              </span>
+            </div>
+            {index < lastIndex && (
+              <span className={`mt-[18px] h-0.5 flex-1 rounded-full transition-colors ${connectorTone}`} aria-hidden="true" />
+            )}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function ProgressHero({
+  progress,
+  statusKind,
+  statusPillLabel,
+  centerCaption,
+  phaseIndex,
+  rows,
+  totalRows,
+  rate,
+  page,
+  elapsedLabel,
+  task,
+}: {
+  progress: number;
+  statusKind: ProgressStatusKind;
+  statusPillLabel: string;
+  centerCaption: string;
+  phaseIndex: number;
+  rows: number;
+  totalRows: number;
+  rate: string;
+  page: string;
+  elapsedLabel: string;
+  task: string;
+}) {
+  const PillIcon =
+    statusKind === 'running' ? LoaderCircle : statusKind === 'done' ? CheckCircle2 : statusKind === 'error' ? AlertTriangle : Clock3;
+  return (
+    <div className="bento-enter rounded-2xl border border-border bg-card p-6 shadow-glow">
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <h3 className="font-bold text-card-foreground">Estado de ejecución</h3>
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${HERO_PILL_TONE[statusKind]}`}
+        >
+          <PillIcon className={`h-3.5 w-3.5 ${statusKind === 'running' ? 'animate-spin' : ''}`} />
+          {statusPillLabel}
+        </span>
+      </div>
+
+      <div className="flex flex-col items-center gap-6 sm:flex-row">
+        <div
+          className="relative h-36 w-36 shrink-0"
+          role="progressbar"
+          aria-label="Progreso de la operación"
+          aria-valuenow={Math.round(Math.max(0, Math.min(100, progress)))}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
+          <ProgressRing value={progress} kind={statusKind} />
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="font-mono text-3xl font-bold tabular-nums text-card-foreground">{progressLabel(progress)}</span>
+            <span className="mt-0.5 max-w-[7rem] text-center text-[11px] font-medium text-muted-foreground">{centerCaption}</span>
+          </div>
+        </div>
+
+        <div className="w-full flex-1 space-y-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Filas procesadas</p>
+            <p className="font-mono text-2xl font-bold tabular-nums text-card-foreground">
+              {rows.toLocaleString('es-CO')}
+              <span className="text-sm font-semibold text-muted-foreground">
+                {' '}
+                / {totalRows ? totalRows.toLocaleString('es-CO') : '—'} filas
+              </span>
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <HeroChip icon={Gauge} label="Velocidad" value={rate} />
+            <HeroChip icon={Layers} label="Página" value={page} />
+            <HeroChip icon={Clock3} label="Tiempo" value={elapsedLabel} />
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6 border-t border-border pt-5">
+        <PhaseStepper phaseIndex={phaseIndex} error={statusKind === 'error'} />
+      </div>
+
+      {task && <p className="mt-4 text-center text-sm text-muted-foreground sm:text-left">{task}</p>}
+    </div>
+  );
+}
+
+const LOG_TONE: Record<LogLevel, { ring: string; icon: string; Icon: React.ElementType }> = {
+  SUCCESS: { ring: 'border-success/30 bg-success/10', icon: 'text-success', Icon: CheckCircle2 },
+  ERROR: { ring: 'border-destructive/30 bg-destructive/10', icon: 'text-destructive', Icon: AlertTriangle },
+  INFO: { ring: 'border-accent/30 bg-accent/10', icon: 'text-accent', Icon: Info },
+};
+
+function OperationTimeline({ logs }: { logs: Array<{ type: LogLevel; message: string }> }) {
+  const [expanded, setExpanded] = useState(true);
+  const scrollRef = useRef<HTMLOListElement>(null);
+
+  // Autoscroll al evento más reciente (abajo) cuando hay novedades y está
+  // desplegado. El neutralizador global de reduced-motion deja el salto seco.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el && expanded) el.scrollTop = el.scrollHeight;
+  }, [logs, expanded]);
+
+  return (
+    <div className="bento-enter overflow-hidden rounded-2xl border border-border bg-card shadow-glow">
+      <button
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        aria-expanded={expanded}
+        aria-controls="registro-operativo"
+        className="flex w-full items-center justify-between gap-3 border-b border-border px-6 py-4 text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <span className="flex items-center gap-2">
+          <h3 className="font-bold text-card-foreground">Registro operativo</h3>
+          {logs.length > 0 && (
+            <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-semibold tabular-nums text-muted-foreground">
+              {logs.length}
+            </span>
+          )}
+        </span>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
+      </button>
+      <div className="p-6">
+        {logs.length === 0 ? (
+          <EmptyState
+            icon={FileSearch}
+            title="Sin operaciones registradas"
+            description="Ejecuta una vista previa o una descarga para ver aquí el registro paso a paso."
+            hint=""
+          />
+        ) : expanded ? (
+          <ol
+            id="registro-operativo"
+            ref={scrollRef}
+            role="log"
+            aria-live="polite"
+            aria-label="Registro de operaciones"
+            className="scrollbar-thin max-h-[260px] overflow-y-auto pr-1"
+          >
+            {logs.map((log, index) => {
+              const tone = LOG_TONE[log.type];
+              const isLast = index === logs.length - 1;
+              const Icon = tone.Icon;
+              return (
+                <li key={`${log.type}-${index}`} className="relative flex gap-3 pb-3 last:pb-0">
+                  {!isLast && <span className="absolute bottom-0 left-[13px] top-7 w-px bg-border" aria-hidden="true" />}
+                  <span className={`relative z-10 mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${tone.ring}`}>
+                    <Icon className={`h-3.5 w-3.5 ${tone.icon}`} />
+                  </span>
+                  <p className="pt-1 text-sm leading-5 text-card-foreground">{log.message}</p>
+                </li>
+              );
+            })}
+          </ol>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Registro colapsado · {logs.length} evento(s). Toca el encabezado para ver el detalle.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ReadyDownloadPanel({
+  job,
+  onDownloadPart,
+}: {
+  job: ExportJobStatusResponse;
+  onDownloadPart: (job: ExportJobStatusResponse, part: ExportJobPart) => void;
+}) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const expiresAt =
+    job.parts[0]?.expiresAt ||
+    (job.finishedAt ? new Date(new Date(job.finishedAt).valueOf() + EXPORT_AVAILABILITY_MS).toISOString() : null);
+  const remainingMs = useCountdown(expiresAt);
+  const expired = remainingMs !== null && remainingMs <= 0;
+
+  // Lleva el éxito al foco visual del usuario en cuanto aparece el ZIP.
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+  }, []);
+
+  return (
+    <div
+      ref={cardRef}
+      className="animate-fade-in-up rounded-2xl border border-success/40 bg-card p-6 shadow-[0_0_40px_rgba(7,137,48,0.16)]"
+    >
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <span className="glow-success flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-success/40 bg-success/10">
+            <CheckCircle2 className="h-6 w-6 text-success" />
+          </span>
+          <div>
+            <h3 className="font-bold text-card-foreground">ZIP listo para descargar</h3>
+            <p className="text-sm text-muted-foreground">
+              Puedes descargar el ZIP las veces que necesites mientras siga disponible.
+            </p>
+          </div>
+        </div>
+        {expired ? (
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-destructive/30 bg-destructive/10 px-3 py-1 text-xs font-semibold text-destructive">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Enlace expirado
+          </span>
+        ) : (
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-3 py-1 text-xs font-semibold tabular-nums text-success">
+            <TimerReset className="h-3.5 w-3.5" />
+            {remainingMs === null ? 'Disponible por 1 hora' : `Disponible ${formatCountdown(remainingMs)}`}
+          </span>
+        )}
+      </div>
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        {job.parts.map((part) => (
+          <button
+            key={`${job.jobId}:${part.index}`}
+            type="button"
+            onClick={() => onDownloadPart(job, part)}
+            disabled={expired}
+            className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-4 py-3 text-left transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:border-border"
+          >
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold text-card-foreground">{part.fileName}</span>
+              <span className="block text-xs tabular-nums text-muted-foreground">
+                {part.rowCount.toLocaleString('es-CO')} filas · {formatBytes(part.sizeBytes)}
+              </span>
+            </span>
+            <Download className="h-4 w-4 shrink-0 text-accent" />
+          </button>
+        ))}
+      </div>
+      {expired && (
+        <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+          <Info className="h-4 w-4 shrink-0 text-accent" />
+          El enlace de descarga expiró (la ventana es de 1 hora). Genera una nueva exportación.
+        </p>
+      )}
     </div>
   );
 }
