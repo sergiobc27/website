@@ -19,7 +19,6 @@ on:
       - "package-lock.json"
       - "vite.config.ts"
       - "postcss.config.mjs"
-      - "default_shadcn_theme.css"
       - ".github/workflows/deploy-ideam.yml"
 
 jobs:

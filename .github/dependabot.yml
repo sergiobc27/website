@@ -1,0 +1,23 @@
+# Dependabot: vigila dependencias vulnerables/desactualizadas y abre PRs solo,
+# en vez de cerrar alertas a mano (ver commit 696fef1). Las dev-deps se agrupan
+# en un solo PR para no inundar de PRs sueltos.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "github-actions"
