@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Calendar,
@@ -28,6 +28,9 @@ import { fmt } from '../lib/format';
 import { canDownloadAgain, type HistoryEntry, readHistory, saveHistory } from '../lib/downloadHistory';
 import { NAVIGATE_EVENT, pathToView, type NavigateDetail } from '../lib/navigation';
 import { buildSearch, parseSearch } from '../lib/urlState';
+
+// Mapa (MapLibre) diferido: solo se descarga al abrir el selector en mapa.
+const MapaSelectorDepartamentos = lazy(() => import('./MapaSelectorDepartamentos'));
 import type {
   CatalogBundleRow,
   CatalogFilterDefinition,
@@ -1655,6 +1658,7 @@ function StepPanel({
 }) {
   const [filterSearch, setFilterSearch] = useState<Record<string, string>>({});
   const [departmentSearch, setDepartmentSearch] = useState('');
+  const [showMap, setShowMap] = useState(false);
 
   // Alta/baja de un código de estación desde la tabla de apoyo (clic = agrega o
   // quita). Reescribe el textarea normalizado a lista separada por comas.
@@ -1736,8 +1740,35 @@ function StepPanel({
             >
               Ninguno
             </button>
+            <button
+              type="button"
+              onClick={() => setShowMap((open) => !open)}
+              aria-pressed={showMap}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-[border-color,transform] duration-200 active:scale-[0.97] ${
+                showMap ? 'border-accent bg-accent/15 text-accent' : 'border-border bg-background text-muted-foreground hover:border-accent/40'
+              }`}
+            >
+              <MapPin className="h-3.5 w-3.5" />
+              Mapa
+            </button>
           </div>
         </div>
+
+        {showMap && (
+          <Suspense
+            fallback={
+              <div className="flex h-[320px] items-center justify-center rounded-lg border border-border text-xs text-muted-foreground">
+                Cargando mapa…
+              </div>
+            }
+          >
+            <MapaSelectorDepartamentos
+              departments={meta?.departments || []}
+              selected={selectedDepartments}
+              onToggle={onToggleDepartment}
+            />
+          </Suspense>
+        )}
         <div className="flex max-h-56 flex-wrap gap-2 overflow-y-auto">
           {(meta?.departments || [])
             .filter((department) => normalizeText(department).includes(normalizeText(departmentSearch)))
