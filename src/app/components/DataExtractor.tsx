@@ -4,8 +4,6 @@ import {
   Calendar,
   CheckCircle2,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Clock3,
   Database,
   Download,
@@ -274,6 +272,9 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   const [step, setStep] = useState<StepId>(
     storedConfig.acceptedTerms && storedConfig.step && STEP_IDS.includes(storedConfig.step) ? storedConfig.step : 'consent'
   );
+  // Sección abierta del acordeón "todo-en-uno" (Fase 2). Reemplaza la navegación
+  // por pasos: el usuario abre/cierra cada sección de configuración a voluntad.
+  const [openSection, setOpenSection] = useState<StepId | null>('variable');
   const [acceptedTerms, setAcceptedTerms] = useState(Boolean(storedConfig.acceptedTerms));
   const [datasetId, setDatasetId] = useState(typeof storedConfig.datasetId === 'string' ? storedConfig.datasetId : '');
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>(
@@ -321,14 +322,15 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   // siempre a la versión con el estado más reciente sin re-suscribirse.
   const aplicarDeepLinkRef = useRef<(params: Record<string, string>) => void>(() => {});
 
-  const steps = useMemo(
+  // Secciones de configuración del acordeón "todo-en-uno" (Fase 2). El
+  // consentimiento (barra no-bloqueante) y la ejecución (CTA) viven fuera del
+  // acordeón.
+  const accordionSections = useMemo(
     () => [
-      { id: 'consent' as StepId, title: 'Consentimiento', icon: ShieldCheck },
       { id: 'variable' as StepId, title: 'Variable', icon: Database },
       { id: 'territory' as StepId, title: 'Territorio', icon: MapPin },
       { id: 'advanced' as StepId, title: 'Filtros avanzados', icon: Filter },
       { id: 'time' as StepId, title: 'Temporalidad', icon: Calendar },
-      { id: 'execute' as StepId, title: 'Ejecución', icon: Rocket },
     ],
     []
   );
@@ -337,8 +339,6 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     () => meta?.datasets.find((dataset) => dataset.id === datasetId) || null,
     [meta, datasetId]
   );
-
-  const selectedStepIndex = steps.findIndex((item) => item.id === step);
 
   const executionPayload = useMemo(() => {
     return {
@@ -658,7 +658,9 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   }, [catalogFilters, catalogOptionStatus, datasetId, selectedDepartments]);
 
   useEffect(() => {
-    if (!acceptedTerms || !datasetId || !selectedDepartments.length || !meta?.catalogFilters?.length) return;
+    // Sin guard de consentimiento (Fase 2): los catálogos se precargan durante
+    // la configuración; solo la vista previa y la descarga exigen el aviso legal.
+    if (!datasetId || !selectedDepartments.length || !meta?.catalogFilters?.length) return;
     let cancelled = false;
     let retryPending = true;
     const definitions = meta.catalogFilters;
@@ -700,7 +702,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       cancelled = true;
       window.clearInterval(retryTimer);
     };
-  }, [acceptedTerms, datasetId, meta?.catalogFilters, selectedDepartments.join('|')]);
+  }, [datasetId, meta?.catalogFilters, selectedDepartments.join('|')]);
 
   useEffect(() => {
     const definitions = meta?.catalogFilters || [];
@@ -889,6 +891,9 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       current.includes(department) ? current.filter((item) => item !== department) : [...current, department]
     );
   };
+
+  const selectAllDepartments = (departments: string[]) => setSelectedDepartments(departments);
+  const clearDepartments = () => setSelectedDepartments([]);
 
   const toggleCatalogValue = (filterKey: string, value: string) => {
     setCatalogFilters((current) => {
@@ -1095,29 +1100,48 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     }
   };
 
-  // Requisito faltante del paso actual: si hay uno, el boton Siguiente se
-  // deshabilita y se muestra el motivo inline (no en el log lejano).
-  const stepRequirement =
-    step === 'consent' && !acceptedTerms
-      ? 'Acepta el aviso legal para continuar.'
-      : step === 'variable' && !datasetId
-        ? 'Selecciona una variable para continuar.'
-        : step === 'territory' && !selectedDepartments.length
-          ? 'Selecciona al menos un departamento.'
-          : step === 'time' && (!startDate || !endDate || startDate > endDate)
-            ? 'Configura un rango temporal valido.'
-            : null;
-  const isLastStep = selectedStepIndex === steps.length - 1;
-  const canAdvance = !stepRequirement && !isLastStep;
-
-  const goNext = () => {
-    if (stepRequirement || isLastStep) return;
-    setStep(steps[Math.min(selectedStepIndex + 1, steps.length - 1)].id);
+  // Requisito faltante por sección del acordeón (motivo mostrado inline en la
+  // cabecera), estado de completitud y resumen para la cabecera colapsada.
+  const sectionRequirement = (id: StepId): string | null => {
+    if (id === 'variable') return datasetId ? null : 'Selecciona una variable.';
+    if (id === 'territory') return selectedDepartments.length ? null : 'Selecciona al menos un departamento.';
+    if (id === 'time') return !startDate || !endDate || startDate > endDate ? 'Configura un rango temporal válido.' : null;
+    return null; // 'advanced' es opcional
   };
 
-  const goBack = () => {
-    setStep(steps[Math.max(selectedStepIndex - 1, 0)].id);
+  const sectionComplete = (id: StepId): boolean => {
+    if (id === 'advanced') {
+      return Object.values(catalogFilters).some((values) => values.length) || parseStationCodes(stationCodesText).length > 0;
+    }
+    return sectionRequirement(id) === null;
   };
+
+  const sectionSummary = (id: StepId): string => {
+    if (id === 'variable') return selectedDataset?.name || 'Sin selección';
+    if (id === 'territory') {
+      return selectedDepartments.length
+        ? selectedDepartments.length <= 2
+          ? selectedDepartments.join(', ')
+          : `${selectedDepartments.length} departamentos`
+        : 'Sin selección';
+    }
+    if (id === 'advanced') {
+      const filtros = selectionSummary.advancedSelections.reduce((sum, item) => sum + item.values.length, 0);
+      const estaciones = selectionSummary.stationCodes.length;
+      const partes: string[] = [];
+      if (filtros) partes.push(`${filtros} filtro(s)`);
+      if (estaciones) partes.push(`${estaciones} estación(es)`);
+      return partes.length ? partes.join(' · ') : 'Sin filtros (opcional)';
+    }
+    // time
+    if (timeMode === 'full') return 'Todo el histórico';
+    return startDate && endDate ? `${startDate} → ${endDate}` : 'Sin rango';
+  };
+
+  // Por qué la descarga está bloqueada: consentimiento + configuración mínima.
+  const downloadRequirement = !acceptedTerms
+    ? 'Acepta el aviso legal para descargar.'
+    : sectionRequirement('variable') || sectionRequirement('territory') || sectionRequirement('time');
 
   const runtimeRows = Math.max(animatedRows, transferProgress?.downloadedRows ?? downloadMetrics?.rowCount ?? preview?.rowCount ?? 0);
   const runtimeTotalRows = transferProgress?.totalRows ?? preview?.rowCount ?? downloadMetrics?.rowCount ?? 0;
@@ -1195,124 +1219,114 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     });
   }, [activeTask, elapsedMs, isBusy, onRuntimeChange, progress, runtimeElapsedMs, runtimeRows, runtimeTotalRows]);
 
+  // Props compartidas por las secciones del acordeón y el CTA de ejecución;
+  // `step` se pasa aparte en cada uso.
+  const stepPanelProps = {
+    meta,
+    datasetId,
+    selectedDataset,
+    acceptedTerms,
+    onAcceptedTermsChange: setAcceptedTerms,
+    selectedDepartments,
+    onToggleDepartment: toggleDepartment,
+    onSelectAllDepartments: selectAllDepartments,
+    onClearDepartments: clearDepartments,
+    catalogFilters,
+    catalogOptions,
+    catalogOptionStatus,
+    catalogOptionErrors,
+    onToggleCatalogValue: toggleCatalogValue,
+    onLoadCatalogOptions: loadCatalogOptions,
+    canLoadCatalogOptions: Boolean(datasetId && selectedDepartments.length),
+    stationCodesText,
+    onStationCodesTextChange: setStationCodesText,
+    onLoadStationHelper: loadStationHelper,
+    stationHelperRows,
+    stationHelperLoading,
+    dateRange,
+    timeMode,
+    setTimeMode,
+    startDate,
+    endDate,
+    onStartDateChange: setStartDate,
+    onEndDateChange: setEndDate,
+    selectedFormats,
+    onToggleOutputFormat: toggleOutputFormat,
+    onDatasetChange: setDatasetId,
+    selectionSummary,
+    coverageReports,
+    coverageLoading,
+    onRunPreview: runPreview,
+    onRunDownload: runDownload,
+    isBusy,
+    downloadRequirement,
+  };
+
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-12 min-h-[calc(100vh-7rem)]">
       <div className="space-y-6 xl:col-span-4 xl:sticky xl:top-6 self-start">
-        <div className="animate-fade-in-up bg-card border border-border rounded-2xl p-6 shadow-glow">
-          <div className="mb-5 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Paso {selectedStepIndex + 1} de {steps.length}</p>
-              <h2 className="text-card-foreground text-xl font-bold">Configurar descarga</h2>
-            </div>
-            <span className="rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-semibold text-accent">
-              {steps[selectedStepIndex]?.title}
+        {/* Configuración: acordeón todo-en-uno (Fase 2) */}
+        <div className="animate-fade-in-up rounded-2xl border border-border bg-card p-4 shadow-glow">
+          <div className="mb-3 flex items-center justify-between gap-3 px-2 pt-1">
+            <h2 className="text-lg font-bold text-card-foreground">Configurar descarga</h2>
+            <span className="rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-semibold tabular-nums text-accent">
+              {accordionSections.filter((section) => sectionComplete(section.id)).length}/{accordionSections.length} listas
             </span>
           </div>
-          <StepPanel
-            step={step}
-            meta={meta}
-            datasetId={datasetId}
-            selectedDataset={selectedDataset}
-            acceptedTerms={acceptedTerms}
-            onAcceptedTermsChange={setAcceptedTerms}
-            selectedDepartments={selectedDepartments}
-            onToggleDepartment={toggleDepartment}
-            catalogFilters={catalogFilters}
-            catalogOptions={catalogOptions}
-            catalogOptionStatus={catalogOptionStatus}
-            catalogOptionErrors={catalogOptionErrors}
-            onToggleCatalogValue={toggleCatalogValue}
-            onLoadCatalogOptions={loadCatalogOptions}
-            canLoadCatalogOptions={Boolean(datasetId && selectedDepartments.length)}
-            stationCodesText={stationCodesText}
-            onStationCodesTextChange={setStationCodesText}
-            onLoadStationHelper={loadStationHelper}
-            stationHelperRows={stationHelperRows}
-            stationHelperLoading={stationHelperLoading}
-            dateRange={dateRange}
-            timeMode={timeMode}
-            setTimeMode={setTimeMode}
-            startDate={startDate}
-            endDate={endDate}
-            onStartDateChange={setStartDate}
-            onEndDateChange={setEndDate}
-            selectedFormats={selectedFormats}
-            onToggleOutputFormat={toggleOutputFormat}
-            onDatasetChange={setDatasetId}
-            selectionSummary={selectionSummary}
-            coverageReports={coverageReports}
-            coverageLoading={coverageLoading}
-            onRunPreview={runPreview}
-            onRunDownload={runDownload}
-            isBusy={isBusy}
-          />
-
-          {stepRequirement && !isLastStep && (
-            <p id="step-requirement" role="status" className="mt-4 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-              <Info className="h-3.5 w-3.5 shrink-0 text-accent" />
-              {stepRequirement}
-            </p>
-          )}
-
-          <div className="mt-6 flex items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={goBack}
-              disabled={selectedStepIndex === 0}
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold text-card-foreground transition-[border-color,transform] duration-200 hover:border-accent/40 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Atrás
-            </button>
-            <button
-              type="button"
-              onClick={goNext}
-              disabled={!canAdvance}
-              title={stepRequirement ?? undefined}
-              aria-describedby={stepRequirement ? 'step-requirement' : undefined}
-              className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary to-accent px-4 py-2 text-sm font-semibold text-primary-foreground transition-[box-shadow,transform] duration-200 hover:shadow-[0_0_24px] hover:shadow-accent/40 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
-            >
-              Siguiente
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-
-        <div className="animate-fade-in-up bg-card border border-border rounded-2xl p-4 shadow-glow">
-          <h2 className="text-card-foreground text-sm font-bold mb-3">Navegación del flujo</h2>
-          <div className="grid grid-cols-2 gap-2">
-            {steps.map((item, index) => {
-              const Icon = item.icon;
-              const isActive = step === item.id;
-              const isDone = selectedStepIndex > index && acceptedTerms;
+          <div className="space-y-2">
+            {accordionSections.map((section) => {
+              const Icon = section.icon;
+              const isOpen = openSection === section.id;
+              const complete = sectionComplete(section.id);
+              const requirement = sectionRequirement(section.id);
+              const panelId = `acordeon-${section.id}`;
               return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    if (item.id !== 'consent' && !acceptedTerms) {
-                      appendLog('ERROR', 'Debes aceptar el consentimiento antes de abrir otros pasos.');
-                      return;
-                    }
-                    setStep(item.id);
-                  }}
-                  className={`flex min-h-16 items-center gap-2 rounded-lg border px-3 py-2 text-left transition-[border-color,background-color,transform] duration-200 active:scale-[0.98] ${
-                    isActive
-                      ? 'border-accent bg-accent/10 text-card-foreground'
-                      : isDone
-                      ? 'border-success/30 bg-success/10 text-card-foreground'
-                      : 'border-border bg-background text-muted-foreground hover:border-accent/40'
-                  }`}
-                >
-                  {isDone ? <CheckCircle2 className="h-4 w-4 shrink-0 text-success" /> : <Icon className="h-4 w-4 shrink-0 text-accent" />}
-                  <span className="min-w-0">
-                    <span className="block truncate text-xs font-bold">{item.title}</span>
-                    <span className="block text-[11px] opacity-80">Paso {index + 1}</span>
-                  </span>
-                </button>
+                <div key={section.id} className="overflow-hidden rounded-xl border border-border bg-background">
+                  <button
+                    type="button"
+                    onClick={() => setOpenSection((current) => (current === section.id ? null : section.id))}
+                    aria-expanded={isOpen}
+                    aria-controls={panelId}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    <span
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition-colors ${
+                        complete ? 'border-success/40 bg-success/10 text-success' : 'border-accent/30 bg-accent/10 text-accent'
+                      }`}
+                    >
+                      {complete ? <CheckCircle2 className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-bold text-card-foreground">{section.title}</span>
+                      <span className={`block truncate text-xs ${requirement && !isOpen ? 'text-warning' : 'text-muted-foreground'}`}>
+                        {requirement && !isOpen ? requirement : sectionSummary(section.id)}
+                      </span>
+                    </span>
+                    <ChevronDown
+                      className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+                  {isOpen && (
+                    <div id={panelId} className="border-t border-border px-4 py-4">
+                      <StepPanel step={section.id} {...stepPanelProps} />
+                      {requirement && (
+                        <p role="status" className="mt-4 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                          <Info className="h-3.5 w-3.5 shrink-0 text-accent" />
+                          {requirement}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
+        </div>
+
+        {/* Consentimiento (barra no-bloqueante) + ejecución (CTA persistente) */}
+        <div className="animate-fade-in-up space-y-5 rounded-2xl border border-border bg-card p-6 shadow-glow">
+          <ConsentBar accepted={acceptedTerms} onChange={setAcceptedTerms} />
+          <StepPanel step="execute" {...stepPanelProps} />
         </div>
       </div>
 
@@ -1462,6 +1476,8 @@ function StepPanel({
   onAcceptedTermsChange,
   selectedDepartments,
   onToggleDepartment,
+  onSelectAllDepartments,
+  onClearDepartments,
   catalogFilters,
   catalogOptions,
   catalogOptionStatus,
@@ -1490,6 +1506,7 @@ function StepPanel({
   onRunPreview,
   onRunDownload,
   isBusy,
+  downloadRequirement,
 }: {
   step: StepId;
   meta: MetaResponse | null;
@@ -1499,6 +1516,8 @@ function StepPanel({
   onAcceptedTermsChange: (value: boolean) => void;
   selectedDepartments: string[];
   onToggleDepartment: (department: string) => void;
+  onSelectAllDepartments: (departments: string[]) => void;
+  onClearDepartments: () => void;
   catalogFilters: Record<string, string[]>;
   catalogOptions: Record<string, OptionItem[]>;
   catalogOptionStatus: Record<string, CatalogOptionStatus>;
@@ -1532,8 +1551,20 @@ function StepPanel({
   onRunPreview: () => void;
   onRunDownload: () => void;
   isBusy: boolean;
+  downloadRequirement: string | null;
 }) {
   const [filterSearch, setFilterSearch] = useState<Record<string, string>>({});
+  const [departmentSearch, setDepartmentSearch] = useState('');
+
+  // Alta/baja de un código de estación desde la tabla de apoyo (clic = agrega o
+  // quita). Reescribe el textarea normalizado a lista separada por comas.
+  const selectedStationCodes = parseStationCodes(stationCodesText);
+  const toggleStationCode = (code: string) => {
+    const next = selectedStationCodes.includes(code)
+      ? selectedStationCodes.filter((item) => item !== code)
+      : [...selectedStationCodes, code];
+    onStationCodesTextChange(next.join(', '));
+  };
 
   if (step === 'consent') {
     return (
@@ -1579,24 +1610,58 @@ function StepPanel({
         <div className="rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
           Selecciona al menos un departamento. Las descargas globales estan bloqueadas para mantener el servicio en costo $0.00 y evitar procesos masivos accidentales.
         </div>
-        <div className="flex flex-wrap gap-2">
-          {(meta?.departments || []).map((department) => (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={departmentSearch}
+              onChange={(event) => setDepartmentSearch(event.target.value)}
+              placeholder="Buscar departamento"
+              className="w-full rounded-lg border border-border bg-input py-2 pl-9 pr-3 text-sm text-card-foreground focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            />
+          </div>
+          <div className="flex gap-2">
             <button
-              key={department}
               type="button"
-              onClick={() => onToggleDepartment(department)}
-              className={`rounded-full border px-3 py-2 text-xs font-semibold transition-[border-color,background-color,color,transform] duration-200 active:scale-[0.96] ${
-                selectedDepartments.includes(department)
-                  ? 'border-accent bg-accent/15 text-accent'
-                  : 'border-border bg-background text-muted-foreground hover:border-accent/40'
-              }`}
+              onClick={() => onSelectAllDepartments(meta?.departments || [])}
+              className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold text-card-foreground transition-[border-color,transform] duration-200 hover:border-accent/40 active:scale-[0.97]"
             >
-              {department}
+              Todos
             </button>
-          ))}
+            <button
+              type="button"
+              onClick={onClearDepartments}
+              disabled={!selectedDepartments.length}
+              className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold text-muted-foreground transition-[border-color,transform] duration-200 hover:border-accent/40 active:scale-[0.97] disabled:opacity-50"
+            >
+              Ninguno
+            </button>
+          </div>
+        </div>
+        <div className="flex max-h-56 flex-wrap gap-2 overflow-y-auto">
+          {(meta?.departments || [])
+            .filter((department) => normalizeText(department).includes(normalizeText(departmentSearch)))
+            .map((department) => (
+              <button
+                key={department}
+                type="button"
+                onClick={() => onToggleDepartment(department)}
+                aria-pressed={selectedDepartments.includes(department)}
+                className={`rounded-full border px-3 py-2 text-xs font-semibold transition-[border-color,background-color,color,transform] duration-200 active:scale-[0.96] ${
+                  selectedDepartments.includes(department)
+                    ? 'border-accent bg-accent/15 text-accent'
+                    : 'border-border bg-background text-muted-foreground hover:border-accent/40'
+                }`}
+              >
+                {department}
+              </button>
+            ))}
         </div>
         <div className="rounded-lg border border-border bg-background p-3 text-sm text-muted-foreground">
-          Selección actual: {selectedDepartments.length ? selectedDepartments.join(', ') : 'Sin departamentos seleccionados'}
+          Selección actual:{' '}
+          {selectedDepartments.length
+            ? `${selectedDepartments.length} · ${selectedDepartments.join(', ')}`
+            : 'Sin departamentos seleccionados'}
         </div>
       </Section>
     );
@@ -1708,26 +1773,57 @@ function StepPanel({
             </button>
           </div>
           {stationHelperRows.length > 0 && (
-            <div className="max-h-52 overflow-y-auto rounded-lg border border-border bg-background">
-              <table className="w-full text-xs">
-                <thead className="border-b border-border text-muted-foreground">
-                  <tr>
-                    <th className="p-2 text-left">Código</th>
-                    <th className="p-2 text-left">Nombre</th>
-                    <th className="p-2 text-left">Municipio</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stationHelperRows.map((item) => (
-                    <tr key={`${item.code}-${item.name}`} className="border-b border-border">
-                      <td className="p-2 font-mono text-card-foreground">{item.code}</td>
-                      <td className="p-2 text-card-foreground">{item.name}</td>
-                      <td className="p-2 text-muted-foreground">{item.municipality}</td>
+            <>
+              <p className="text-xs text-muted-foreground">Toca una estación para agregarla o quitarla de la selección.</p>
+              <div className="max-h-52 overflow-y-auto rounded-lg border border-border bg-background">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 border-b border-border bg-background text-muted-foreground">
+                    <tr>
+                      <th className="p-2 text-left">Código</th>
+                      <th className="p-2 text-left">Nombre</th>
+                      <th className="p-2 text-left">Municipio</th>
+                      <th className="p-2 text-right">Acción</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {stationHelperRows.map((item) => {
+                      const added = selectedStationCodes.includes(item.code);
+                      return (
+                        <tr
+                          key={`${item.code}-${item.name}`}
+                          role="button"
+                          tabIndex={0}
+                          aria-pressed={added}
+                          onClick={() => toggleStationCode(item.code)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault();
+                              toggleStationCode(item.code);
+                            }
+                          }}
+                          className={`cursor-pointer border-b border-border transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                            added ? 'bg-accent/10' : ''
+                          }`}
+                        >
+                          <td className="p-2 font-mono text-card-foreground">{item.code}</td>
+                          <td className="p-2 text-card-foreground">{item.name}</td>
+                          <td className="p-2 text-muted-foreground">{item.municipality}</td>
+                          <td className="p-2 text-right">
+                            {added ? (
+                              <span className="inline-flex items-center gap-1 font-semibold text-success">
+                                <CheckCircle2 className="h-3.5 w-3.5" /> Añadida
+                              </span>
+                            ) : (
+                              <span className="text-accent">+ Agregar</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       </Section>
@@ -1803,8 +1899,9 @@ function StepPanel({
         <button
           type="button"
           onClick={onRunPreview}
-          disabled={isBusy}
-          className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-3 text-sm font-semibold text-card-foreground transition-[border-color,transform] duration-200 hover:border-accent/40 active:scale-[0.98] disabled:opacity-50"
+          disabled={isBusy || Boolean(downloadRequirement)}
+          title={downloadRequirement ?? undefined}
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-3 text-sm font-semibold text-card-foreground transition-[border-color,transform] duration-200 hover:border-accent/40 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
         >
           <FileSearch className="h-4 w-4" />
           Vista previa
@@ -1812,13 +1909,21 @@ function StepPanel({
         <button
           type="button"
           onClick={onRunDownload}
-          disabled={isBusy || coverageLoading}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-primary to-accent px-4 py-3 text-sm font-semibold text-primary-foreground transition-[box-shadow,transform] duration-200 hover:shadow-[0_0_24px] hover:shadow-accent/40 active:scale-[0.98] disabled:opacity-50"
+          disabled={isBusy || coverageLoading || Boolean(downloadRequirement)}
+          title={downloadRequirement ?? undefined}
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-primary to-accent px-4 py-3 text-sm font-semibold text-primary-foreground transition-[box-shadow,transform] duration-200 hover:shadow-[0_0_24px] hover:shadow-accent/40 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {coverageLoading ? <ShieldCheck className="h-4 w-4" /> : <Download className="h-4 w-4" />}
           {coverageLoading ? 'Validando cobertura...' : 'Descargar ZIP'}
         </button>
       </div>
+
+      {downloadRequirement && (
+        <p role="status" className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <Info className="h-3.5 w-3.5 shrink-0 text-accent" />
+          {downloadRequirement}
+        </p>
+      )}
 
       {coverageReports.length > 0 && (
         <div className="space-y-3 rounded-lg border border-border bg-background p-4">
@@ -1839,6 +1944,36 @@ function StepPanel({
         </div>
       )}
     </Section>
+  );
+}
+
+// Consentimiento no-bloqueante (Fase 2): el usuario puede configurar todo sin
+// aceptar; solo la vista previa y la descarga quedan gated por esta casilla.
+function ConsentBar({ accepted, onChange }: { accepted: boolean; onChange: (value: boolean) => void }) {
+  return (
+    <label
+      className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${
+        accepted ? 'border-success/40 bg-success/5' : 'border-warning/40 bg-warning/5'
+      }`}
+    >
+      <input
+        type="checkbox"
+        checked={accepted}
+        onChange={(event) => onChange(event.target.checked)}
+        className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent)]"
+      />
+      <span className="min-w-0 text-sm">
+        <span className="flex items-center gap-2 font-semibold text-card-foreground">
+          <ShieldCheck className={`h-4 w-4 shrink-0 ${accepted ? 'text-success' : 'text-warning'}`} />
+          {accepted ? 'Aviso legal aceptado' : 'Acepto el aviso legal'}
+        </span>
+        <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+          Herramienta para fines académicos e investigativos. Los datos provienen de IDEAM y Datos Abiertos Colombia; el
+          usuario conserva la responsabilidad sobre su uso posterior. Marca esta casilla para habilitar la vista previa y
+          la descarga.
+        </span>
+      </span>
+    </label>
   );
 }
 
