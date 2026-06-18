@@ -1315,6 +1315,20 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     downloadRequirement,
   };
 
+  // Cancelar la espera del cliente: detiene el polling y resetea la UI. NO mata el
+  // job en el servidor (no hay endpoint de cancelación); si termina, el ZIP queda
+  // disponible 1 h en el centro de descargas. setCurrentJobId(null) además limpia
+  // ACTIVE_JOB_KEY (efecto), así que una recarga no vuelve a engancharse.
+  const cancelarEspera = () => {
+    setCurrentJobId(null);
+    setCurrentJob(null);
+    setTransferProgress(null);
+    setIsBusy(false);
+    setProgress(0);
+    setActiveTask('Esperando configuración');
+    appendLog('INFO', 'Espera cancelada. El job puede seguir en el servidor; si termina, el ZIP queda disponible 1 hora.');
+  };
+
   // Resumen-primero en prosa (antes del botón): qué se va a descargar, en lenguaje
   // natural, para prevenir descargas erróneas y fijar expectativa.
   const resumenAnios =
@@ -1464,6 +1478,18 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           elapsedLabel={formatDuration(runtimeElapsedMs)}
           task={stageText}
         />
+
+        {isBusy && !readyDownloadJob && (
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={cancelarEspera}
+              className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
+            >
+              Cancelar
+            </button>
+          </div>
+        )}
 
         <CuriosidadEspera
           activo={isBusy}
