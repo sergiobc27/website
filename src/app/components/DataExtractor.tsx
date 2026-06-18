@@ -23,8 +23,11 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { EmptyState } from './EmptyState';
+import { CuriosidadEspera } from './CuriosidadEspera';
 import { ApiError, apiJson, apiUrl } from '../lib/ideamApi';
 import { fmt } from '../lib/format';
+import { construirResumenProsa } from '../lib/resumenDescarga';
+import { etaAmable } from '../lib/progresoDescarga';
 import { canDownloadAgain, type HistoryEntry, readHistory, saveHistory } from '../lib/downloadHistory';
 import { NAVIGATE_EVENT, pathToView, type NavigateDetail } from '../lib/navigation';
 import { buildSearch, parseSearch } from '../lib/urlState';
@@ -1168,11 +1171,10 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     : downloadMetrics
       ? `${downloadMetrics.downloadedPages}/${downloadMetrics.downloadedPages}`
       : '0/0';
-  const runtimeEta = currentJob?.estimatedRemainingSeconds !== null && currentJob?.estimatedRemainingSeconds !== undefined
-    ? formatDuration(currentJob.estimatedRemainingSeconds * 1000)
-    : currentJob?.status === 'planning'
-      ? 'Calculando'
-      : 'Sin dato';
+  // ETA en rango amable (sin falsa precisión); 'Calculando' mientras planea.
+  const runtimeEta =
+    etaAmable(currentJob?.estimatedRemainingSeconds) ||
+    (currentJob?.status === 'planning' ? 'Calculando' : 'Sin dato');
   const runtimeRate = formatRowsPerSecond(currentJob?.rowsPerSecond || 0);
   const runtimeCurrentPage = currentJob
     ? `${currentJob.currentPage}/${Math.max(currentJob.totalPages, 1)}`
@@ -1313,6 +1315,37 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     downloadRequirement,
   };
 
+  // Cancelar la espera del cliente: detiene el polling y resetea la UI. NO mata el
+  // job en el servidor (no hay endpoint de cancelación); si termina, el ZIP queda
+  // disponible 1 h en el centro de descargas. setCurrentJobId(null) además limpia
+  // ACTIVE_JOB_KEY (efecto), así que una recarga no vuelve a engancharse.
+  const cancelarEspera = () => {
+    setCurrentJobId(null);
+    setCurrentJob(null);
+    setTransferProgress(null);
+    setIsBusy(false);
+    setProgress(0);
+    setActiveTask('Esperando configuración');
+    appendLog('INFO', 'Espera cancelada. El job puede seguir en el servidor; si termina, el ZIP queda disponible 1 hora.');
+  };
+
+  // Resumen-primero en prosa (antes del botón): qué se va a descargar, en lenguaje
+  // natural, para prevenir descargas erróneas y fijar expectativa.
+  const resumenAnios =
+    timeMode === 'custom'
+      ? { inicio: startDate ? Number(startDate.slice(0, 4)) : null, fin: endDate ? Number(endDate.slice(0, 4)) : null }
+      : {
+          inicio: dateRange?.startDate ? Number(dateRange.startDate.slice(0, 4)) : null,
+          fin: dateRange?.endDate ? Number(dateRange.endDate.slice(0, 4)) : null,
+        };
+  const resumenProsa = construirResumenProsa({
+    variable: selectedDataset?.name ?? '',
+    departamentos: selectedDepartments,
+    anioInicio: resumenAnios.inicio,
+    anioFin: resumenAnios.fin,
+    estaciones: liveEstimate?.stationPoolSize ?? 0,
+  });
+
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-12 min-h-[calc(100vh-7rem)]">
       <div className="space-y-6 xl:col-span-4 xl:sticky xl:top-6 self-start">
@@ -1422,6 +1455,11 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
               )}
             </div>
           )}
+          {selectedDataset && (
+            <p className="rounded-xl border border-accent/20 bg-accent/5 px-4 py-3 text-sm leading-relaxed text-card-foreground">
+              {resumenProsa}
+            </p>
+          )}
           <StepPanel step="execute" {...stepPanelProps} />
         </div>
       </div>
@@ -1441,43 +1479,27 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           task={stageText}
         />
 
+        {isBusy && !readyDownloadJob && (
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={cancelarEspera}
+              className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
+            >
+              Cancelar
+            </button>
+          </div>
+        )}
+
+        <CuriosidadEspera
+          activo={isBusy}
+          esPrecipitacion={(selectedDataset?.name ?? '').toLowerCase().includes('precipit')}
+          departamentos={selectedDepartments}
+        />
+
         {readyDownloadJob && (
           <ReadyDownloadPanel job={readyDownloadJob} onDownloadPart={downloadJobPart} />
         )}
-
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <div className="animate-fade-in-up bg-card border border-border rounded-2xl p-6 shadow-glow">
-            <h3 className="text-card-foreground font-bold mb-4">Resumen configurado</h3>
-            <div className="space-y-3 text-sm">
-              <SummaryRow label="Variable" value={selectedDataset?.name || 'Sin selección'} />
-              <SummaryRow label="Departamentos" value={selectionSummary.departments} />
-              <SummaryRow label="Rango temporal" value={`${startDate || 'N/D'} -> ${endDate || 'N/D'}`} />
-              <SummaryRow label="Estaciones manuales" value={String(selectionSummary.stationCodes.length)} />
-              <SummaryRow
-                label="Filtros avanzados"
-                value={
-                  selectionSummary.advancedSelections.length
-                    ? selectionSummary.advancedSelections.map((item) => `${item.label}: ${item.values.length}`).join(' | ')
-                    : 'Sin filtros avanzados'
-                }
-              />
-            </div>
-          </div>
-
-          <div className="animate-fade-in-up bg-card border border-border rounded-2xl p-6 shadow-glow">
-            <h3 className="text-card-foreground font-bold mb-4">Salida esperada</h3>
-            <div className="space-y-3 text-sm">
-              <SummaryRow label="Entrega" value="ZIP único organizado por carpetas" />
-              <SummaryRow label="Formatos" value={selectionSummary.formats.length ? selectionSummary.formats.join(', ').toUpperCase() : 'Sin selección'} />
-              <SummaryRow label="Pool de estaciones" value={String(downloadMetrics?.stationPoolSize || preview?.stationPoolSize || 0)} />
-              <SummaryRow label="Planes de consulta" value={String(downloadMetrics?.queryPlans || preview?.queryPlans || 0)} />
-              <SummaryRow label="ZIP esperado" value={readyDownloadJob || downloadMetrics ? '1 archivo' : 'Pendiente'} />
-              <SummaryRow label="Municipios cubiertos" value={String(downloadMetrics?.municipalityCount || preview?.summary.municipalityCount || 0)} />
-            </div>
-          </div>
-        </div>
-
-        <OperationTimeline logs={logs} />
 
         <div className="animate-fade-in-up bg-card border border-border rounded-2xl overflow-hidden shadow-glow">
           <div className="flex items-center justify-between px-6 py-4 border-b border-border">
@@ -1531,33 +1553,56 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           </div>
         </div>
 
-        <div className="animate-fade-in-up bg-card border border-border rounded-2xl overflow-hidden shadow-glow">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-            <h3 className="text-card-foreground font-bold">Métricas de descarga</h3>
-            <span className="text-muted-foreground text-sm font-mono">{downloadMetrics?.fileName || 'Sin ejecución final'}</span>
-          </div>
-          <div className="p-6">
-            {!downloadMetrics ? (
-              <EmptyState
-                icon={Layers}
-                title="Sin métricas todavía"
-                description="Al completar una descarga verás filas, estaciones, municipios, peso y tiempo."
-                hint=""
-              />
-            ) : (
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <MetricCard title="Filas" value={downloadMetrics.rowCount.toLocaleString('es-CO')} icon={Database} />
-                <MetricCard title="Tiempo total" value={formatDuration(downloadMetrics.processingMs)} icon={Clock3} />
-                <MetricCard title="Peso ZIP" value={formatBytes(downloadMetrics.sizeBytes)} icon={FileArchive} />
-                <MetricCard title="Estaciones" value={String(downloadMetrics.stationCount)} icon={MapPin} />
-                <MetricCard title="Municipios" value={String(downloadMetrics.municipalityCount)} icon={Layers} />
-                <MetricCard title="Zonas" value={String(downloadMetrics.zoneCount)} icon={Filter} />
-                <MetricCard title="Inicio observado" value={formatDateLabel(downloadMetrics.observedStart)} icon={Calendar} />
-                <MetricCard title="Fin observado" value={formatDateLabel(downloadMetrics.observedEnd)} icon={Calendar} />
+        {/* Detalle técnico: info de baja utilidad para el usuario final, colapsada (menos es más). */}
+        <details className="group animate-fade-in-up">
+          <summary className="flex cursor-pointer list-none items-center justify-between rounded-2xl border border-border bg-card px-6 py-4 font-bold text-card-foreground shadow-glow transition-colors hover:border-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent [&::-webkit-details-marker]:hidden">
+            <span className="flex items-center gap-2"><Layers className="h-4 w-4 text-muted-foreground" />Ver detalle técnico</span>
+            <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="mt-4 space-y-6">
+            <div className="bg-card border border-border rounded-2xl p-6 shadow-glow">
+              <h3 className="text-card-foreground font-bold mb-4">Salida esperada</h3>
+              <div className="space-y-3 text-sm">
+                <SummaryRow label="Entrega" value="ZIP único organizado por carpetas" />
+                <SummaryRow label="Formatos" value={selectionSummary.formats.length ? selectionSummary.formats.join(', ').toUpperCase() : 'Sin selección'} />
+                <SummaryRow label="Pool de estaciones" value={String(downloadMetrics?.stationPoolSize || preview?.stationPoolSize || 0)} />
+                <SummaryRow label="Planes de consulta" value={String(downloadMetrics?.queryPlans || preview?.queryPlans || 0)} />
+                <SummaryRow label="ZIP esperado" value={readyDownloadJob || downloadMetrics ? '1 archivo' : 'Pendiente'} />
+                <SummaryRow label="Municipios cubiertos" value={String(downloadMetrics?.municipalityCount || preview?.summary.municipalityCount || 0)} />
               </div>
-            )}
+            </div>
+
+            <OperationTimeline logs={logs} />
+
+            <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-glow">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+                <h3 className="text-card-foreground font-bold">Métricas de descarga</h3>
+                <span className="text-muted-foreground text-sm font-mono">{downloadMetrics?.fileName || 'Sin ejecución final'}</span>
+              </div>
+              <div className="p-6">
+                {!downloadMetrics ? (
+                  <EmptyState
+                    icon={Layers}
+                    title="Sin métricas todavía"
+                    description="Al completar una descarga verás filas, estaciones, municipios, peso y tiempo."
+                    hint=""
+                  />
+                ) : (
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <MetricCard title="Filas" value={downloadMetrics.rowCount.toLocaleString('es-CO')} icon={Database} />
+                    <MetricCard title="Tiempo total" value={formatDuration(downloadMetrics.processingMs)} icon={Clock3} />
+                    <MetricCard title="Peso ZIP" value={formatBytes(downloadMetrics.sizeBytes)} icon={FileArchive} />
+                    <MetricCard title="Estaciones" value={String(downloadMetrics.stationCount)} icon={MapPin} />
+                    <MetricCard title="Municipios" value={String(downloadMetrics.municipalityCount)} icon={Layers} />
+                    <MetricCard title="Zonas" value={String(downloadMetrics.zoneCount)} icon={Filter} />
+                    <MetricCard title="Inicio observado" value={formatDateLabel(downloadMetrics.observedStart)} icon={Calendar} />
+                    <MetricCard title="Fin observado" value={formatDateLabel(downloadMetrics.observedEnd)} icon={Calendar} />
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
+        </details>
 
         <DownloadCenter
           tick={historyTick}
@@ -1988,21 +2033,6 @@ function StepPanel({
 
   return (
     <Section title="Ejecución y descarga" icon={Rocket}>
-      <div className="rounded-lg border border-border bg-background p-4 text-sm text-muted-foreground space-y-2">
-        <p>
-          <span className="font-semibold text-card-foreground">Departamentos:</span> {selectionSummary.departments}
-        </p>
-        <p>
-          <span className="font-semibold text-card-foreground">Filtros avanzados:</span>{' '}
-          {selectionSummary.advancedSelections.length
-            ? selectionSummary.advancedSelections.map((item) => `${item.label} (${item.values.length})`).join(' · ')
-            : 'Sin filtros avanzados'}
-        </p>
-        <p>
-          <span className="font-semibold text-card-foreground">Estaciones manuales:</span> {selectionSummary.stationCodes.length}
-        </p>
-      </div>
-
       <div className="space-y-3">
         <p className="text-sm font-semibold text-card-foreground">Formatos dentro del ZIP</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
