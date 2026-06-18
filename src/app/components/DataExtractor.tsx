@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { EmptyState } from './EmptyState';
+import { CuriosidadEspera } from './CuriosidadEspera';
 import { ApiError, apiJson, apiUrl } from '../lib/ideamApi';
 import { fmt } from '../lib/format';
 import { construirResumenProsa } from '../lib/resumenDescarga';
@@ -1462,6 +1463,12 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           page={runtimeCurrentPage}
           elapsedLabel={formatDuration(runtimeElapsedMs)}
           task={stageText}
+        />
+
+        <CuriosidadEspera
+          activo={isBusy}
+          esPrecipitacion={(selectedDataset?.name ?? '').toLowerCase().includes('precipit')}
+          departamentos={selectedDepartments}
         />
 
         {readyDownloadJob && (
