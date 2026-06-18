@@ -27,6 +27,7 @@ import { CuriosidadEspera } from './CuriosidadEspera';
 import { ApiError, apiJson, apiUrl } from '../lib/ideamApi';
 import { fmt } from '../lib/format';
 import { construirResumenProsa } from '../lib/resumenDescarga';
+import { etaAmable } from '../lib/progresoDescarga';
 import { canDownloadAgain, type HistoryEntry, readHistory, saveHistory } from '../lib/downloadHistory';
 import { NAVIGATE_EVENT, pathToView, type NavigateDetail } from '../lib/navigation';
 import { buildSearch, parseSearch } from '../lib/urlState';
@@ -1170,11 +1171,10 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     : downloadMetrics
       ? `${downloadMetrics.downloadedPages}/${downloadMetrics.downloadedPages}`
       : '0/0';
-  const runtimeEta = currentJob?.estimatedRemainingSeconds !== null && currentJob?.estimatedRemainingSeconds !== undefined
-    ? formatDuration(currentJob.estimatedRemainingSeconds * 1000)
-    : currentJob?.status === 'planning'
-      ? 'Calculando'
-      : 'Sin dato';
+  // ETA en rango amable (sin falsa precisión); 'Calculando' mientras planea.
+  const runtimeEta =
+    etaAmable(currentJob?.estimatedRemainingSeconds) ||
+    (currentJob?.status === 'planning' ? 'Calculando' : 'Sin dato');
   const runtimeRate = formatRowsPerSecond(currentJob?.rowsPerSecond || 0);
   const runtimeCurrentPage = currentJob
     ? `${currentJob.currentPage}/${Math.max(currentJob.totalPages, 1)}`
@@ -2007,21 +2007,6 @@ function StepPanel({
 
   return (
     <Section title="Ejecución y descarga" icon={Rocket}>
-      <div className="rounded-lg border border-border bg-background p-4 text-sm text-muted-foreground space-y-2">
-        <p>
-          <span className="font-semibold text-card-foreground">Departamentos:</span> {selectionSummary.departments}
-        </p>
-        <p>
-          <span className="font-semibold text-card-foreground">Filtros avanzados:</span>{' '}
-          {selectionSummary.advancedSelections.length
-            ? selectionSummary.advancedSelections.map((item) => `${item.label} (${item.values.length})`).join(' · ')
-            : 'Sin filtros avanzados'}
-        </p>
-        <p>
-          <span className="font-semibold text-card-foreground">Estaciones manuales:</span> {selectionSummary.stationCodes.length}
-        </p>
-      </div>
-
       <div className="space-y-3">
         <p className="text-sm font-semibold text-card-foreground">Formatos dentro del ZIP</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
