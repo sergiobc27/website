@@ -30,6 +30,7 @@ export function FacetCombobox({
   status = 'ready',
   statusMessage,
   disabled = false,
+  single = false,
 }: {
   label: string;
   options: FacetOption[];
@@ -40,6 +41,13 @@ export function FacetCombobox({
   status?: FacetStatus;
   statusMessage?: string;
   disabled?: boolean;
+  /**
+   * Modo selección única: oculta "Todos/Ninguno", usa círculo (radio) en vez de
+   * checkbox, cierra el popover al elegir y muestra el nombre elegido en el
+   * disparador. La forma del estado sigue siendo string[] (con 0 o 1 elemento),
+   * así que el padre no cambia su modelo de datos.
+   */
+  single?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
@@ -67,6 +75,8 @@ export function FacetCombobox({
   const filtered = options.filter((o) => norm(`${o.label || o.value} ${o.total ?? ''}`).includes(norm(q)));
   const count = selected.length;
   const busy = status === 'loading' || status === 'warming';
+  const selectedLabel = single && count ? options.find((o) => o.value === selected[0])?.label || selected[0] : null;
+  const triggerLabel = single ? (selectedLabel ? `${label}: ${selectedLabel}` : label) : count > 0 ? `${label} · ${count}` : label;
 
   return (
     <div ref={rootRef} className="relative">
@@ -82,7 +92,7 @@ export function FacetCombobox({
             : 'border-border bg-background text-card-foreground hover:border-accent/40'
         }`}
       >
-        <span className="max-w-[12rem] truncate">{count > 0 ? `${label} · ${count}` : label}</span>
+        <span className="max-w-[12rem] truncate">{triggerLabel}</span>
         {busy ? (
           <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
         ) : (
@@ -93,7 +103,7 @@ export function FacetCombobox({
         <div
           role="listbox"
           aria-label={label}
-          aria-multiselectable="true"
+          aria-multiselectable={!single}
           className="absolute z-30 mt-2 w-72 max-w-[80vw] rounded-xl border border-border bg-card p-2 shadow-glow"
         >
           <div className="relative mb-2">
@@ -106,7 +116,7 @@ export function FacetCombobox({
               className="w-full rounded-lg border border-border bg-input py-1.5 pl-8 pr-2 text-sm text-card-foreground focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             />
           </div>
-          {(onAll || onNone) && (
+          {!single && (onAll || onNone) && (
             <div className="mb-2 flex gap-2">
               {onAll && (
                 <button
@@ -145,17 +155,20 @@ export function FacetCombobox({
                     type="button"
                     role="option"
                     aria-selected={sel}
-                    onClick={() => onToggle(o.value)}
+                    onClick={() => {
+                      onToggle(o.value);
+                      if (single) setOpen(false);
+                    }}
                     className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted/50 ${
                       sel ? 'text-accent' : 'text-card-foreground'
                     }`}
                   >
                     <span
-                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                      className={`flex h-4 w-4 shrink-0 items-center justify-center border ${single ? 'rounded-full' : 'rounded'} ${
                         sel ? 'border-accent bg-accent text-white' : 'border-border'
                       }`}
                     >
-                      {sel && <Check className="h-3 w-3" />}
+                      {sel && (single ? <span className="h-1.5 w-1.5 rounded-full bg-white" /> : <Check className="h-3 w-3" />)}
                     </span>
                     <span className="min-w-0 flex-1 truncate">{o.label || o.value}</span>
                     {o.total != null && (

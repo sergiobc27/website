@@ -381,16 +381,23 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   }, []);
 
   // Precarga los filtros desde un deep-link ({var,dep,est,years}). El Asistente
-  // envía un solo `dep`; "Compartir configuración" puede enviar varios separados
-  // por coma (retrocompatible: un valor sin coma = arreglo de uno). Si var/dep
-  // cambian, los efectos de reset limpiarán estación y recargarán el rango →
-  // estación/años quedan pendientes y se aplican cuando el nuevo rango llega
-  // (efecto de abajo). No tocamos el aviso legal.
+  // envía un solo `dep`. Enlaces antiguos (o "Compartir") podían traer varios
+  // separados por coma: ahora solo descargamos UN departamento por descarga, así
+  // que tomamos el primero. Si var/dep cambian, los efectos de reset limpiarán
+  // estación y recargarán el rango → estación/años quedan pendientes y se aplican
+  // cuando el nuevo rango llega (efecto de abajo). No tocamos el aviso legal.
   const aplicarDeepLink = (params: Record<string, string>) => {
     if (!params || !(params.var || params.dep || params.est || params.years)) return;
-    const depList = params.dep
+    const depParsed = params.dep
       ? Array.from(new Set(params.dep.split(',').map((item) => item.trim()).filter(Boolean)))
       : [];
+    const depList = depParsed.slice(0, 1);
+    if (depParsed.length > 1) {
+      appendLog(
+        'INFO',
+        `El enlace traía ${depParsed.length} departamentos; cada descarga procesa solo uno, se usó "${depList[0]}".`
+      );
+    }
     const datasetCambia = Boolean(params.var) && params.var !== datasetId;
     const depCambia =
       depList.length > 0 &&
@@ -872,7 +879,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       throw new Error('Selecciona una variable para continuar.');
     }
     if (!selectedDepartments.length) {
-      throw new Error('Selecciona al menos un departamento. Las descargas globales no estan permitidas.');
+      throw new Error('Selecciona un departamento. Las descargas globales no estan permitidas.');
     }
     if (!startDate || !endDate) {
       throw new Error('Debes definir el rango temporal.');
@@ -882,14 +889,13 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     }
   };
 
+  // Selección única: cada descarga procesa un solo departamento (evita descargas
+  // masivas que tumbarían el servicio gratis). Clic en uno nuevo lo reemplaza;
+  // clic en el ya elegido lo deselecciona. La forma del estado sigue siendo
+  // string[] (con 0 o 1 elemento) para no tocar payload/deep-links/Compartir.
   const toggleDepartment = (department: string) => {
-    setSelectedDepartments((current) =>
-      current.includes(department) ? current.filter((item) => item !== department) : [...current, department]
-    );
+    setSelectedDepartments((current) => (current.includes(department) ? [] : [department]));
   };
-
-  const selectAllDepartments = (departments: string[]) => setSelectedDepartments(departments);
-  const clearDepartments = () => setSelectedDepartments([]);
 
   // Comparte la configuración actual como deep-link {var,dep,est,years}. dep/est
   // se serializan separados por coma. Limitación documentada: las fechas custom
@@ -1134,7 +1140,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   // cabecera), estado de completitud y resumen para la cabecera colapsada.
   const sectionRequirement = (id: StepId): string | null => {
     if (id === 'variable') return datasetId ? null : 'Selecciona una variable.';
-    if (id === 'territory') return selectedDepartments.length ? null : 'Selecciona al menos un departamento.';
+    if (id === 'territory') return selectedDepartments.length ? null : 'Selecciona un departamento.';
     if (id === 'time') return !startDate || !endDate || startDate > endDate ? 'Configura un rango temporal válido.' : null;
     return null; // 'advanced' es opcional
   };
@@ -1149,11 +1155,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   const sectionSummary = (id: StepId): string => {
     if (id === 'variable') return selectedDataset?.name || 'Sin selección';
     if (id === 'territory') {
-      return selectedDepartments.length
-        ? selectedDepartments.length <= 2
-          ? selectedDepartments.join(', ')
-          : `${selectedDepartments.length} departamentos`
-        : 'Sin selección';
+      return selectedDepartments[0] || 'Sin selección';
     }
     if (id === 'advanced') {
       const filtros = selectionSummary.advancedSelections.reduce((sum, item) => sum + item.values.length, 0);
@@ -1299,8 +1301,6 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     onAcceptedTermsChange: setAcceptedTerms,
     selectedDepartments,
     onToggleDepartment: toggleDepartment,
-    onSelectAllDepartments: selectAllDepartments,
-    onClearDepartments: clearDepartments,
     catalogFilters,
     catalogOptions,
     catalogOptionStatus,
@@ -1702,8 +1702,6 @@ function StepPanel({
   onAcceptedTermsChange,
   selectedDepartments,
   onToggleDepartment,
-  onSelectAllDepartments,
-  onClearDepartments,
   catalogFilters,
   catalogOptions,
   catalogOptionStatus,
@@ -1742,8 +1740,6 @@ function StepPanel({
   onAcceptedTermsChange: (value: boolean) => void;
   selectedDepartments: string[];
   onToggleDepartment: (department: string) => void;
-  onSelectAllDepartments: (departments: string[]) => void;
-  onClearDepartments: () => void;
   catalogFilters: Record<string, string[]>;
   catalogOptions: Record<string, OptionItem[]>;
   catalogOptionStatus: Record<string, CatalogOptionStatus>;
@@ -1815,16 +1811,15 @@ function StepPanel({
     return (
       <Section title="Cobertura territorial" icon={MapPin}>
         <div className="rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
-          Selecciona al menos un departamento. Las descargas globales estan bloqueadas para mantener el servicio en costo $0.00 y evitar procesos masivos accidentales.
+          Selecciona un departamento. Cada descarga procesa un solo departamento para mantener el servicio en costo $0.00 y evitar procesos masivos.
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <FacetCombobox
             label="Departamento"
+            single
             options={(meta?.departments || []).map((d) => ({ value: d }))}
             selected={selectedDepartments}
             onToggle={onToggleDepartment}
-            onAll={() => onSelectAllDepartments(meta?.departments || [])}
-            onNone={onClearDepartments}
           />
           <button
             type="button"
@@ -1853,35 +1848,6 @@ function StepPanel({
               onToggle={onToggleDepartment}
             />
           </Suspense>
-        )}
-        {selectedDepartments.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-2">
-            {selectedDepartments.map((department) => (
-              <span
-                key={department}
-                className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent"
-              >
-                {department}
-                <button
-                  type="button"
-                  onClick={() => onToggleDepartment(department)}
-                  aria-label={`Quitar ${department}`}
-                  className="text-accent/70 transition-colors hover:text-card-foreground"
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-            <button
-              type="button"
-              onClick={onClearDepartments}
-              className="text-xs text-muted-foreground underline transition-colors hover:text-card-foreground"
-            >
-              Limpiar todo
-            </button>
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">Sin departamentos seleccionados.</p>
         )}
       </Section>
     );
@@ -1924,17 +1890,41 @@ function StepPanel({
           })}
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-semibold text-card-foreground">Códigos de estación manuales</label>
-          <textarea
-            value={stationCodesText}
-            onChange={(event) => onStationCodesTextChange(event.target.value)}
-            rows={4}
-            placeholder="Ej: 21205790, 29045180"
-            className="w-full rounded-lg border border-border bg-input px-4 py-3 text-card-foreground focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          />
+          <label className="text-sm font-semibold text-card-foreground">Estaciones específicas (opcional)</label>
+          <p className="text-xs text-muted-foreground">
+            Por defecto se incluyen todas las estaciones del departamento. Para acotar a estaciones puntuales, ábrelas con
+            “Ver estaciones filtradas” y tócalas para agregarlas o quitarlas.
+          </p>
+          {selectedStationCodes.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              {selectedStationCodes.map((code) => (
+                <span
+                  key={code}
+                  className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent"
+                >
+                  <span className="font-mono">{code}</span>
+                  <button
+                    type="button"
+                    onClick={() => toggleStationCode(code)}
+                    aria-label={`Quitar estación ${code}`}
+                    className="text-accent/70 transition-colors hover:text-card-foreground"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              <button
+                type="button"
+                onClick={() => onStationCodesTextChange('')}
+                className="text-xs text-muted-foreground underline transition-colors hover:text-card-foreground"
+              >
+                Limpiar
+              </button>
+            </div>
+          )}
           <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
             <span className="text-xs text-muted-foreground">
-              Estaciones cargadas manualmente: {selectionSummary.stationCodes.length}
+              Estaciones seleccionadas: {selectionSummary.stationCodes.length}
             </span>
             <button
               type="button"
