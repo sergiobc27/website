@@ -1431,7 +1431,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       <div
         ref={configRef}
         tabIndex={-1}
-        className={`mx-auto w-full max-w-3xl space-y-6 focus:outline-none ${mode === 'config' ? '' : 'hidden'}`}
+        className={`mx-auto w-full space-y-6 focus:outline-none ${acceptedTerms ? 'max-w-3xl' : 'max-w-5xl'} ${mode === 'config' ? '' : 'hidden'}`}
       >
         {/* Aviso legal: puerta de entrada bloqueante — lo PRIMERO que se ve. Sin
             aceptar, la configuración y la descarga quedan ocultas. */}
