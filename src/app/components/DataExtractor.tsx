@@ -349,7 +349,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     };
   }, [catalogFilters, meta?.catalogFilters, selectedDepartments, selectedFormats, stationCodesText]);
 
-  const previewColumns = preview?.rows.length ? Object.keys(preview.rows[0]).slice(0, 8) : [];
+  const previewColumns = preview?.rows.length ? Object.keys(preview.rows[0]) : [];
 
   const appendLog = useCallback((type: LogLevel, message: string) => {
     setLogs((current) => {
@@ -1496,7 +1496,9 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           <div className="flex items-center justify-between px-6 py-4 border-b border-border">
             <h3 className="text-card-foreground font-bold">Vista previa de resultados</h3>
             <span className="text-muted-foreground text-sm font-mono">
-              {preview?.rowCount?.toLocaleString('es-CO') || 0} filas encontradas
+              {preview?.rows?.length
+                ? `muestra de ${preview.rows.length} de ${(preview.rowCount || 0).toLocaleString('es-CO')} filas`
+                : `${preview?.rowCount?.toLocaleString('es-CO') || 0} filas encontradas`}
             </span>
           </div>
           <div className="p-6">
@@ -1515,12 +1517,17 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
                   <MetricCard title="Municipios" value={String(preview.summary.municipalityCount)} icon={Layers} />
                   <MetricCard title="Tiempo" value={formatDuration(preview.processingMs)} icon={TimerReset} />
                 </div>
-                <div className="overflow-x-auto">
+                <div
+                  role="region"
+                  aria-label="Vista previa de datos (desplázate para ver más)"
+                  tabIndex={0}
+                  className="max-h-[28rem] overflow-auto rounded-lg border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
                   <table className="w-full text-sm">
-                    <thead className="text-muted-foreground border-b border-border">
+                    <thead className="sticky top-0 z-10 text-muted-foreground">
                       <tr>
                         {previewColumns.map((column) => (
-                          <th key={column} className="text-left p-3 font-mono font-bold">
+                          <th key={column} className="bg-card p-3 text-left font-mono font-bold shadow-[inset_0_-1px_0_var(--border)]">
                             {column}
                           </th>
                         ))}
