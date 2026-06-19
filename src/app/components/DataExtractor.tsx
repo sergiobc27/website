@@ -24,6 +24,7 @@ import {
 import { toast } from 'sonner';
 import { EmptyState } from './EmptyState';
 import { CuriosidadEspera } from './CuriosidadEspera';
+import { SlideToAccept } from './SlideToAccept';
 import { ApiError, apiJson, apiUrl } from '../lib/ideamApi';
 import { fmt } from '../lib/format';
 import { construirResumenProsa } from '../lib/resumenDescarga';
@@ -58,9 +59,9 @@ const MAX_OPERATION_LOGS = 80;
 const EXPORT_AVAILABILITY_MS = 60 * 60 * 1000;
 const EXPORT_PLAN_FAST_TIMEOUT_MS = 2500;
 
-type StepId = 'consent' | 'variable' | 'territory' | 'advanced' | 'time' | 'execute';
+type StepId = 'variable' | 'territory' | 'advanced' | 'time' | 'execute';
 
-const STEP_IDS: StepId[] = ['consent', 'variable', 'territory', 'advanced', 'time', 'execute'];
+const STEP_IDS: StepId[] = ['variable', 'territory', 'advanced', 'time', 'execute'];
 
 interface StoredExtractorConfig {
   acceptedTerms?: boolean;
@@ -250,7 +251,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   const [storedConfig] = useState<StoredExtractorConfig>(loadStoredConfig);
   const [meta, setMeta] = useState<MetaResponse | null>(null);
   const [step, setStep] = useState<StepId>(
-    storedConfig.acceptedTerms && storedConfig.step && STEP_IDS.includes(storedConfig.step) ? storedConfig.step : 'consent'
+    storedConfig.step && STEP_IDS.includes(storedConfig.step) ? storedConfig.step : 'variable'
   );
   // Sección abierta del acordeón "todo-en-uno" (Fase 2). Reemplaza la navegación
   // por pasos: el usuario abre/cierra cada sección de configuración a voluntad.
@@ -1418,7 +1419,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
 
         {/* Consentimiento (barra no-bloqueante) + ejecución (CTA persistente) */}
         <div className="animate-fade-in-up space-y-5 rounded-2xl border border-border bg-card p-6 shadow-glow">
-          <ConsentBar accepted={acceptedTerms} onChange={setAcceptedTerms} />
+          <SlideToAccept accepted={acceptedTerms} onChange={setAcceptedTerms} />
           {(estimating || liveEstimate) && (
             <div className="rounded-xl border border-border bg-background p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Estimación antes de descargar</p>
@@ -1712,24 +1713,6 @@ function StepPanel({
       : [...selectedStationCodes, code];
     onStationCodesTextChange(next.join(', '));
   };
-
-  if (step === 'consent') {
-    return (
-      <Section title="Aviso legal" icon={ShieldCheck}>
-        <div className="rounded-lg border border-border bg-background p-4 text-sm leading-6 text-muted-foreground">
-          Esta herramienta fue creada para fines académicos e investigativos. La información proviene de IDEAM y
-          Datos Abiertos Colombia. El usuario conserva responsabilidad sobre el tratamiento posterior de los datos y su
-          uso.
-        </div>
-        <label className="flex items-start gap-3 rounded-lg border border-border bg-background p-4">
-          <input type="checkbox" checked={acceptedTerms} onChange={(event) => onAcceptedTermsChange(event.target.checked)} />
-          <span className="text-sm text-card-foreground font-medium">
-            Acepto los términos y entiendo que debo marcar este consentimiento para continuar con la configuración y la descarga.
-          </span>
-        </label>
-      </Section>
-    );
-  }
 
   if (step === 'variable') {
     return (
@@ -2169,34 +2152,6 @@ function DownloadCenter({ tick, onRedownload }: { tick: number; onRedownload: (e
 
 // Consentimiento no-bloqueante (Fase 2): el usuario puede configurar todo sin
 // aceptar; solo la vista previa y la descarga quedan gated por esta casilla.
-function ConsentBar({ accepted, onChange }: { accepted: boolean; onChange: (value: boolean) => void }) {
-  return (
-    <label
-      className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${
-        accepted ? 'border-success/40 bg-success/5' : 'border-warning/40 bg-warning/5'
-      }`}
-    >
-      <input
-        type="checkbox"
-        checked={accepted}
-        onChange={(event) => onChange(event.target.checked)}
-        className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent)]"
-      />
-      <span className="min-w-0 text-sm">
-        <span className="flex items-center gap-2 font-semibold text-card-foreground">
-          <ShieldCheck className={`h-4 w-4 shrink-0 ${accepted ? 'text-success' : 'text-warning'}`} />
-          {accepted ? 'Aviso legal aceptado' : 'Acepto el aviso legal'}
-        </span>
-        <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-          Herramienta para fines académicos e investigativos. Los datos provienen de IDEAM y Datos Abiertos Colombia; el
-          usuario conserva la responsabilidad sobre su uso posterior. Marca esta casilla para habilitar la vista previa y
-          la descarga.
-        </span>
-      </span>
-    </label>
-  );
-}
-
 function Section({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
   return (
     <div className="space-y-4">
