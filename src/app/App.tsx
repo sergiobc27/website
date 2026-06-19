@@ -288,8 +288,8 @@ function DocumentationView({ onOpenExtractor }: { onOpenExtractor: () => void })
           items={[
             'Aceptar el aviso legal.',
             'Seleccionar variable IDEAM.',
-            'Elegir todo el país o departamentos puntuales.',
-            'Aplicar filtros de catálogo o estaciones manuales.',
+            'Elegir un departamento (uno por descarga).',
+            'Aplicar filtros de catálogo y estaciones específicas (opcional).',
             'Definir temporalidad y descargar ZIP.',
           ]}
         />
