@@ -111,7 +111,10 @@ export function FacetCombobox({
           role="listbox"
           aria-label={label}
           aria-multiselectable={!single}
-          className="absolute z-30 mt-2 w-72 max-w-[80vw] rounded-xl border border-border bg-card p-2 shadow-glow"
+          // Ancho que se ajusta a la opción más larga (w-max), con mínimo cómodo y
+          // tope para no desbordar en pantallas chicas. Antes era `w-72` fijo y los
+          // nombres largos (p. ej. departamentos) se cortaban horizontalmente.
+          className="absolute z-30 mt-2 w-max min-w-[16rem] max-w-[min(92vw,34rem)] rounded-xl border border-border bg-card p-2 shadow-glow"
         >
           <div className="relative mb-2">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -177,7 +180,7 @@ export function FacetCombobox({
                     >
                       {sel && (single ? <span className="h-1.5 w-1.5 rounded-full bg-white" /> : <Check className="h-3 w-3" />)}
                     </span>
-                    <span className="min-w-0 flex-1 truncate">{o.label || o.value}</span>
+                    <span className="min-w-0 flex-1 break-words">{o.label || o.value}</span>
                     {o.total != null && (
                       <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{o.total.toLocaleString('es-CO')}</span>
                     )}
