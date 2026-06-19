@@ -28,7 +28,7 @@ import { SlideToAccept } from './SlideToAccept';
 import { ApiError, apiJson, apiUrl } from '../lib/ideamApi';
 import { fmt } from '../lib/format';
 import { construirResumenProsa } from '../lib/resumenDescarga';
-import { etaAmable } from '../lib/progresoDescarga';
+import { emaSiguiente, etaAmable, etaEstableSeg } from '../lib/progresoDescarga';
 import { canDownloadAgain, type HistoryEntry, readHistory, saveHistory } from '../lib/downloadHistory';
 import { NAVIGATE_EVENT, pathToView, type NavigateDetail } from '../lib/navigation';
 import { buildSearch, parseSearch } from '../lib/urlState';
@@ -854,8 +854,10 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   }, [currentJob, downloadMetrics?.rowCount, elapsedMs, isBusy, preview?.rowCount, transferProgress]);
 
   useEffect(() => {
+    const reduce = typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     setAnimatedRows((current) => {
       if (!Number.isFinite(projectedRows)) return current;
+      if (reduce) return Math.round(projectedRows); // sin interpolar: salto directo al valor
       if (Math.abs(projectedRows - current) < 10) return Math.round(projectedRows);
       return Math.round(current + (projectedRows - current) * 0.35);
     });
@@ -1001,6 +1003,9 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       setOperationStartedAt(performance.now());
       setElapsedMs(0);
       setAnimatedRows(0);
+      emaRpsRef.current = null;
+      etaShownRef.current = null;
+      lastProcRef.current = null;
       setTransferProgress(null);
       setProgress(20);
       setActiveTask('Generando vista previa...');
@@ -1037,6 +1042,9 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       setOperationStartedAt(performance.now());
       setElapsedMs(0);
       setAnimatedRows(0);
+      emaRpsRef.current = null;
+      etaShownRef.current = null;
+      lastProcRef.current = null;
       setDownloadMetrics(null);
       setTransferProgress(null);
       setCurrentJob(null);
@@ -1164,22 +1172,29 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     ? 'Acepta el aviso legal para descargar.'
     : sectionRequirement('variable') || sectionRequirement('territory') || sectionRequirement('time');
 
+  // Suavizado del ETA: EMA del throughput + histéresis (refs; no provocan re-render).
+  const emaRpsRef = useRef<number | null>(null);
+  const etaShownRef = useRef<number | null>(null);
+  const lastProcRef = useRef<number | null>(null);
+
   const runtimeRows = Math.max(animatedRows, transferProgress?.downloadedRows ?? downloadMetrics?.rowCount ?? preview?.rowCount ?? 0);
   const runtimeTotalRows = transferProgress?.totalRows ?? preview?.rowCount ?? downloadMetrics?.rowCount ?? 0;
   const runtimeElapsedMs = isBusy ? elapsedMs : downloadMetrics?.processingMs ?? preview?.processingMs ?? 0;
-  const runtimePages = transferProgress
-    ? `${transferProgress.completedPages}/${transferProgress.totalPages}`
-    : downloadMetrics
-      ? `${downloadMetrics.downloadedPages}/${downloadMetrics.downloadedPages}`
-      : '0/0';
-  // ETA en rango amable (sin falsa precisión); 'Calculando' mientras planea.
+  // ETA suavizado en cliente: actualiza la EMA una vez por poll (cuando cambian las
+  // filas procesadas), estima los segundos restantes con el ritmo suavizado y aplica
+  // histéresis para que el número no salte. Sin falsa precisión.
+  const procActual = currentJob?.processedRows ?? 0;
+  if (isBusy && currentJob && currentJob.status !== 'planning' && procActual !== lastProcRef.current) {
+    lastProcRef.current = procActual;
+    emaRpsRef.current = emaSiguiente(emaRpsRef.current, currentJob.rowsPerSecond ?? 0);
+    const restantes = Math.max(0, runtimeTotalRows - runtimeRows);
+    const crudo = emaRpsRef.current > 0 ? restantes / emaRpsRef.current : null;
+    if (crudo != null) etaShownRef.current = etaEstableSeg(etaShownRef.current, crudo);
+  }
   const runtimeEta =
-    etaAmable(currentJob?.estimatedRemainingSeconds) ||
+    etaAmable(etaShownRef.current) ||
     (currentJob?.status === 'planning' ? 'Calculando' : 'Sin dato');
   const runtimeRate = formatRowsPerSecond(currentJob?.rowsPerSecond || 0);
-  const runtimeCurrentPage = currentJob
-    ? `${currentJob.currentPage}/${Math.max(currentJob.totalPages, 1)}`
-    : runtimePages;
   const readyDownloadJob = currentJob?.status === 'completed' && currentJob.parts.length ? currentJob : null;
 
   // Estado agregado del héroe de progreso: tipo (color/copys), fase del stepper
@@ -1522,7 +1537,6 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           rows={runtimeRows}
           totalRows={runtimeTotalRows}
           rate={runtimeRate}
-          page={runtimeCurrentPage}
           elapsedLabel={formatDuration(runtimeElapsedMs)}
           task={stageText}
         />
@@ -2445,7 +2459,6 @@ function ProgressHero({
   rows,
   totalRows,
   rate,
-  page,
   elapsedLabel,
   task,
 }: {
@@ -2457,7 +2470,6 @@ function ProgressHero({
   rows: number;
   totalRows: number;
   rate: string;
-  page: string;
   elapsedLabel: string;
   task: string;
 }) {
@@ -2504,7 +2516,6 @@ function ProgressHero({
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <HeroChip icon={Gauge} label="Velocidad" value={rate} />
-            <HeroChip icon={Layers} label="Página" value={page} />
             <HeroChip icon={Clock3} label="Tiempo" value={elapsedLabel} />
           </div>
         </div>
