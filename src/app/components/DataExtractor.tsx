@@ -24,7 +24,7 @@ import {
 import { toast } from 'sonner';
 import { EmptyState } from './EmptyState';
 import { CuriosidadEspera } from './CuriosidadEspera';
-import { SlideToAccept } from './SlideToAccept';
+import { AvisoLegalGate } from './AvisoLegalGate';
 import { FacetCombobox } from './FacetCombobox';
 import { ApiError, apiJson, apiUrl } from '../lib/ideamApi';
 import { fmt } from '../lib/format';
@@ -258,7 +258,9 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   // por pasos: el usuario abre/cierra cada sección de configuración a voluntad.
   // Arranca con todo recogido (null): el usuario despliega cada filtro uno a uno.
   const [openSection, setOpenSection] = useState<StepId | null>(null);
-  const [acceptedTerms, setAcceptedTerms] = useState(Boolean(storedConfig.acceptedTerms));
+  // Arranca SIN aceptar siempre (no se restaura de almacenamiento): el aviso legal
+  // es la puerta de entrada del extractor y debe verse/aceptarse al abrir.
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [datasetId, setDatasetId] = useState(typeof storedConfig.datasetId === 'string' ? storedConfig.datasetId : '');
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>(
     Array.isArray(storedConfig.selectedDepartments) ? storedConfig.selectedDepartments : []
@@ -1431,8 +1433,16 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         tabIndex={-1}
         className={`mx-auto w-full max-w-3xl space-y-6 focus:outline-none ${mode === 'config' ? '' : 'hidden'}`}
       >
-        {/* Configuración: acordeón todo-en-uno (Fase 2) */}
-        <div className="animate-fade-in-up rounded-2xl border border-border bg-card p-4 shadow-glow">
+        {/* Aviso legal: puerta de entrada bloqueante — lo PRIMERO que se ve. Sin
+            aceptar, la configuración y la descarga quedan ocultas. */}
+        <AvisoLegalGate accepted={acceptedTerms} onAccept={() => setAcceptedTerms(true)} />
+
+        {acceptedTerms && (
+          <>
+        {/* Configuración: acordeón todo-en-uno (Fase 2). `relative z-10` para que los
+            popovers de los filtros se vean por ENCIMA de la tarjeta de ejecución de
+            abajo (ambas crean stacking context por la animación de entrada). */}
+        <div className="relative z-10 animate-fade-in-up rounded-2xl border border-border bg-card p-4 shadow-glow">
           <div className="mb-3 flex items-center justify-between gap-3 px-2 pt-1">
             <h2 className="text-lg font-bold text-card-foreground">Configurar descarga</h2>
             <div className="flex items-center gap-2">
@@ -1456,7 +1466,13 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
               const requirement = sectionRequirement(section.id);
               const panelId = `acordeon-${section.id}`;
               return (
-                <div key={section.id} className="overflow-hidden rounded-xl border border-border bg-background">
+                // overflow-hidden solo cuando está cerrada (para las esquinas redondeadas).
+                // Abierta: overflow visible + z alto, para que el popover del FacetCombobox
+                // (lista de departamentos/filtros) se vea POR ENCIMA del siguiente filtro y no se corte.
+                <div
+                  key={section.id}
+                  className={`rounded-xl border border-border bg-background ${isOpen ? 'relative z-20' : 'overflow-hidden'}`}
+                >
                   <button
                     type="button"
                     onClick={() => setOpenSection((current) => (current === section.id ? null : section.id))}
@@ -1498,9 +1514,8 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           </div>
         </div>
 
-        {/* Consentimiento (barra no-bloqueante) + ejecución (CTA persistente) */}
+        {/* Ejecución (CTA persistente). El consentimiento ya se gestionó arriba. */}
         <div className="animate-fade-in-up space-y-5 rounded-2xl border border-border bg-card p-6 shadow-glow">
-          <SlideToAccept accepted={acceptedTerms} onChange={setAcceptedTerms} />
           {(estimating || liveEstimate) && (
             <div className="rounded-xl border border-border bg-background p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Estimación antes de descargar</p>
@@ -1535,6 +1550,8 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           )}
           <StepPanel step="execute" {...stepPanelProps} />
         </div>
+          </>
+        )}
       </div>
 
       <div className={`space-y-6 ${mode === 'config' ? 'hidden' : ''}`}>
