@@ -25,6 +25,7 @@ import { toast } from 'sonner';
 import { EmptyState } from './EmptyState';
 import { CuriosidadEspera } from './CuriosidadEspera';
 import { SlideToAccept } from './SlideToAccept';
+import { FacetCombobox } from './FacetCombobox';
 import { ApiError, apiJson, apiUrl } from '../lib/ideamApi';
 import { fmt } from '../lib/format';
 import { construirResumenProsa } from '../lib/resumenDescarga';
@@ -1371,6 +1372,14 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     if (isBusy && !readyDownloadJob) setMode('running');
     else if (readyDownloadJob || preview || downloadMetrics) setMode('results');
   }, [isBusy, readyDownloadJob, preview, downloadMetrics]);
+  // Modo enfoque (#7): pide al Sidebar que se colapse mientras corre el job; al salir
+  // del extractor restaura la preferencia del usuario.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('ideam-focus-mode', { detail: mode === 'running' }));
+  }, [mode]);
+  useEffect(() => () => {
+    window.dispatchEvent(new CustomEvent('ideam-focus-mode', { detail: false }));
+  }, []);
   const irA = (m: 'config' | 'running' | 'results') => {
     const d = typeof document !== 'undefined' ? (document as Document & { startViewTransition?: (cb: () => void) => void }) : null;
     if (d?.startViewTransition) d.startViewTransition(() => setMode(m));
@@ -1770,8 +1779,6 @@ function StepPanel({
   isBusy: boolean;
   downloadRequirement: string | null;
 }) {
-  const [filterSearch, setFilterSearch] = useState<Record<string, string>>({});
-  const [departmentSearch, setDepartmentSearch] = useState('');
   const [showMap, setShowMap] = useState(false);
 
   // Alta/baja de un código de estación desde la tabla de apoyo (clic = agrega o
@@ -1810,44 +1817,26 @@ function StepPanel({
         <div className="rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
           Selecciona al menos un departamento. Las descargas globales estan bloqueadas para mantener el servicio en costo $0.00 y evitar procesos masivos accidentales.
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={departmentSearch}
-              onChange={(event) => setDepartmentSearch(event.target.value)}
-              placeholder="Buscar departamento"
-              className="w-full rounded-lg border border-border bg-input py-2 pl-9 pr-3 text-sm text-card-foreground focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            />
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => onSelectAllDepartments(meta?.departments || [])}
-              className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold text-card-foreground transition-[border-color,transform] duration-200 hover:border-accent/40 active:scale-[0.97]"
-            >
-              Todos
-            </button>
-            <button
-              type="button"
-              onClick={onClearDepartments}
-              disabled={!selectedDepartments.length}
-              className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold text-muted-foreground transition-[border-color,transform] duration-200 hover:border-accent/40 active:scale-[0.97] disabled:opacity-50"
-            >
-              Ninguno
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowMap((open) => !open)}
-              aria-pressed={showMap}
-              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-[border-color,transform] duration-200 active:scale-[0.97] ${
-                showMap ? 'border-accent bg-accent/15 text-accent' : 'border-border bg-background text-muted-foreground hover:border-accent/40'
-              }`}
-            >
-              <MapPin className="h-3.5 w-3.5" />
-              Mapa
-            </button>
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <FacetCombobox
+            label="Departamento"
+            options={(meta?.departments || []).map((d) => ({ value: d }))}
+            selected={selectedDepartments}
+            onToggle={onToggleDepartment}
+            onAll={() => onSelectAllDepartments(meta?.departments || [])}
+            onNone={onClearDepartments}
+          />
+          <button
+            type="button"
+            onClick={() => setShowMap((open) => !open)}
+            aria-pressed={showMap}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors active:scale-[0.97] ${
+              showMap ? 'border-accent bg-accent/15 text-accent' : 'border-border bg-background text-muted-foreground hover:border-accent/40'
+            }`}
+          >
+            <MapPin className="h-3.5 w-3.5" />
+            Mapa
+          </button>
         </div>
 
         {showMap && (
@@ -1865,31 +1854,35 @@ function StepPanel({
             />
           </Suspense>
         )}
-        <div className="flex max-h-56 flex-wrap gap-2 overflow-y-auto">
-          {(meta?.departments || [])
-            .filter((department) => normalizeText(department).includes(normalizeText(departmentSearch)))
-            .map((department) => (
-              <button
+        {selectedDepartments.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {selectedDepartments.map((department) => (
+              <span
                 key={department}
-                type="button"
-                onClick={() => onToggleDepartment(department)}
-                aria-pressed={selectedDepartments.includes(department)}
-                className={`rounded-full border px-3 py-2 text-xs font-semibold transition-[border-color,background-color,color,transform] duration-200 active:scale-[0.96] ${
-                  selectedDepartments.includes(department)
-                    ? 'border-accent bg-accent/15 text-accent'
-                    : 'border-border bg-background text-muted-foreground hover:border-accent/40'
-                }`}
+                className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent"
               >
                 {department}
-              </button>
+                <button
+                  type="button"
+                  onClick={() => onToggleDepartment(department)}
+                  aria-label={`Quitar ${department}`}
+                  className="text-accent/70 transition-colors hover:text-card-foreground"
+                >
+                  ×
+                </button>
+              </span>
             ))}
-        </div>
-        <div className="rounded-lg border border-border bg-background p-3 text-sm text-muted-foreground">
-          Selección actual:{' '}
-          {selectedDepartments.length
-            ? `${selectedDepartments.length} · ${selectedDepartments.join(', ')}`
-            : 'Sin departamentos seleccionados'}
-        </div>
+            <button
+              type="button"
+              onClick={onClearDepartments}
+              className="text-xs text-muted-foreground underline transition-colors hover:text-card-foreground"
+            >
+              Limpiar todo
+            </button>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Sin departamentos seleccionados.</p>
+        )}
       </Section>
     );
   }
@@ -1901,81 +1894,35 @@ function StepPanel({
           Estos catálogos se precargan por dataset y departamento para que la selección sea más rápida. La descarga
           final sigue aplicando fechas, municipios, estaciones y demás filtros exactamente como los selecciones.
         </div>
-        {(meta?.catalogFilters || []).map((definition) => {
-          const status = catalogOptionStatus[definition.key] || 'idle';
-          const selectedCount = (catalogFilters[definition.key] || []).length;
-          const search = normalizeText(filterSearch[definition.key] || '');
-          const options = (catalogOptions[definition.key] || []).filter((option) =>
-            normalizeText(`${option.label || option.value} ${option.total}`).includes(search)
-          );
-
-          return (
-            <div key={definition.key} className="space-y-2">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <label className="text-sm font-semibold text-card-foreground">{definition.label}</label>
-                <span className="rounded-full border border-border bg-card px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                  {selectedCount} seleccionados
-                </span>
-              </div>
-              <input
-                value={filterSearch[definition.key] || ''}
-                onChange={(event) => setFilterSearch((current) => ({ ...current, [definition.key]: event.target.value }))}
-                placeholder={`Buscar ${definition.label.toLowerCase()}`}
-                disabled={status !== 'ready'}
-                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-card-foreground focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+        <div className="flex flex-wrap gap-2">
+          {(meta?.catalogFilters || []).map((definition) => {
+            const status = catalogOptionStatus[definition.key] || 'idle';
+            return (
+              <FacetCombobox
+                key={definition.key}
+                label={definition.label}
+                options={(catalogOptions[definition.key] || []).map((o) => ({
+                  value: o.value,
+                  label: o.label || o.value,
+                  total: o.total,
+                }))}
+                selected={catalogFilters[definition.key] || []}
+                onToggle={(value) => onToggleCatalogValue(definition.key, value)}
+                status={status}
+                statusMessage={
+                  status === 'error'
+                    ? catalogOptionErrors[definition.key] || 'No fue posible sincronizar este catálogo.'
+                    : status === 'idle'
+                      ? canLoadCatalogOptions
+                        ? 'Catálogo preparado automáticamente.'
+                        : 'Completa variable y departamento.'
+                      : undefined
+                }
+                disabled={status === 'idle' && !canLoadCatalogOptions}
               />
-              <div className="max-h-48 overflow-y-auto rounded-lg border border-border bg-background p-3">
-                {status === 'idle' ? (
-                  <p className="text-sm text-muted-foreground">
-                    {canLoadCatalogOptions ? 'Catálogo preparado automáticamente.' : 'Completa variable y departamento.'}
-                  </p>
-                ) : status === 'loading' && !options.length ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <LoaderCircle className="h-4 w-4 animate-spin text-accent" />
-                    Sincronizando catálogo local...
-                  </div>
-                ) : status === 'warming' ? (
-                  <p className="text-sm text-muted-foreground">Catálogo preparado automáticamente.</p>
-                ) : status === 'error' ? (
-                  <p className="text-sm text-destructive">
-                    {catalogOptionErrors[definition.key] || 'No fue posible sincronizar este catálogo.'}
-                  </p>
-                ) : !options.length ? (
-                  <p className="text-sm text-muted-foreground">Sin opciones para los filtros actuales.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {status === 'loading' && (
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <LoaderCircle className="h-3.5 w-3.5 animate-spin text-accent" />
-                        Actualizando opciones...
-                      </div>
-                    )}
-                    <div className="flex flex-wrap gap-2">
-                      {options.slice(0, 80).map((option) => {
-                        const selected = (catalogFilters[definition.key] || []).includes(option.value);
-                        return (
-                          <button
-                            key={`${definition.key}-${option.value}`}
-                            type="button"
-                            onClick={() => onToggleCatalogValue(definition.key, option.value)}
-                            aria-pressed={selected}
-                            className={`rounded-full border px-3 py-2 text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-                              selected
-                                ? 'border-accent bg-accent/15 text-accent'
-                                : 'border-border bg-card text-muted-foreground hover:border-accent/40'
-                            }`}
-                          >
-                            {option.label || option.value} ({option.total})
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
         <div className="space-y-2">
           <label className="text-sm font-semibold text-card-foreground">Códigos de estación manuales</label>
           <textarea

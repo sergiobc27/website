@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Activity, BookOpenText, Building2, Database, Download, Droplets, Settings, FileText, BarChart3, ChevronLeft, ChevronRight, GitCompareArrows, MapPin, MessageCircle, TrendingUp } from 'lucide-react';
 import logoVertical from "../../imports/Logo_CUC_PNG_letra_blanca_barra_roja_vtcal.png";
 import logoCollapsed from "../../imports/u.png";
@@ -154,6 +154,17 @@ export function SidebarContent({
 // persiste en localStorage, igual que el tema y el historial.
 export function Sidebar({ currentView, onNavigate }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(readCollapsed);
+
+  // Modo enfoque del Extractor: colapsa de forma transitoria (sin persistir) cuando
+  // hay un job en curso; al salir restaura la preferencia guardada del usuario.
+  useEffect(() => {
+    const onFocus = (e: Event) => {
+      const on = (e as CustomEvent<boolean>).detail;
+      setIsCollapsed(on ? true : readCollapsed());
+    };
+    window.addEventListener('ideam-focus-mode', onFocus as EventListener);
+    return () => window.removeEventListener('ideam-focus-mode', onFocus as EventListener);
+  }, []);
 
   const toggleCollapse = () =>
     setIsCollapsed((collapsed) => {
