@@ -16,19 +16,22 @@ describe('construirResumenProsa', () => {
     expect(f).toContain('2024');
     expect(f).toContain('12');
   });
-  it('maneja sin departamentos', () => {
+  it('sin departamentos anticipa en singular (no "todo el país")', () => {
     const f = construirResumenProsa({ variable: 'Nivel', departamentos: [], anioInicio: 2003, anioFin: 2026, estaciones: 0 });
     expect(f).toContain('Nivel');
+    expect(f).toContain('un departamento');
+    expect(f).not.toContain('todo el país');
     expect(f).not.toContain('estaciones');
   });
-  it('resume varios departamentos por conteo', () => {
+  it('un departamento por descarga: usa el nombre elegido', () => {
     const f = construirResumenProsa({
       variable: 'Precipitación',
-      departamentos: ['CÓRDOBA', 'SUCRE', 'BOLÍVAR'],
+      departamentos: ['CÓRDOBA'],
       anioInicio: 2010,
       anioFin: 2020,
       estaciones: 30,
     });
-    expect(f).toContain('3 departamentos');
+    expect(f).toContain('CÓRDOBA');
+    expect(f).not.toContain('departamentos');
   });
 });
