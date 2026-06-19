@@ -35,6 +35,21 @@ export function derivarProgreso(job: JobLike | null | undefined, prevPercent = 0
   return { fase: empacando ? 'empacar' : 'descargar', percent, indeterminado: false };
 }
 
+/** Media móvil exponencial del throughput. `prev=null` arranca con `actual`. */
+export function emaSiguiente(prev: number | null, actual: number, alpha = 0.25): number {
+  if (prev == null || !Number.isFinite(prev)) return actual;
+  return Math.round(alpha * actual + (1 - alpha) * prev);
+}
+
+/**
+ * Histéresis del ETA: conserva el valor mostrado si el nuevo cambia menos del
+ * umbral (evita el parpadeo "5 min → 2 min → 7 min").
+ */
+export function etaEstableSeg(prevShown: number | null, nuevo: number, umbral = 0.1): number {
+  if (prevShown == null || prevShown <= 0) return nuevo;
+  return Math.abs(nuevo - prevShown) / prevShown < umbral ? prevShown : nuevo;
+}
+
 /** ETA en rango amable (sesgo a sobreestimar). Devuelve '' si no hay dato útil. */
 export function etaAmable(segundos: number | null | undefined): string {
   if (segundos == null || !Number.isFinite(segundos) || segundos <= 0) return '';

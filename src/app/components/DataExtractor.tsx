@@ -24,10 +24,11 @@ import {
 import { toast } from 'sonner';
 import { EmptyState } from './EmptyState';
 import { CuriosidadEspera } from './CuriosidadEspera';
+import { SlideToAccept } from './SlideToAccept';
 import { ApiError, apiJson, apiUrl } from '../lib/ideamApi';
 import { fmt } from '../lib/format';
 import { construirResumenProsa } from '../lib/resumenDescarga';
-import { etaAmable } from '../lib/progresoDescarga';
+import { emaSiguiente, etaAmable, etaEstableSeg } from '../lib/progresoDescarga';
 import { canDownloadAgain, type HistoryEntry, readHistory, saveHistory } from '../lib/downloadHistory';
 import { NAVIGATE_EVENT, pathToView, type NavigateDetail } from '../lib/navigation';
 import { buildSearch, parseSearch } from '../lib/urlState';
@@ -58,9 +59,9 @@ const MAX_OPERATION_LOGS = 80;
 const EXPORT_AVAILABILITY_MS = 60 * 60 * 1000;
 const EXPORT_PLAN_FAST_TIMEOUT_MS = 2500;
 
-type StepId = 'consent' | 'variable' | 'territory' | 'advanced' | 'time' | 'execute';
+type StepId = 'variable' | 'territory' | 'advanced' | 'time' | 'execute';
 
-const STEP_IDS: StepId[] = ['consent', 'variable', 'territory', 'advanced', 'time', 'execute'];
+const STEP_IDS: StepId[] = ['variable', 'territory', 'advanced', 'time', 'execute'];
 
 interface StoredExtractorConfig {
   acceptedTerms?: boolean;
@@ -250,7 +251,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   const [storedConfig] = useState<StoredExtractorConfig>(loadStoredConfig);
   const [meta, setMeta] = useState<MetaResponse | null>(null);
   const [step, setStep] = useState<StepId>(
-    storedConfig.acceptedTerms && storedConfig.step && STEP_IDS.includes(storedConfig.step) ? storedConfig.step : 'consent'
+    storedConfig.step && STEP_IDS.includes(storedConfig.step) ? storedConfig.step : 'variable'
   );
   // Sección abierta del acordeón "todo-en-uno" (Fase 2). Reemplaza la navegación
   // por pasos: el usuario abre/cierra cada sección de configuración a voluntad.
@@ -349,7 +350,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     };
   }, [catalogFilters, meta?.catalogFilters, selectedDepartments, selectedFormats, stationCodesText]);
 
-  const previewColumns = preview?.rows.length ? Object.keys(preview.rows[0]).slice(0, 8) : [];
+  const previewColumns = preview?.rows.length ? Object.keys(preview.rows[0]) : [];
 
   const appendLog = useCallback((type: LogLevel, message: string) => {
     setLogs((current) => {
@@ -853,8 +854,10 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   }, [currentJob, downloadMetrics?.rowCount, elapsedMs, isBusy, preview?.rowCount, transferProgress]);
 
   useEffect(() => {
+    const reduce = typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     setAnimatedRows((current) => {
       if (!Number.isFinite(projectedRows)) return current;
+      if (reduce) return Math.round(projectedRows); // sin interpolar: salto directo al valor
       if (Math.abs(projectedRows - current) < 10) return Math.round(projectedRows);
       return Math.round(current + (projectedRows - current) * 0.35);
     });
@@ -1000,6 +1003,9 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       setOperationStartedAt(performance.now());
       setElapsedMs(0);
       setAnimatedRows(0);
+      emaRpsRef.current = null;
+      etaShownRef.current = null;
+      lastProcRef.current = null;
       setTransferProgress(null);
       setProgress(20);
       setActiveTask('Generando vista previa...');
@@ -1036,6 +1042,9 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       setOperationStartedAt(performance.now());
       setElapsedMs(0);
       setAnimatedRows(0);
+      emaRpsRef.current = null;
+      etaShownRef.current = null;
+      lastProcRef.current = null;
       setDownloadMetrics(null);
       setTransferProgress(null);
       setCurrentJob(null);
@@ -1163,22 +1172,29 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     ? 'Acepta el aviso legal para descargar.'
     : sectionRequirement('variable') || sectionRequirement('territory') || sectionRequirement('time');
 
+  // Suavizado del ETA: EMA del throughput + histéresis (refs; no provocan re-render).
+  const emaRpsRef = useRef<number | null>(null);
+  const etaShownRef = useRef<number | null>(null);
+  const lastProcRef = useRef<number | null>(null);
+
   const runtimeRows = Math.max(animatedRows, transferProgress?.downloadedRows ?? downloadMetrics?.rowCount ?? preview?.rowCount ?? 0);
   const runtimeTotalRows = transferProgress?.totalRows ?? preview?.rowCount ?? downloadMetrics?.rowCount ?? 0;
   const runtimeElapsedMs = isBusy ? elapsedMs : downloadMetrics?.processingMs ?? preview?.processingMs ?? 0;
-  const runtimePages = transferProgress
-    ? `${transferProgress.completedPages}/${transferProgress.totalPages}`
-    : downloadMetrics
-      ? `${downloadMetrics.downloadedPages}/${downloadMetrics.downloadedPages}`
-      : '0/0';
-  // ETA en rango amable (sin falsa precisión); 'Calculando' mientras planea.
+  // ETA suavizado en cliente: actualiza la EMA una vez por poll (cuando cambian las
+  // filas procesadas), estima los segundos restantes con el ritmo suavizado y aplica
+  // histéresis para que el número no salte. Sin falsa precisión.
+  const procActual = currentJob?.processedRows ?? 0;
+  if (isBusy && currentJob && currentJob.status !== 'planning' && procActual !== lastProcRef.current) {
+    lastProcRef.current = procActual;
+    emaRpsRef.current = emaSiguiente(emaRpsRef.current, currentJob.rowsPerSecond ?? 0);
+    const restantes = Math.max(0, runtimeTotalRows - runtimeRows);
+    const crudo = emaRpsRef.current > 0 ? restantes / emaRpsRef.current : null;
+    if (crudo != null) etaShownRef.current = etaEstableSeg(etaShownRef.current, crudo);
+  }
   const runtimeEta =
-    etaAmable(currentJob?.estimatedRemainingSeconds) ||
+    etaAmable(etaShownRef.current) ||
     (currentJob?.status === 'planning' ? 'Calculando' : 'Sin dato');
   const runtimeRate = formatRowsPerSecond(currentJob?.rowsPerSecond || 0);
-  const runtimeCurrentPage = currentJob
-    ? `${currentJob.currentPage}/${Math.max(currentJob.totalPages, 1)}`
-    : runtimePages;
   const readyDownloadJob = currentJob?.status === 'completed' && currentJob.parts.length ? currentJob : null;
 
   // Estado agregado del héroe de progreso: tipo (color/copys), fase del stepper
@@ -1346,17 +1362,70 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     estaciones: liveEstimate?.stationPoolSize ?? 0,
   });
 
+  // Flujo en dos fases: la vista cambia de modo (config → running → results) en vez
+  // de mostrar config y ejecución lado a lado. Ambos subárboles quedan SIEMPRE
+  // montados y se alterna visibilidad con `hidden` para preservar el estado de React.
+  const configRef = useRef<HTMLDivElement>(null);
+  const [mode, setMode] = useState<'config' | 'running' | 'results'>('config');
+  useEffect(() => {
+    if (isBusy && !readyDownloadJob) setMode('running');
+    else if (readyDownloadJob || preview || downloadMetrics) setMode('results');
+  }, [isBusy, readyDownloadJob, preview, downloadMetrics]);
+  const irA = (m: 'config' | 'running' | 'results') => {
+    const d = typeof document !== 'undefined' ? (document as Document & { startViewTransition?: (cb: () => void) => void }) : null;
+    if (d?.startViewTransition) d.startViewTransition(() => setMode(m));
+    else setMode(m);
+  };
+  // Volver a configurar: si hay job en curso lo cancela (no mata el del servidor) y
+  // limpia resultados para que el efecto derivado no vuelva a saltar a 'results'.
+  const volverAConfig = () => {
+    if (isBusy) cancelarEspera();
+    setPreview(null);
+    setDownloadMetrics(null);
+    setCurrentJob(null);
+    setCurrentJobId(null);
+    irA('config');
+    window.setTimeout(() => configRef.current?.focus(), 0);
+  };
+
   return (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-12 min-h-[calc(100vh-7rem)]">
-      <div className="space-y-6 xl:col-span-4 xl:sticky xl:top-6 self-start">
+    <div className="min-h-[calc(100vh-7rem)] space-y-4">
+      {mode !== 'config' && (
+        <nav aria-label="Progreso de la descarga" className="flex items-center justify-between gap-3">
+          <ol className="flex items-center gap-2 text-sm">
+            <li>
+              <button
+                type="button"
+                onClick={volverAConfig}
+                className="rounded font-medium text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                Configuración
+              </button>
+            </li>
+            <li aria-hidden="true" className="text-muted-foreground">›</li>
+            <li aria-current="step" className="font-semibold text-card-foreground">
+              {mode === 'results' ? 'Resultado' : 'Ejecución'}
+            </li>
+          </ol>
+          <button
+            type="button"
+            onClick={volverAConfig}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-accent/40 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            ← Editar configuración
+          </button>
+        </nav>
+      )}
+      <div
+        ref={configRef}
+        tabIndex={-1}
+        className={`mx-auto w-full max-w-3xl space-y-6 focus:outline-none ${mode === 'config' ? '' : 'hidden'}`}
+      >
         {/* Configuración: acordeón todo-en-uno (Fase 2) */}
         <div className="animate-fade-in-up rounded-2xl border border-border bg-card p-4 shadow-glow">
           <div className="mb-3 flex items-center justify-between gap-3 px-2 pt-1">
             <h2 className="text-lg font-bold text-card-foreground">Configurar descarga</h2>
             <div className="flex items-center gap-2">
-              <span className="rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-semibold tabular-nums text-accent">
-                {accordionSections.filter((section) => sectionComplete(section.id)).length}/{accordionSections.length} listas
-              </span>
               <button
                 type="button"
                 onClick={shareConfiguration}
@@ -1421,24 +1490,18 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
 
         {/* Consentimiento (barra no-bloqueante) + ejecución (CTA persistente) */}
         <div className="animate-fade-in-up space-y-5 rounded-2xl border border-border bg-card p-6 shadow-glow">
-          <ConsentBar accepted={acceptedTerms} onChange={setAcceptedTerms} />
+          <SlideToAccept accepted={acceptedTerms} onChange={setAcceptedTerms} />
           {(estimating || liveEstimate) && (
             <div className="rounded-xl border border-border bg-background p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Estimación antes de descargar</p>
               {liveEstimate ? (
                 <>
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-center">
                     <div>
                       <p className="font-mono text-lg font-bold tabular-nums text-card-foreground">
                         {liveEstimate.rowCount.toLocaleString('es-CO')}
                       </p>
                       <p className="text-[11px] text-muted-foreground">filas aprox.</p>
-                    </div>
-                    <div>
-                      <p className="font-mono text-lg font-bold tabular-nums text-card-foreground">
-                        {Math.max(liveEstimate.totalPages, 1).toLocaleString('es-CO')}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">página(s)</p>
                     </div>
                     <div>
                       <p className="font-mono text-lg font-bold tabular-nums text-card-foreground">~{formatBytes(estimatedBytes)}</p>
@@ -1464,7 +1527,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         </div>
       </div>
 
-      <div className="xl:col-span-8 space-y-6">
+      <div className={`space-y-6 ${mode === 'config' ? 'hidden' : ''}`}>
         <ProgressHero
           progress={progress}
           statusKind={statusKind}
@@ -1474,7 +1537,6 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           rows={runtimeRows}
           totalRows={runtimeTotalRows}
           rate={runtimeRate}
-          page={runtimeCurrentPage}
           elapsedLabel={formatDuration(runtimeElapsedMs)}
           task={stageText}
         />
@@ -1483,7 +1545,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           <div className="flex justify-center">
             <button
               type="button"
-              onClick={cancelarEspera}
+              onClick={volverAConfig}
               className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
             >
               Cancelar
@@ -1505,7 +1567,9 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           <div className="flex items-center justify-between px-6 py-4 border-b border-border">
             <h3 className="text-card-foreground font-bold">Vista previa de resultados</h3>
             <span className="text-muted-foreground text-sm font-mono">
-              {preview?.rowCount?.toLocaleString('es-CO') || 0} filas encontradas
+              {preview?.rows?.length
+                ? `muestra de ${preview.rows.length} de ${(preview.rowCount || 0).toLocaleString('es-CO')} filas`
+                : `${preview?.rowCount?.toLocaleString('es-CO') || 0} filas encontradas`}
             </span>
           </div>
           <div className="p-6">
@@ -1524,12 +1588,17 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
                   <MetricCard title="Municipios" value={String(preview.summary.municipalityCount)} icon={Layers} />
                   <MetricCard title="Tiempo" value={formatDuration(preview.processingMs)} icon={TimerReset} />
                 </div>
-                <div className="overflow-x-auto">
+                <div
+                  role="region"
+                  aria-label="Vista previa de datos (desplázate para ver más)"
+                  tabIndex={0}
+                  className="max-h-[28rem] overflow-auto rounded-lg border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
                   <table className="w-full text-sm">
-                    <thead className="text-muted-foreground border-b border-border">
+                    <thead className="sticky top-0 z-10 text-muted-foreground">
                       <tr>
                         {previewColumns.map((column) => (
-                          <th key={column} className="text-left p-3 font-mono font-bold">
+                          <th key={column} className="bg-card p-3 text-left font-mono font-bold shadow-[inset_0_-1px_0_var(--border)]">
                             {column}
                           </th>
                         ))}
@@ -1714,24 +1783,6 @@ function StepPanel({
       : [...selectedStationCodes, code];
     onStationCodesTextChange(next.join(', '));
   };
-
-  if (step === 'consent') {
-    return (
-      <Section title="Aviso legal" icon={ShieldCheck}>
-        <div className="rounded-lg border border-border bg-background p-4 text-sm leading-6 text-muted-foreground">
-          Esta herramienta fue creada para fines académicos e investigativos. La información proviene de IDEAM y
-          Datos Abiertos Colombia. El usuario conserva responsabilidad sobre el tratamiento posterior de los datos y su
-          uso.
-        </div>
-        <label className="flex items-start gap-3 rounded-lg border border-border bg-background p-4">
-          <input type="checkbox" checked={acceptedTerms} onChange={(event) => onAcceptedTermsChange(event.target.checked)} />
-          <span className="text-sm text-card-foreground font-medium">
-            Acepto los términos y entiendo que debo marcar este consentimiento para continuar con la configuración y la descarga.
-          </span>
-        </label>
-      </Section>
-    );
-  }
 
   if (step === 'variable') {
     return (
@@ -2171,34 +2222,6 @@ function DownloadCenter({ tick, onRedownload }: { tick: number; onRedownload: (e
 
 // Consentimiento no-bloqueante (Fase 2): el usuario puede configurar todo sin
 // aceptar; solo la vista previa y la descarga quedan gated por esta casilla.
-function ConsentBar({ accepted, onChange }: { accepted: boolean; onChange: (value: boolean) => void }) {
-  return (
-    <label
-      className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${
-        accepted ? 'border-success/40 bg-success/5' : 'border-warning/40 bg-warning/5'
-      }`}
-    >
-      <input
-        type="checkbox"
-        checked={accepted}
-        onChange={(event) => onChange(event.target.checked)}
-        className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent)]"
-      />
-      <span className="min-w-0 text-sm">
-        <span className="flex items-center gap-2 font-semibold text-card-foreground">
-          <ShieldCheck className={`h-4 w-4 shrink-0 ${accepted ? 'text-success' : 'text-warning'}`} />
-          {accepted ? 'Aviso legal aceptado' : 'Acepto el aviso legal'}
-        </span>
-        <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-          Herramienta para fines académicos e investigativos. Los datos provienen de IDEAM y Datos Abiertos Colombia; el
-          usuario conserva la responsabilidad sobre su uso posterior. Marca esta casilla para habilitar la vista previa y
-          la descarga.
-        </span>
-      </span>
-    </label>
-  );
-}
-
 function Section({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
   return (
     <div className="space-y-4">
@@ -2436,7 +2459,6 @@ function ProgressHero({
   rows,
   totalRows,
   rate,
-  page,
   elapsedLabel,
   task,
 }: {
@@ -2448,7 +2470,6 @@ function ProgressHero({
   rows: number;
   totalRows: number;
   rate: string;
-  page: string;
   elapsedLabel: string;
   task: string;
 }) {
@@ -2495,7 +2516,6 @@ function ProgressHero({
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <HeroChip icon={Gauge} label="Velocidad" value={rate} />
-            <HeroChip icon={Layers} label="Página" value={page} />
             <HeroChip icon={Clock3} label="Tiempo" value={elapsedLabel} />
           </div>
         </div>
@@ -2602,13 +2622,9 @@ function ReadyDownloadPanel({
   const remainingMs = useCountdown(expiresAt);
   const expired = remainingMs !== null && remainingMs <= 0;
 
-  // Lleva el éxito al foco visual del usuario en cuanto aparece el ZIP.
-  useEffect(() => {
-    const el = cardRef.current;
-    if (!el) return;
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
-  }, []);
+  // (Se quitó el auto-scroll al aparecer el ZIP: arrastraba la página sin pedirlo.
+  // La señal in-place — anillo verde + botón de descarga + toast — y el cambio a la
+  // vista de resultados ya orientan al usuario.)
 
   return (
     <div
