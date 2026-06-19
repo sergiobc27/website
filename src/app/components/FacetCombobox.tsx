@@ -72,6 +72,13 @@ export function FacetCombobox({
     };
   }, [open]);
 
+  // Limpia la búsqueda al cerrar el popover. Sin esto, el texto previo persistía y
+  // al reabrir la lista quedaba filtrada a un solo resultado (en modo `single`,
+  // elegir cierra el popover → reabrir mostraba solo lo ya elegido y parecía "atascado").
+  useEffect(() => {
+    if (!open) setQ('');
+  }, [open]);
+
   const filtered = options.filter((o) => norm(`${o.label || o.value} ${o.total ?? ''}`).includes(norm(q)));
   const count = selected.length;
   const busy = status === 'loading' || status === 'warming';

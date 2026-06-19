@@ -256,7 +256,8 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   );
   // Sección abierta del acordeón "todo-en-uno" (Fase 2). Reemplaza la navegación
   // por pasos: el usuario abre/cierra cada sección de configuración a voluntad.
-  const [openSection, setOpenSection] = useState<StepId | null>('variable');
+  // Arranca con todo recogido (null): el usuario despliega cada filtro uno a uno.
+  const [openSection, setOpenSection] = useState<StepId | null>(null);
   const [acceptedTerms, setAcceptedTerms] = useState(Boolean(storedConfig.acceptedTerms));
   const [datasetId, setDatasetId] = useState(typeof storedConfig.datasetId === 'string' ? storedConfig.datasetId : '');
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>(
@@ -1810,9 +1811,6 @@ function StepPanel({
   if (step === 'territory') {
     return (
       <Section title="Cobertura territorial" icon={MapPin}>
-        <div className="rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
-          Selecciona un departamento. Cada descarga procesa un solo departamento para mantener el servicio en costo $0.00 y evitar procesos masivos.
-        </div>
         <div className="flex flex-wrap items-center gap-2">
           <FacetCombobox
             label="Departamento"
