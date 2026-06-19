@@ -1347,9 +1347,65 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     estaciones: liveEstimate?.stationPoolSize ?? 0,
   });
 
+  // Flujo en dos fases: la vista cambia de modo (config → running → results) en vez
+  // de mostrar config y ejecución lado a lado. Ambos subárboles quedan SIEMPRE
+  // montados y se alterna visibilidad con `hidden` para preservar el estado de React.
+  const configRef = useRef<HTMLDivElement>(null);
+  const [mode, setMode] = useState<'config' | 'running' | 'results'>('config');
+  useEffect(() => {
+    if (isBusy && !readyDownloadJob) setMode('running');
+    else if (readyDownloadJob || preview || downloadMetrics) setMode('results');
+  }, [isBusy, readyDownloadJob, preview, downloadMetrics]);
+  const irA = (m: 'config' | 'running' | 'results') => {
+    const d = typeof document !== 'undefined' ? (document as Document & { startViewTransition?: (cb: () => void) => void }) : null;
+    if (d?.startViewTransition) d.startViewTransition(() => setMode(m));
+    else setMode(m);
+  };
+  // Volver a configurar: si hay job en curso lo cancela (no mata el del servidor) y
+  // limpia resultados para que el efecto derivado no vuelva a saltar a 'results'.
+  const volverAConfig = () => {
+    if (isBusy) cancelarEspera();
+    setPreview(null);
+    setDownloadMetrics(null);
+    setCurrentJob(null);
+    setCurrentJobId(null);
+    irA('config');
+    window.setTimeout(() => configRef.current?.focus(), 0);
+  };
+
   return (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-12 min-h-[calc(100vh-7rem)]">
-      <div className="space-y-6 xl:col-span-4 xl:sticky xl:top-6 self-start">
+    <div className="min-h-[calc(100vh-7rem)] space-y-4">
+      {mode !== 'config' && (
+        <nav aria-label="Progreso de la descarga" className="flex items-center justify-between gap-3">
+          <ol className="flex items-center gap-2 text-sm">
+            <li>
+              <button
+                type="button"
+                onClick={volverAConfig}
+                className="rounded font-medium text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                Configuración
+              </button>
+            </li>
+            <li aria-hidden="true" className="text-muted-foreground">›</li>
+            <li aria-current="step" className="font-semibold text-card-foreground">
+              {mode === 'results' ? 'Resultado' : 'Ejecución'}
+            </li>
+          </ol>
+          <button
+            type="button"
+            onClick={volverAConfig}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-accent/40 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            ← Editar configuración
+          </button>
+        </nav>
+      )}
+      <div
+        ref={configRef}
+        tabIndex={-1}
+        className={`mx-auto w-full max-w-3xl space-y-6 focus:outline-none ${mode === 'config' ? '' : 'hidden'}`}
+      >
         {/* Configuración: acordeón todo-en-uno (Fase 2) */}
         <div className="animate-fade-in-up rounded-2xl border border-border bg-card p-4 shadow-glow">
           <div className="mb-3 flex items-center justify-between gap-3 px-2 pt-1">
@@ -1456,7 +1512,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         </div>
       </div>
 
-      <div className="xl:col-span-8 space-y-6">
+      <div className={`space-y-6 ${mode === 'config' ? 'hidden' : ''}`}>
         <ProgressHero
           progress={progress}
           statusKind={statusKind}
@@ -1475,7 +1531,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           <div className="flex justify-center">
             <button
               type="button"
-              onClick={cancelarEspera}
+              onClick={volverAConfig}
               className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
             >
               Cancelar
