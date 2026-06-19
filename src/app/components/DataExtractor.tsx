@@ -1354,9 +1354,6 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           <div className="mb-3 flex items-center justify-between gap-3 px-2 pt-1">
             <h2 className="text-lg font-bold text-card-foreground">Configurar descarga</h2>
             <div className="flex items-center gap-2">
-              <span className="rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-semibold tabular-nums text-accent">
-                {accordionSections.filter((section) => sectionComplete(section.id)).length}/{accordionSections.length} listas
-              </span>
               <button
                 type="button"
                 onClick={shareConfiguration}
@@ -1427,18 +1424,12 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Estimación antes de descargar</p>
               {liveEstimate ? (
                 <>
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-center">
                     <div>
                       <p className="font-mono text-lg font-bold tabular-nums text-card-foreground">
                         {liveEstimate.rowCount.toLocaleString('es-CO')}
                       </p>
                       <p className="text-[11px] text-muted-foreground">filas aprox.</p>
-                    </div>
-                    <div>
-                      <p className="font-mono text-lg font-bold tabular-nums text-card-foreground">
-                        {Math.max(liveEstimate.totalPages, 1).toLocaleString('es-CO')}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">página(s)</p>
                     </div>
                     <div>
                       <p className="font-mono text-lg font-bold tabular-nums text-card-foreground">~{formatBytes(estimatedBytes)}</p>
@@ -2602,13 +2593,9 @@ function ReadyDownloadPanel({
   const remainingMs = useCountdown(expiresAt);
   const expired = remainingMs !== null && remainingMs <= 0;
 
-  // Lleva el éxito al foco visual del usuario en cuanto aparece el ZIP.
-  useEffect(() => {
-    const el = cardRef.current;
-    if (!el) return;
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
-  }, []);
+  // (Se quitó el auto-scroll al aparecer el ZIP: arrastraba la página sin pedirlo.
+  // La señal in-place — anillo verde + botón de descarga + toast — y el cambio a la
+  // vista de resultados ya orientan al usuario.)
 
   return (
     <div
