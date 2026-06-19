@@ -12,10 +12,9 @@ export interface ResumenProsaOpts {
 
 function territorio(departamentos: string[]): string {
   const deps = (departamentos ?? []).filter(Boolean);
-  if (deps.length === 0) return 'todo el país';
-  if (deps.length === 1) return deps[0];
-  if (deps.length === 2) return `${deps[0]} y ${deps[1]}`;
-  return `${deps.length} departamentos`;
+  // Una descarga = un departamento. Sin selección aún, se anticipa en singular
+  // (la descarga global ya no es posible).
+  return deps[0] || 'un departamento';
 }
 
 export function construirResumenProsa(opts: ResumenProsaOpts): string {
