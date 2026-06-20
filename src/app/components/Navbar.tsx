@@ -1,4 +1,4 @@
-import { Sun, Moon, Monitor, HelpCircle, User, ChevronRight, History, Search, Trash2 } from 'lucide-react';
+import { Sun, Moon, Monitor, HelpCircle, User, ChevronRight, History, Search, Trash2, Menu } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ExtractorRuntimeState } from './DataExtractor';
 import {
@@ -31,6 +31,8 @@ interface NavbarProps {
   breadcrumbs: Array<{ label: string; view?: string }>;
   runtime: ExtractorRuntimeState;
   onNavigate: (view: string) => void;
+  // Abre el drawer de navegación en móvil (hamburguesa). Solo visible en <lg.
+  onOpenMenu?: () => void;
 }
 
 function formatDuration(value: number) {
@@ -58,7 +60,7 @@ function resolveQuickToggle(current: ThemeChoice): ThemeChoice {
   return isDarkNow ? 'light' : 'dark';
 }
 
-export function Navbar({ breadcrumbs, runtime, onNavigate }: NavbarProps) {
+export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMenu }: NavbarProps) {
   const [theme, setTheme] = useState<ThemeChoice>(getThemeChoice);
   const [downloadCount, setDownloadCount] = useState(0);
 
@@ -77,6 +79,16 @@ export function Navbar({ breadcrumbs, runtime, onNavigate }: NavbarProps) {
   return (
     <div className="glass-chrome absolute inset-x-0 top-0 z-30 flex min-h-16 items-center justify-between gap-3 border-b border-border px-4 md:px-6">
       <div className="min-w-0 flex items-center gap-2 overflow-hidden text-sm">
+        {onOpenMenu && (
+          <button
+            type="button"
+            onClick={onOpenMenu}
+            aria-label="Abrir menú de navegación"
+            className="-ml-1 mr-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:hidden"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        )}
         {breadcrumbs.map((crumb, index) => {
           const isLast = index === breadcrumbs.length - 1;
           const clickable = !isLast && crumb.view;

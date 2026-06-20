@@ -1,10 +1,11 @@
 import { BarChart3, Droplets, MapPin, Menu, TrendingUp } from 'lucide-react';
 
+// Orden alineado con el sidebar (MENU_SECTIONS): map antes de hydro.
 const TABS = [
   { id: 'dashboard', icon: BarChart3, label: 'Panel' },
   { id: 'analytics', icon: TrendingUp, label: 'Analítica' },
-  { id: 'hydro', icon: Droplets, label: 'Hidrología' },
   { id: 'map', icon: MapPin, label: 'Mapa' },
+  { id: 'hydro', icon: Droplets, label: 'Hidrología' },
 ] as const;
 
 interface BarraInferiorProps {
