@@ -202,8 +202,10 @@ export default function App() {
 
       <div className="relative flex-1 flex flex-col overflow-hidden min-w-0">
         {/* La navbar es overlay: el contenido scrollea POR DEBAJO del vidrio. */}
-        <Navbar breadcrumbs={getBreadcrumbs()} runtime={runtime} onNavigate={navigate} />
+        <Navbar breadcrumbs={getBreadcrumbs()} runtime={runtime} onNavigate={navigate} onOpenMenu={() => setMobileNavOpen(true)} />
         <main className="flex-1 overflow-y-auto p-4 pt-20 pb-24 md:p-6 md:pt-20 lg:pb-6 scrollbar-thin scrollbar-track-transparent">
+          {/* h1 único de la página = título de la vista activa (la marca del panel ya no es h1). */}
+          <h1 className="sr-only">{getBreadcrumbs().slice(-1)[0]?.label || 'IDEAM'}</h1>
           <div className={currentView === 'extractor' ? 'block' : 'hidden'}>
             <DataExtractor onRuntimeChange={setRuntime} />
           </div>
