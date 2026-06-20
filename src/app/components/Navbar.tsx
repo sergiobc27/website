@@ -1,4 +1,4 @@
-import { Sun, Moon, Monitor, HelpCircle, User, ChevronRight, History, Search, Trash2, Menu } from 'lucide-react';
+import { Sun, Moon, Monitor, HelpCircle, User, ChevronRight, History, Search, Trash2, Menu, Github, Package } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ExtractorRuntimeState } from './DataExtractor';
 import {
@@ -171,6 +171,30 @@ export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMenu }: NavbarP
         </button>
 
         <CopyLinkButton />
+
+        {/* Enlaces del proyecto (abren en otra pestaña). Ocultos en móvil muy
+            angosto para no saturar la barra; el divisor los separa de las acciones. */}
+        <span className="mx-0.5 hidden h-5 w-px bg-border sm:inline-block" aria-hidden="true" />
+        <a
+          href="https://github.com/sergiobc27/ideam-data-automator"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group hidden rounded-lg p-2 text-muted-foreground transition-[transform,background-color,color] duration-150 ease-out hover:scale-105 hover:bg-muted hover:text-accent active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:inline-flex"
+          title="Código en GitHub"
+          aria-label="Repositorio del proyecto en GitHub (abre en una pestaña nueva)"
+        >
+          <Github className="anim-wiggle h-5 w-5" />
+        </a>
+        <a
+          href="https://pypi.org/project/ideam-data-automator/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group hidden rounded-lg p-2 text-muted-foreground transition-[transform,background-color,color] duration-150 ease-out hover:scale-105 hover:bg-muted hover:text-accent active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:inline-flex"
+          title="Paquete en PyPI (ideam-data-automator)"
+          aria-label="Paquete en PyPI (abre en una pestaña nueva)"
+        >
+          <Package className="anim-wiggle h-5 w-5" />
+        </a>
 
         <button
           type="button"
