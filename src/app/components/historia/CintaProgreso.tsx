@@ -73,9 +73,9 @@ export function CintaProgreso({
       >
         <div ref={fillRef} className="hl-cinta-fill" style={{ transform: `scaleX(${progreso})` }} />
       </div>
-      <div className="hl-marcador" aria-hidden="true">
-        <BookOpenText className="hl-marcador-icono" />
-        <span>
+      <div className="hl-banda">
+        <span className="hl-marcador" aria-hidden="true">
+          <BookOpenText className="hl-marcador-icono" />
           Capítulo <b>{aRomano(activo)}</b> · de {aRomano(TOTAL_ESCENAS)}
         </span>
       </div>
