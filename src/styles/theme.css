@@ -446,6 +446,7 @@
   --hl-celda-bg: rgba(255, 255, 255, 0.5);
   --hl-defn-bg: rgba(201, 162, 39, 0.1);
   --hl-paper-solid: #f6f1e7;
+  --hl-banda-bg: rgba(246, 241, 231, 0.86);
   color: var(--hl-ink);
   background: radial-gradient(120% 70% at 50% 0%, #fbf7ee 0%, #f5edda 55%, #efe6d2 100%);
 }
@@ -461,6 +462,7 @@
   --hl-celda-bg: rgba(255, 255, 255, 0.04);
   --hl-defn-bg: rgba(201, 162, 39, 0.12);
   --hl-paper-solid: #15110a;
+  --hl-banda-bg: rgba(20, 16, 10, 0.86);
   background: radial-gradient(120% 70% at 50% 0%, #1b160e 0%, #15110a 60%, #100d07 100%);
 }
 
@@ -557,21 +559,25 @@
 .hl-indice-dots { flex: 1; border-bottom: 1px dotted var(--hl-hair); transform: translateY(-0.3rem); }
 .hl-indice-pg { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.85rem; color: var(--hl-faint); flex: none; }
 
-/* Cinta de progreso continua + marcador de capítulo */
-.hl-cinta-wrap { position: sticky; top: 4rem; z-index: 20; margin: 0 -1rem; }
-.hl-cinta { height: 5px; background: var(--hl-hair); }
-.hl-cinta-fill { height: 100%; transform-origin: left center; background: linear-gradient(90deg, var(--hl-red), var(--hl-gold)); box-shadow: 0 1px 8px rgba(201, 162, 39, 0.5); }
-.hl-marcador {
-  position: absolute; right: 1rem; top: 5px; display: flex; align-items: center; gap: 0.45rem;
-  padding: 0.35rem 0.7rem 0.45rem; background: var(--hl-red); color: #fdf6e3;
-  font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.03em;
-  border-radius: 0 0 5px 5px; box-shadow: 0 6px 14px rgba(125, 16, 19, 0.3);
+/* Cinta de progreso continua: toolbar fija arriba (bajo la navbar). La línea de
+   progreso va pegada al borde superior y el marcador de capítulo vive en una
+   banda translúcida con filete inferior, para que el contenido pase POR DEBAJO
+   sin que nada se superponga a la página. */
+.hl-cinta-wrap {
+  position: sticky; top: -1rem; z-index: 20; margin: 0 -1rem;
+  background: var(--hl-banda-bg);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--hl-hair);
 }
-.hl-marcador b { font-weight: 800; }
-.hl-marcador-icono { width: 0.85rem; height: 0.85rem; }
+.hl-cinta { position: relative; height: 3px; background: var(--hl-hair-soft); }
+.hl-cinta-fill { height: 100%; transform-origin: left center; background: linear-gradient(90deg, var(--hl-red), var(--hl-gold)); }
+.hl-banda { display: flex; align-items: center; justify-content: flex-end; height: 1.9rem; padding: 0 1rem; }
+.hl-marcador { display: flex; align-items: center; gap: 0.4rem; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.02em; color: var(--hl-soft); }
+.hl-marcador b { color: var(--hl-red); font-weight: 800; }
+.hl-marcador-icono { width: 0.85rem; height: 0.85rem; color: var(--hl-gold); }
 @media (min-width: 768px) {
   .hl-cinta-wrap { margin: 0 -1.5rem; }
-  .hl-marcador { right: 1.5rem; }
+  .hl-banda { padding: 0 1.5rem; }
 }
 
 /* Stepper lateral (índice del libro) — solo escritorio */

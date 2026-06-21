@@ -61,7 +61,7 @@ export function HistoriaIdf({ onNavigate }: HistoriaIdfProps) {
   return (
     <div
       ref={rootRef}
-      className="historia-libro font-serif relative -mx-4 -mt-20 -mb-24 px-4 pt-20 pb-24 md:-mx-6 md:px-6 lg:-mb-6 lg:pb-6"
+      className="historia-libro font-serif relative -mx-4 -mt-4 -mb-24 px-4 pb-24 md:-mx-6 md:px-6 lg:-mb-6 lg:pb-6"
     >
       <CintaProgreso rootRef={rootRef} activo={activo} titulo={tituloActivo} />
       <StepperCapitulos capitulos={capitulos} activo={activo} onIr={irA} />
