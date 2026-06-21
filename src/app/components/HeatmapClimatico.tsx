@@ -194,7 +194,7 @@ export function HeatmapClimatico({ datasetId, department, metric, anioMin, anioM
       {expandido && (
         <div className="fixed inset-0 z-50 flex flex-col bg-background/95 p-6 backdrop-blur-sm" role="dialog" aria-modal="true">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-lg font-bold text-card-foreground">Mapa de calor climático — {department || 'Todo el país'}</h3>
+            <h3 className="text-lg font-bold text-card-foreground">Mapa de calor climático: {department || 'Todo el país'}</h3>
             <button type="button" onClick={() => setExpandido(false)} className="rounded-md border border-border p-2 text-muted-foreground hover:bg-muted/60" aria-label="Cerrar">
               <X className="h-5 w-5" />
             </button>
@@ -226,7 +226,7 @@ function AniosMeses({ anios, max }: { anios: Array<{ anio: number; meses: Array<
               key={i}
               className="rounded-[3px] border border-border/30"
               style={{ height: 24, backgroundColor: colorCalendario(v, max) }}
-              title={`${MESES[i]} ${fila.anio} — ${v !== null ? fmt(v, 2) : 'sin datos'}`}
+              title={`${MESES[i]} ${fila.anio}: ${v !== null ? fmt(v, 2) : 'sin datos'}`}
             />
           ))}
         </Fragment>
@@ -251,7 +251,7 @@ function MesesDias({ filas, max, anio }: { filas: Array<Array<number | null>>; m
               key={d}
               className="rounded-[2px] border border-border/20"
               style={{ height: 22, backgroundColor: colorCalendario(v, max) }}
-              title={`${d + 1} de ${MESES[mes]} de ${anio} — ${v !== null ? fmt(v, 2) : 'sin datos'}`}
+              title={`${d + 1} de ${MESES[mes]} de ${anio}: ${v !== null ? fmt(v, 2) : 'sin datos'}`}
             />
           ))}
         </Fragment>
@@ -293,7 +293,7 @@ function SemanaSemanas({ columnas, max }: { columnas: Array<Array<Dia | null>>; 
                 key={c}
                 className="rounded-[2px] border border-border/20"
                 style={{ height: 15, backgroundColor: d ? colorCalendario(d.valor, max) : 'transparent' }}
-                title={d ? `${fechaLarga(d.fecha)} — ${d.valor !== null ? fmt(d.valor, 2) : 'sin datos'}` : ''}
+                title={d ? `${fechaLarga(d.fecha)}: ${d.valor !== null ? fmt(d.valor, 2) : 'sin datos'}` : ''}
               />
             );
           })}

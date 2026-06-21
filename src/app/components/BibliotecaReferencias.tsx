@@ -49,7 +49,7 @@ export function BibliotecaReferencias() {
             <Library className="h-5 w-5 text-accent" /> Biblioteca de referencias
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Fuentes normativas y académicas en las que se basa la plataforma — {REFERENCIAS.length} en total,{' '}
+            Fuentes normativas y académicas en las que se basa la plataforma: {REFERENCIAS.length} en total,{' '}
             {nColombia} colombianas. Filtra por tema o país, o busca por autor/título/año.
           </p>
         </div>

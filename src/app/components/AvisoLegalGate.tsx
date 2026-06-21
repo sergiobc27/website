@@ -65,7 +65,7 @@ export function AvisoLegalGate({ accepted, onAccept }: { accepted: boolean; onAc
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
               En lugar de navegar y descargar a mano desde los portales oficiales, aquí eliges qué necesitas
-              —variable, territorio y periodo— y la herramienta arma la descarga por ti. Nace del trabajo de grado de
+              (variable, territorio y periodo) y la herramienta arma la descarga por ti. Nace del trabajo de grado de
               Ingeniería Civil de la Universidad de la Costa (CUC) y busca facilitar el acceso a series históricas para
               estudios hidrológicos (incluidas las curvas IDF).
             </p>

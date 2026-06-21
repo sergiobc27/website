@@ -303,7 +303,7 @@ export default function MapaEstaciones() {
             }
             codes.push(props.codigo);
             window.localStorage.setItem('ideam-comparador', JSON.stringify(codes));
-            compareButton.textContent = '✓ Añadida — abre el Comparador';
+            compareButton.textContent = '✓ Añadida: abre el Comparador';
           } catch {
             // best-effort
           }
