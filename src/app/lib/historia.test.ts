@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { escenaMasVisible, validarHistoria, intensidadDeCurva, TOTAL_ESCENAS } from './historia';
+import { escenaMasVisible, validarHistoria, intensidadDeCurva, TOTAL_ESCENAS, aRomano, progresoLectura } from './historia';
 import { HISTORIA_IDF } from '../data/historiaIdf';
 
 describe('escenaMasVisible', () => {
@@ -40,4 +40,35 @@ describe('intensidadDeCurva', () => {
 
 it('TOTAL_ESCENAS es 8', () => {
   expect(TOTAL_ESCENAS).toBe(8);
+});
+
+describe('aRomano', () => {
+  it('convierte 1-8 a numerales romanos', () => {
+    expect([1, 2, 3, 4, 5, 6, 7, 8].map(aRomano)).toEqual(['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII']);
+  });
+  it('fuera de rango devuelve el número como texto', () => {
+    expect(aRomano(0)).toBe('0');
+    expect(aRomano(99)).toBe('99');
+  });
+});
+
+describe('progresoLectura', () => {
+  // topRelativo = top del contenedor de la historia respecto al tope del scroller
+  // (0 al empezar; negativo al avanzar). alto = alto del contenedor; ventanaAlto = alto visible.
+  it('es 0 al inicio (tope alineado con el scroller)', () => {
+    expect(progresoLectura(0, 4000, 800)).toBe(0);
+  });
+  it('es 1 al final (último tramo leído)', () => {
+    expect(progresoLectura(-(4000 - 800), 4000, 800)).toBe(1);
+  });
+  it('es 0.5 a la mitad del recorrido', () => {
+    expect(progresoLectura(-(4000 - 800) / 2, 4000, 800)).toBeCloseTo(0.5, 5);
+  });
+  it('hace clamp por debajo de 0 y por encima de 1', () => {
+    expect(progresoLectura(500, 4000, 800)).toBe(0);
+    expect(progresoLectura(-99999, 4000, 800)).toBe(1);
+  });
+  it('si el contenido cabe entero en la ventana devuelve 1', () => {
+    expect(progresoLectura(0, 600, 800)).toBe(1);
+  });
 });
