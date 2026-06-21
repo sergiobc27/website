@@ -80,7 +80,7 @@ export function GraficaViva({ escena, data }: { escena: number; data: HistoriaId
       )}
 
       {escena === 2 && (
-        <ChartCon titulo={`Tormenta real del ${tormenta.fecha} — pulsos de 10 minutos`}>
+        <ChartCon titulo={`Tormenta real del ${tormenta.fecha}: pulsos de 10 minutos`}>
           <BarChart data={tormenta.puntos}>
             <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
             <XAxis dataKey="hora" {...ejeProps} minTickGap={40} />
