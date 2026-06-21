@@ -37,6 +37,27 @@ export function escenaMasVisible(ratios: number[], actual = 1): number {
   return mejor > 0 ? idx + 1 : actual;
 }
 
+const ROMANOS = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'] as const;
+
+/** Numeral romano para 1-10 (los capítulos de la historia). Fuera de rango: el número como texto. */
+export function aRomano(n: number): string {
+  return n >= 1 && n <= 10 ? ROMANOS[n] : String(n);
+}
+
+/**
+ * Progreso de lectura 0..1 (continuo, ligado al scroll real).
+ * @param topRelativo  top del contenedor de la historia respecto al tope del scroller (0 al empezar, negativo al avanzar)
+ * @param alto         alto total del contenedor de la historia
+ * @param ventanaAlto  alto visible del scroller
+ * Si el contenido cabe entero en la ventana, devuelve 1 (todo visible = leído).
+ */
+export function progresoLectura(topRelativo: number, alto: number, ventanaAlto: number): number {
+  const recorrido = alto - ventanaAlto;
+  if (recorrido <= 0) return 1;
+  const p = -topRelativo / recorrido;
+  return p <= 0 ? 0 : p > 1 ? 1 : p;
+}
+
 /** Chequeo de shape del dataset embebido (lo usan el test y quien regenere). */
 export function validarHistoria(d: HistoriaIdfData): string[] {
   const errores: string[] = [];
