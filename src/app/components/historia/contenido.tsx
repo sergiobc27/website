@@ -52,8 +52,8 @@ export function construirCapitulos(D: HistoriaIdfData): CapituloContenido[] {
             calle se inunda; si se pasa, la obra cuesta de más.
           </p>
           <p>
-            Esta es la historia de cómo una estación real del IDEAM —{est.nombre}, en {est.municipio},{' '}
-            {est.departamento}— convierte gotas de lluvia en una herramienta de diseño.
+            Esta es la historia de cómo una estación real del IDEAM ({est.nombre}, en {est.municipio},{' '}
+            {est.departamento}) convierte gotas de lluvia en una herramienta de diseño.
           </p>
         </>
       ),
@@ -67,11 +67,11 @@ export function construirCapitulos(D: HistoriaIdfData): CapituloContenido[] {
         <>
           <p className="hl-cap">
             El IDEAM no mide la lluvia «por días»: la registra <R>cada 10 minutos</R>. Esto que ves es una tormenta real
-            del {t.fecha} —cada barra es lo que cayó en diez minutos.
+            del {t.fecha}: cada barra es lo que cayó en diez minutos.
           </p>
           <p>
             Ese día cayeron <R>{fmt(t.totalMm)} mm</R> en total, con una ráfaga que alcanzó una intensidad de{' '}
-            <O>{fmt(t.maxIntensidadMmH)} mm/h</O>. La lluvia no es pareja: tiene picos cortos y violentos —y esos picos
+            <O>{fmt(t.maxIntensidadMmH)} mm/h</O>. La lluvia no es pareja: tiene picos cortos y violentos, y esos picos
             son los que inundan una calle.
           </p>
           <Defn termino="Intensidad (mm/h)">
@@ -89,16 +89,16 @@ export function construirCapitulos(D: HistoriaIdfData): CapituloContenido[] {
       cuerpo: (
         <>
           <p className="hl-cap">
-            La práctica común en Colombia solo conoce el <R>total del día</R> —un número— y lo «desagrega» con fórmulas
+            La práctica común en Colombia solo conoce el <R>total del día</R> (un número) y lo «desagrega» con fórmulas
             regionales para adivinar cómo se repartió esa lluvia.
           </p>
           <Defn termino="Desagregar">
-            repartir un solo número (el total del día) en sus partes —cada hora, cada 10 minutos— usando una fórmula que
+            repartir un solo número (el total del día) en sus partes (cada hora, cada 10 minutos) usando una fórmula que
             asume una forma «típica» de tormenta. Es una conjetura informada, no la lluvia real.
           </Defn>
           <p>
             Esta plataforma no adivina: usa los <O>144 registros reales</O> de cada día. Esa es la diferencia entre{' '}
-            <em>estimar</em> una curva IDF y <em>construirla</em> —y es el corazón de esta tesis.
+            <em>estimar</em> una curva IDF y <em>construirla</em>. Es el corazón de esta tesis.
           </p>
         </>
       ),
@@ -112,7 +112,7 @@ export function construirCapitulos(D: HistoriaIdfData): CapituloContenido[] {
         <>
           <p className="hl-cap">
             Para diseñar no basta una tormenta: hay que conocerlas todas. De cada año de registro guardamos su peor
-            tormenta de 24 horas. Aquí están las de {est.nombre} —<R>{D.maximosAnuales.length} años</R>.
+            tormenta de 24 horas. Aquí están las de {est.nombre} (<R>{D.maximosAnuales.length} años</R>).
           </p>
           <p>
             El <O>anillo dorado</O> es la misma tormenta que viste al inicio. A simple vista parecen puntos al azar; la
@@ -133,13 +133,13 @@ export function construirCapitulos(D: HistoriaIdfData): CapituloContenido[] {
             ordena ese caos y a cada lámina de lluvia le asigna una probabilidad de ser superada.
           </p>
           <Defn termino="Gumbel">
-            una curva pensada para los máximos —la creciente más grande de cada año—. Aprende de tus peores tormentas y
+            una curva pensada para los máximos (la creciente más grande de cada año). Aprende de tus peores tormentas y
             estima qué tan grande podría ser una aún peor.
           </Defn>
           <p>De ahí sale el período de retorno (Tr), el lenguaje con el que se diseña.</p>
           <Defn termino="Período de retorno (Tr)">
             «Tr = 25 años» <em>no</em> significa que ocurra cada 25 años. Significa que <O>cada año hay un 4%</O> de
-            probabilidad de que se supere —puede pasar dos años seguidos.
+            probabilidad de que se supere. Puede pasar dos años seguidos.
           </Defn>
           <p>
             La <O>franja dorada</O> es la incertidumbre del ajuste (IC 90%): con series de pocos años es honesta y ancha.
@@ -156,7 +156,7 @@ export function construirCapitulos(D: HistoriaIdfData): CapituloContenido[] {
       cuerpo: (
         <>
           <p className="hl-cap">
-            Repitiendo ese análisis para cada duración —10 minutos, 30, una hora, un día— aparecen las curvas <R>IDF</R>.
+            Repitiendo ese análisis para cada duración (10 minutos, 30, una hora, un día) aparecen las curvas <R>IDF</R>.
           </p>
           <Defn termino="IDF = Intensidad · Duración · Frecuencia">
             cada curva responde a una pregunta de diseño: «para una lluvia de esta duración y esta frecuencia, ¿qué
@@ -182,13 +182,13 @@ export function construirCapitulos(D: HistoriaIdfData): CapituloContenido[] {
             Díaz-Granados (1998), ajustada a esta estación.
           </p>
           <p>
-            Sus tres parámetros —<R>K</R>, <R>m</R> y <R>n</R>— son el ADN hidrológico de {est.nombre}: con ellos cabe la
+            Sus tres parámetros (<R>K</R>, <R>m</R> y <R>n</R>) son el ADN hidrológico de {est.nombre}: con ellos cabe la
             estación entera en una calculadora.
           </p>
           {r2 != null && (
             <Defn termino="R² (bondad del ajuste)">
               qué tan bien la ecuación reproduce los datos reales, de 0 (nada) a 1 (perfecto). Aquí{' '}
-              <O>R² = {fmt(r2, 3)}</O> —explica el {fmt(r2 * 100, 0)}% de lo observado.
+              <O>R² = {fmt(r2, 3)}</O>: explica el {fmt(r2 * 100, 0)}% de lo observado.
             </Defn>
           )}
         </>
