@@ -1,4 +1,5 @@
-import { Suspense, lazy, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { lazyWithRetry } from './lib/lazyWithRetry';
 import { BookOpen, CheckCircle2, Cloud, Database, FileArchive, KeyRound, ShieldCheck, Terminal } from 'lucide-react';
 import { Sidebar, SidebarContent } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
@@ -8,13 +9,13 @@ import { FichaClimatica } from './components/FichaClimatica';
 
 // Vistas no iniciales: lazy para aligerar el bundle inicial (Dashboard y la
 // Ficha —que puede abrirse por hash compartible— se mantienen estáticas).
-const MapaEstaciones = lazy(() => import('./components/MapaEstaciones'));
-const Analytics = lazy(() => import('./components/Analytics').then((m) => ({ default: m.Analytics })));
-const EstadoEspejo = lazy(() => import('./components/EstadoEspejo').then((m) => ({ default: m.EstadoEspejo })));
-const ComparadorEstaciones = lazy(() => import('./components/ComparadorEstaciones').then((m) => ({ default: m.ComparadorEstaciones })));
-const Hidrologia = lazy(() => import('./components/Hidrologia').then((m) => ({ default: m.Hidrologia })));
-const BibliotecaReferencias = lazy(() => import('./components/BibliotecaReferencias').then((m) => ({ default: m.BibliotecaReferencias })));
-const HistoriaIdf = lazy(() => import('./components/HistoriaIdf').then((m) => ({ default: m.HistoriaIdf })));
+const MapaEstaciones = lazyWithRetry(() => import('./components/MapaEstaciones'));
+const Analytics = lazyWithRetry(() => import('./components/Analytics').then((m) => ({ default: m.Analytics })));
+const EstadoEspejo = lazyWithRetry(() => import('./components/EstadoEspejo').then((m) => ({ default: m.EstadoEspejo })));
+const ComparadorEstaciones = lazyWithRetry(() => import('./components/ComparadorEstaciones').then((m) => ({ default: m.ComparadorEstaciones })));
+const Hidrologia = lazyWithRetry(() => import('./components/Hidrologia').then((m) => ({ default: m.Hidrologia })));
+const BibliotecaReferencias = lazyWithRetry(() => import('./components/BibliotecaReferencias').then((m) => ({ default: m.BibliotecaReferencias })));
+const HistoriaIdf = lazyWithRetry(() => import('./components/HistoriaIdf').then((m) => ({ default: m.HistoriaIdf })));
 
 // Compatibilidad hacia atrás: convierte un enlace viejo de ficha por hash
 // (#/ficha/DEP/MUN) a la ruta nueva con query (/ficha?dep=DEP&mun=MUN).
