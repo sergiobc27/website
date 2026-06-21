@@ -956,8 +956,8 @@ export function Hidrologia() {
                         <strong>Bondad de ajuste (Kolmogorov-Smirnov):</strong>{' '}
                         {returnPeriods.goodnessOfFit.passes
                           ? `el ajuste ${returnPeriods.recommended ?? 'recomendado'} es aceptable`
-                          : `el ajuste ${returnPeriods.recommended ?? 'recomendado'} NO pasa el test; usa los cuantiles con cautela`}{' '}
-        — <V>D</V> = {fmt(returnPeriods.goodnessOfFit.statistic, 4)} {returnPeriods.goodnessOfFit.passes ? '<' : '≥'} {fmt(returnPeriods.goodnessOfFit.critical, 4)} (crítico, <V>α</V> = {fmt(returnPeriods.goodnessOfFit.alpha, 2)}). Exigido por el Manual de Drenaje INVÍAS.
+                          : `el ajuste ${returnPeriods.recommended ?? 'recomendado'} NO pasa el test; usa los cuantiles con cautela`}:{' '}
+        <V>D</V> = {fmt(returnPeriods.goodnessOfFit.statistic, 4)} {returnPeriods.goodnessOfFit.passes ? '<' : '≥'} {fmt(returnPeriods.goodnessOfFit.critical, 4)} (crítico, <V>α</V> = {fmt(returnPeriods.goodnessOfFit.alpha, 2)}). Exigido por el Manual de Drenaje INVÍAS.
                       </span>
                     </div>
                   )}

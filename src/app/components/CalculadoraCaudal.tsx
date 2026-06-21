@@ -84,7 +84,7 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
               <Select
                 value={obraIdx}
                 onChange={onObra}
-                options={[{ value: -1, label: 'Personalizado' }, ...OBRAS_TR.map((o, i) => ({ value: i, label: `${o.label} — Tr ${o.tr}a` }))]}
+                options={[{ value: -1, label: 'Personalizado' }, ...OBRAS_TR.map((o, i) => ({ value: i, label: `${o.label} (Tr ${o.tr}a)`}))]}
               />
             </Field>
             <Field label="Período de retorno (años)">
@@ -110,7 +110,7 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
         </SeccionColapsable>
 
         {/* 2 · Tiempo de concentración */}
-        <SeccionColapsable titulo="2 · Tiempo de concentración (Tc)" descripcion="Kirpich · Témez · Giandotti — rango y recomendado">
+        <SeccionColapsable titulo="2 · Tiempo de concentración (Tc)" descripcion="Kirpich · Témez · Giandotti: rango y recomendado">
           <SeccionTc tcs={tcs} metodo={tcMetodo} setMetodo={(m) => setTcMetodo(m as MetodoTc | 'recomendado')} tcUsado={tcUsado} avisoKirpich={avisoKirpich} />
         </SeccionColapsable>
 
@@ -160,13 +160,13 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
           <div className="space-y-2 text-xs text-muted-foreground">
             <p className="flex flex-wrap items-center gap-x-2">
               <Formula className="text-sm text-card-foreground"><V>Q</V>&nbsp;=&nbsp;<Frac num={<><V>C</V> · <V>I</V> · <V>A</V></>} den={<>360</>} /></Formula>
-              <span>— Método Racional (Q en m³/s, C adimensional, I en mm/h, A en hectáreas).</span>
+              <span>·Método Racional (Q en m³/s, C adimensional, I en mm/h, A en hectáreas).</span>
             </p>
             <p className="flex flex-wrap items-center gap-x-2">
               <Formula className="text-sm text-card-foreground"><V>I</V>&nbsp;=&nbsp;<Frac num={<><V>K</V> · <V>T</V><Sup><V>m</V></Sup></>} den={<><V>D</V><Sup><V>n</V></Sup></>} /></Formula>
-              <span>— curva IDF ajustada de esta estación (D = Tc).</span>
+              <span>·curva IDF ajustada de esta estación (D = Tc).</span>
             </p>
-            <p>· Validez del método racional: áreas pequeñas — RAS 0330/2017 (urbano, A &lt; 80 ha) y Manual de Drenaje INVÍAS (A ≤ 2,5 km²). C según la cobertura real del área aportante.</p>
+            <p>· Validez del método racional: áreas pequeñas según RAS 0330/2017 (urbano, A &lt; 80 ha) y Manual de Drenaje INVÍAS (A ≤ 2,5 km²). C según la cobertura real del área aportante.</p>
             <p>· Frontera de alcance: producto HIDROLÓGICO (caudal e intensidad de diseño). El dimensionamiento estructural-hidráulico de la obra se rige por NSR-10 / AASHTO / INVÍAS y queda fuera de esta herramienta.</p>
             <p className="text-accent">· Resultado orientativo de pre-dimensionamiento; para diseño definitivo valida con la normativa y un especialista.</p>
             <div className="mt-2 space-y-1 border-t border-border pt-2">

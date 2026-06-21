@@ -152,7 +152,7 @@ export function SeccionManning({ q, pendienteCuenca }: { q: number; pendienteCue
       </Formula>
       <p className="text-xs text-muted-foreground">
         Manning (1891) · R = A/P (radio hidráulico). Velocidad mínima de autolimpieza y máxima por material según RAS 0330
-        (2017); valores de n y velocidad máxima editables — confírmalos con la norma vigente.
+        (2017); valores de n y velocidad máxima editables. Confírmalos con la norma vigente.
       </p>
     </div>
   );

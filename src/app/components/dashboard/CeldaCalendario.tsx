@@ -61,7 +61,7 @@ function Fila({ fila, max }: { fila: { anio: number; meses: Array<number | null>
       {fila.meses.map((valor, mes) => (
         <span
           key={mes}
-          title={valor !== null ? `${MES_LARGO[mes]} ${fila.anio} — ${fmt(valor, 1)} mm/mes` : `${MES_LARGO[mes]} ${fila.anio} — sin datos`}
+          title={valor !== null ? `${MES_LARGO[mes]} ${fila.anio}: ${fmt(valor, 1)} mm/mes` : `${MES_LARGO[mes]} ${fila.anio}: sin datos`}
           className="block min-h-[10px] w-full rounded-[2px] border border-border/30"
           style={{ backgroundColor: colorCalendario(valor, max) }}
         />
