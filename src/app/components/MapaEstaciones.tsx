@@ -2,10 +2,20 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import type { FeatureCollection, Point as GeoJsonPoint } from 'geojson';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Layers, MapPin, SlidersHorizontal, ChevronDown } from 'lucide-react';
+import { MapPin, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import { apiJson, apiUrl } from '../lib/ideamApi';
 import { useUrlSync } from '../lib/urlState';
 import { daneDeDepartamento } from '../lib/departamentos';
+import {
+  vistaPorId,
+  vistasPorFamilia,
+  valoresPorDane,
+  contarEstacionesPorDane,
+  construirFeatures,
+  rangoValores,
+  expresionRelleno,
+  type RegionRow,
+} from '../lib/vistasMapa';
 import type {
   AnalyticsByRegionResponse,
   AnalyticsTimeseriesResponse,
@@ -53,6 +63,13 @@ function escapeHtml(value: unknown) {
 
 function normalizeName(value: string) {
   return value.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
+
+// Valor de la leyenda con su unidad: enteros para conteos o magnitudes grandes,
+// 1 decimal para magnitudes pequeñas (°C, m).
+function fmtValorLeyenda(value: number, unidad: string): string {
+  const dec = unidad === 'estaciones' || Math.abs(value) >= 100 ? 0 : 1;
+  return `${value.toLocaleString('es-CO', { maximumFractionDigits: dec })} ${unidad}`;
 }
 
 function popupHtml(p: StationProperties) {
@@ -166,8 +183,12 @@ function addStationLayers(map: maplibregl.Map) {
 export default function MapaEstaciones() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
-  const sparkDatasetRef = useRef<{ id: string; name: string }>({ id: 's54a-sgyg', name: 'Precipitacion' });
+  // Variable de la mini-serie del popup: se deriva de la vista del mapa elegida
+  // (precipitación por defecto / cuando no hay vista o es "cobertura").
+  const popupDatasetRef = useRef<{ id: string; name: string }>({ id: 's54a-sgyg', name: 'Precipitación' });
   const boundariesRef = useRef<FeatureCollection | null>(null);
+  // Cache de by-region por datasetId: evita re-consultar al alternar vistas.
+  const byRegionCacheRef = useRef<Map<string, RegionRow[]>>(new Map());
 
   const [allStations, setAllStations] = useState<StationFeature[]>([]);
   const [datasets, setDatasets] = useState<Array<{ id: string; name: string }>>([]);
@@ -185,32 +206,34 @@ export default function MapaEstaciones() {
   // Diferido: filtrar 18K features en cada tecla causaba jank (auditoría #5 #13).
   const corrienteQuery = useDeferredValue(corrienteFilter);
   const [altitudMax, setAltitudMax] = useState<number | null>(null); // tope superior (m)
-  const [sparkDataset, setSparkDataset] = useState('s54a-sgyg');
-  const [choroplethOn, setChoroplethOn] = useState(false);
-  const [choroplethRange, setChoroplethRange] = useState<{ min: number; max: number } | null>(null);
+  // Vista temática de la coropleta (id de vistasMapa) o null = solo estaciones.
+  const [mapaVista, setMapaVista] = useState<string | null>(null);
+  const [leyenda, setLeyenda] = useState<{
+    rotulo: string; unidad: string; min: number; max: number; rampa: string[]; invertir: boolean; enRevision: boolean;
+  } | null>(null);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   // Estado en la URL: filtros del mapa + dataset del sparkline + choropleth.
   useUrlSync({
     params: {
-      var: sparkDataset === 's54a-sgyg' ? undefined : sparkDataset,
+      vista: mapaVista ?? undefined,
       estado: estadoFilter === 'todas' ? undefined : estadoFilter,
       cat: categoriaFilter || undefined,
       dep: departamentoFilter || undefined,
       zona: zonaFilter || undefined,
       corriente: corrienteFilter || undefined,
       altmax: altitudMax === null ? undefined : String(altitudMax),
-      choro: choroplethOn ? '1' : undefined,
     },
     onRestore: (p) => {
-      if (p.var) setSparkDataset(p.var);
+      if (p.vista && vistaPorId(p.vista)) setMapaVista(p.vista);
+      // Compatibilidad: enlaces viejos con `choro=1` abrían la coropleta de lluvia.
+      else if (p.choro === '1') setMapaVista('lluvia');
       if (p.estado === 'todas' || p.estado === 'activa' || p.estado === 'otra') setEstadoFilter(p.estado);
       if (p.cat) setCategoriaFilter(p.cat);
       if (p.dep) setDepartamentoFilter(p.dep);
       if (p.zona) setZonaFilter(p.zona);
       if (p.corriente) setCorrienteFilter(p.corriente);
       if (p.altmax && Number.isFinite(Number(p.altmax))) setAltitudMax(Number(p.altmax));
-      if (p.choro === '1') setChoroplethOn(true);
     },
   });
 
@@ -242,10 +265,14 @@ export default function MapaEstaciones() {
     };
   }, []);
 
+  // La variable del popup sigue a la vista del mapa: vista de clima/agua => su
+  // variable; sin vista o "cobertura" => precipitación.
   useEffect(() => {
-    const found = datasets.find((d) => d.id === sparkDataset);
-    if (found) sparkDatasetRef.current = found;
-  }, [datasets, sparkDataset]);
+    const vista = mapaVista ? vistaPorId(mapaVista) : undefined;
+    const id = vista?.datasetId ?? 's54a-sgyg';
+    const name = datasets.find((d) => d.id === id)?.name ?? vista?.rotulo ?? 'Precipitación';
+    popupDatasetRef.current = { id, name };
+  }, [datasets, mapaVista]);
 
   // Inicialización del mapa (una sola vez).
   useEffect(() => {
@@ -309,7 +336,7 @@ export default function MapaEstaciones() {
           }
         });
 
-        const dataset = sparkDatasetRef.current;
+        const dataset = popupDatasetRef.current;
         try {
           const series = await apiJson<AnalyticsTimeseriesResponse>(
             '/api/analytics/timeseries',
@@ -429,8 +456,9 @@ export default function MapaEstaciones() {
     source?.setData({ type: 'FeatureCollection', features: visibleStations } as unknown as FeatureCollection);
   }, [isMapReady, visibleStations, styleEpoch]);
 
-  // Coropleta: límites departamentales estáticos + volumen por departamento
-  // (by-region nacional, <1s sobre obs_mensual). Capa debajo de los clusters.
+  // Coropleta por VISTA temática: colorea cada departamento por la magnitud del
+  // fenómeno (mm/mes, °C, %, nº de estaciones...). Une los límites estáticos con
+  // el valor por DANE y deja "sin datos" en gris. Capa debajo de los clusters.
   useEffect(() => {
     const map = mapRef.current;
     if (!isMapReady || !map) return;
@@ -441,9 +469,10 @@ export default function MapaEstaciones() {
       if (map.getSource(DEPTOS_SOURCE_ID)) map.removeSource(DEPTOS_SOURCE_ID);
     };
 
-    if (!choroplethOn) {
+    const vista = mapaVista ? vistaPorId(mapaVista) : undefined;
+    if (!vista) {
       removeLayers();
-      setChoroplethRange(null);
+      setLeyenda(null);
       return;
     }
 
@@ -455,40 +484,52 @@ export default function MapaEstaciones() {
           if (!response.ok) throw new Error('No fue posible cargar los límites departamentales.');
           boundariesRef.current = (await response.json()) as FeatureCollection;
         }
-        const byRegion = await apiJson<AnalyticsByRegionResponse>(
-          '/api/analytics/by-region',
-          {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ datasetId: sparkDataset, departments: [] }),
-          },
-          'No fue posible cargar el volumen por departamento.'
-        );
-        if (cancelled) return;
 
-        // Se une por código DIVIPOLA/DANE (no por nombre): el cagg puede traer
-        // variantes del mismo departamento, pero todas resuelven al mismo código.
-        const obsByDane = new Map<string, number>();
-        for (const region of byRegion.regions) {
-          const dane = daneDeDepartamento(region.department);
-          if (!dane) continue;
-          obsByDane.set(dane, (obsByDane.get(dane) || 0) + region.rowCount);
+        let valorPorDane: Map<string, number>;
+        if (vista.metrica === 'catalogStations') {
+          // Cobertura: cuenta el catálogo de estaciones ya cargado (red real).
+          valorPorDane = contarEstacionesPorDane(
+            allStations.map((f) => ({ departamento: f.properties.departamento }))
+          );
+        } else {
+          const cacheKey = vista.datasetId as string;
+          let regions = byRegionCacheRef.current.get(cacheKey);
+          if (!regions) {
+            const byRegion = await apiJson<AnalyticsByRegionResponse>(
+              '/api/analytics/by-region',
+              {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ datasetId: vista.datasetId, departments: [] }),
+              },
+              'No fue posible cargar los datos por departamento.'
+            );
+            regions = byRegion.regions as RegionRow[];
+            byRegionCacheRef.current.set(cacheKey, regions);
+          }
+          if (cancelled) return;
+          valorPorDane = valoresPorDane(regions, vista.metrica);
         }
 
-        const merged = {
-          type: 'FeatureCollection',
-          features: (boundariesRef.current.features || []).map((feature) => {
-            const props = feature.properties as Record<string, unknown>;
-            const dane = String(props?.DANE || '');
-            const raw = String(props?.NOMBRE_DPT || '');
-            const obs = obsByDane.get(dane) || 0;
-            return { ...feature, properties: { NOMBRE_DPT: raw, DANE: dane, obs } };
-          }),
-        } as FeatureCollection;
+        const merged = construirFeatures(boundariesRef.current, valorPorDane);
+        const { min, max } = rangoValores([...valorPorDane.values()]);
+        setLeyenda({
+          rotulo: vista.rotulo,
+          unidad: vista.unidad,
+          min,
+          max,
+          rampa: vista.rampa,
+          invertir: !!vista.invertir,
+          enRevision: !!vista.enRevision,
+        });
 
-        const counts = merged.features.map((f) => Number((f.properties as { obs?: number })?.obs) || 0);
-        const max = Math.max(...counts, 1);
-        setChoroplethRange({ min: Math.min(...counts), max });
+        // hasData=false => gris neutro (no el color "más bajo", que mentiría).
+        const fillColor = [
+          'case',
+          ['get', 'hasData'],
+          expresionRelleno(vista, min, max),
+          'rgba(120,120,128,0.18)',
+        ] as unknown as maplibregl.ExpressionSpecification;
 
         removeLayers();
         map.addSource(DEPTOS_SOURCE_ID, { type: 'geojson', data: merged });
@@ -497,16 +538,7 @@ export default function MapaEstaciones() {
             id: 'deptos-fill',
             type: 'fill',
             source: DEPTOS_SOURCE_ID,
-            paint: {
-              'fill-color': [
-                'interpolate', ['linear'], ['get', 'obs'],
-                0, 'rgba(201,162,39,0.04)',
-                max * 0.25, 'rgba(201,162,39,0.25)',
-                max * 0.6, 'rgba(201,162,39,0.45)',
-                max, 'rgba(163,22,26,0.55)',
-              ],
-              'fill-outline-color': 'rgba(201,162,39,0.4)',
-            },
+            paint: { 'fill-color': fillColor, 'fill-outline-color': 'rgba(201,162,39,0.4)' },
           },
           'clusters'
         );
@@ -527,9 +559,7 @@ export default function MapaEstaciones() {
     return () => {
       cancelled = true;
     };
-  }, [isMapReady, choroplethOn, sparkDataset, styleEpoch]);
-
-  const sparkDatasetName = datasets.find((d) => d.id === sparkDataset)?.name || 'Precipitacion';
+  }, [isMapReady, mapaVista, allStations, styleEpoch]);
 
   return (
     <div className="space-y-4">
@@ -630,30 +660,24 @@ export default function MapaEstaciones() {
             </select>
           )}
           <select
-            value={sparkDataset}
-            onChange={(event) => setSparkDataset(event.target.value)}
-            className="h-9 max-w-48 rounded-lg border border-accent/40 bg-card px-3 text-sm text-card-foreground outline-none focus:border-accent"
-            aria-label="Variable para la mini-serie y la coropleta"
-            title="Variable para la mini-serie del popup y la coropleta"
+            value={mapaVista ?? ''}
+            onChange={(event) => setMapaVista(event.target.value || null)}
+            className="h-9 max-w-56 rounded-lg border border-accent/40 bg-card px-3 text-sm text-card-foreground outline-none focus:border-accent"
+            aria-label="Colorear el mapa por una variable"
+            title="Pinta los departamentos según el fenómeno elegido"
           >
-            {(datasets.length ? datasets : [{ id: 's54a-sgyg', name: 'Precipitacion' }]).map((dataset) => (
-              <option key={dataset.id} value={dataset.id}>{dataset.name}</option>
+            <option value="">Colorear mapa: ninguno</option>
+            {vistasPorFamilia().map((grupo) => (
+              <optgroup key={grupo.familia} label={grupo.familia}>
+                {grupo.vistas.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.rotulo}
+                    {v.enRevision ? ' (en revisión)' : ''}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
-          <button
-            type="button"
-            onClick={() => setChoroplethOn((current) => !current)}
-            aria-pressed={choroplethOn}
-            className={`inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-sm font-semibold transition-colors ${
-              choroplethOn
-                ? 'border-accent bg-accent/15 text-accent'
-                : 'border-border bg-card text-muted-foreground hover:border-accent/40'
-            }`}
-            title="Sombrear departamentos por volumen de observaciones de la variable elegida"
-          >
-            <Layers className="h-4 w-4" />
-            Coropleta
-          </button>
           </div>
         </div>
       </div>
@@ -669,14 +693,26 @@ export default function MapaEstaciones() {
             <MapPin className="mr-2 h-4 w-4 animate-bounce text-accent" /> Cargando estaciones...
           </div>
         )}
-        {choroplethOn && choroplethRange && (
+        {leyenda && (
           <div className="absolute bottom-3 left-3 rounded-lg border border-border bg-card/90 px-3 py-2 text-xs text-muted-foreground backdrop-blur-sm">
-            <p className="mb-1 font-semibold text-card-foreground">Observaciones de {sparkDatasetName}</p>
-            <div className="h-2 w-40 rounded-full" style={{ background: 'linear-gradient(to right, rgba(201,162,39,0.08), rgba(201,162,39,0.45), rgba(163,22,26,0.55))' }} />
+            <p className="mb-1 font-semibold text-card-foreground">{leyenda.rotulo}</p>
+            <div
+              className="h-2 w-40 rounded-full"
+              style={{
+                background: `linear-gradient(to right, ${(leyenda.invertir ? [...leyenda.rampa].reverse() : leyenda.rampa).join(', ')})`,
+              }}
+            />
             <div className="mt-0.5 flex justify-between">
-              <span>{choroplethRange.min.toLocaleString('es-CO', { notation: 'compact' })}</span>
-              <span>{choroplethRange.max.toLocaleString('es-CO', { notation: 'compact' })}</span>
+              <span>{fmtValorLeyenda(leyenda.min, leyenda.unidad)}</span>
+              <span>{fmtValorLeyenda(leyenda.max, leyenda.unidad)}</span>
             </div>
+            <div className="mt-1.5 flex items-center gap-1.5">
+              <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: 'rgba(120,120,128,0.35)' }} />
+              sin datos
+            </div>
+            {leyenda.enRevision && (
+              <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">Datos en revisión</p>
+            )}
           </div>
         )}
       </div>
