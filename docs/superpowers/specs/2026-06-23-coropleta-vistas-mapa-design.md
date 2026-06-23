@@ -34,6 +34,10 @@ honestas.
   que no sirve como magnitud).
 - `stationCount`: número de estaciones distintas con datos.
 
+La vista "cobertura" no usa este endpoint: cuenta las estaciones del **catálogo
+nacional ya cargado en el mapa** (`allStations`, con departamento por estación) por
+DANE. Es el total real de la red y no requiere llamada extra a la API.
+
 Por lo tanto **no hace falta tocar la base de datos ni desplegar el backend**.
 
 ## Catálogo de vistas
@@ -45,7 +49,7 @@ Por lo tanto **no hace falta tocar la base de datos ni desplegar el backend**.
 | frio    | Dónde hace más frío               | Clima      | afdg-3zpb   | Temp. mínima del aire     | `mean`         | °C       | bajo=más  |               |
 | humedad | Qué tan húmedo es el aire         | Clima      | uext-mhny   | Humedad del aire          | `mean`         | %        | alto=más  |               |
 | viento  | Qué tan fuerte sopla el viento    | Clima      | sgfv-3yp8   | Velocidad del viento      | `mean`         | m/s      | alto=más  |               |
-| cobertura | Dónde hay más estaciones        | Cobertura  | s54a-sgyg   | (red de monitoreo)        | `stationCount` | estaciones | alto=más | mide red, no clima |
+| cobertura | Dónde hay más estaciones        | Cobertura  | (n/a)       | (red de monitoreo)        | conteo del catálogo | estaciones | alto=más | mide red, no clima |
 | rios    | Nivel de los ríos                 | Agua       | bdmn-sqnh   | Nivel instantáneo del río | `mean`         | m        | alto=más  | "datos en revisión" |
 | mar     | Nivel del mar                     | Agua       | ia8x-22em   | Nivel del mar             | `mean`         | m        | alto=más  |               |
 
@@ -160,9 +164,12 @@ MapLibre):
 
 - Combinación por DANE: suma de conteos, promedio ponderado de magnitudes, manejo de
   nulos y de variantes múltiples.
-- Catálogo de vistas: cada vista resuelve a un datasetId válido y a una unidad.
+- Catálogo de vistas: cada vista resuelve a un datasetId válido (o a "cobertura") y a
+  una unidad.
 - Unidades: "mm/mes" para lluvia, unidad física para el resto, "estaciones" para
   cobertura.
+- Conteo de estaciones por DANE desde el catálogo (vista cobertura), incluyendo
+  estaciones con departamento nulo o no mapeable (se descartan, no rompen).
 - Construcción del FeatureCollection: marca `hasData` correcta para departamentos con y
   sin dato.
 
