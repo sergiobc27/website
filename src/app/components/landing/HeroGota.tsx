@@ -7,6 +7,7 @@ import { usePrefersReducedMotion } from '../../lib/usePrefersReducedMotion';
 import { soporteWebgl } from '../../lib/soporteWebgl';
 import { GotaEstatica } from './GotaEstatica';
 import { MascotaGota } from './MascotaGota';
+import { Reveal, RevealItem } from './Reveal';
 
 const GotaTresD = lazyWithRetry(() => import('./GotaTresD'));
 
@@ -43,37 +44,51 @@ export function HeroGota({ onNavigate }: HeroGotaProps) {
         </button>
       </nav>
 
-      <div className="mx-auto grid w-full max-w-6xl flex-1 grid-cols-1 items-center gap-8 px-6 py-10 md:grid-cols-2 md:px-10">
-        <div className="animate-fade-in-up">
-          <p className="mb-3 text-xs font-extrabold uppercase tracking-[0.18em] text-primary">
-            Trabajo de grado · Ingeniería Civil
-          </p>
-          <h2 className="text-4xl font-extrabold leading-[1.05] tracking-tight text-foreground md:text-6xl">
-            Automatización de datos hídricos del <span className="text-primary">IDEAM</span>
-          </h2>
-          <p className="mt-4 max-w-md text-base text-muted-foreground md:text-lg">
-            De millones de registros crudos a datos limpios, curvas IDF y una plataforma viva. En segundos.
-          </p>
-          <div className="mt-7 flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => onNavigate('dashboard')}
-              className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 font-bold text-primary-foreground transition-transform hover:scale-105"
-            >
-              Entrar a la plataforma <ArrowRight className="h-5 w-5" />
-            </button>
-            <button
-              type="button"
-              onClick={bajar}
-              className="inline-flex items-center gap-2 rounded-xl border border-[#d8c98c] px-5 py-3 font-semibold text-secondary transition-colors hover:border-primary hover:text-primary"
-            >
-              Conoce el proyecto <ChevronDown className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
+      <div className="relative mx-auto grid w-full max-w-6xl flex-1 grid-cols-1 items-center gap-8 px-6 py-10 md:grid-cols-2 md:px-10">
+        <Reveal className="relative z-10">
+          <RevealItem>
+            <p className="mb-3 text-xs font-extrabold uppercase tracking-[0.18em] text-primary">
+              Trabajo de grado · Ingeniería Civil
+            </p>
+          </RevealItem>
+          <RevealItem>
+            <h2 className="text-balance text-[2.6rem] font-black leading-[1.02] tracking-tight text-foreground md:text-6xl lg:text-7xl">
+              Automatización de datos hídricos del <span className="text-primary">IDEAM</span>
+            </h2>
+          </RevealItem>
+          <RevealItem>
+            <p className="mt-5 max-w-md text-pretty text-base font-normal leading-relaxed text-muted-foreground md:text-lg">
+              De millones de registros crudos a datos limpios, curvas IDF y una plataforma viva. En segundos.
+            </p>
+          </RevealItem>
+          <RevealItem>
+            <div className="mt-7 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => onNavigate('dashboard')}
+                className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 font-bold text-primary-foreground shadow-lg shadow-primary/20 transition-transform hover:scale-105"
+              >
+                Entrar a la plataforma <ArrowRight className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={bajar}
+                className="inline-flex items-center gap-2 rounded-xl border border-[#d8c98c] px-5 py-3 font-semibold text-secondary transition-colors hover:border-primary hover:text-primary"
+              >
+                Conoce el proyecto <ChevronDown className="h-5 w-5" />
+              </button>
+            </div>
+          </RevealItem>
+        </Reveal>
 
         <div className="relative flex items-center justify-center">
-          <div className="relative h-64 w-64 md:h-80 md:w-80">
+          {/* Capa de profundidad media: orbes difuminados detrás de la gota. Decorativos. */}
+          <div aria-hidden className="pointer-events-none absolute inset-0 z-0 overflow-visible">
+            <div className="landing-orbe absolute left-1/2 top-1/2 h-64 w-64 -translate-x-[58%] -translate-y-[60%] rounded-full bg-[#A3161A]/25 blur-3xl dark:bg-[#A3161A]/30 md:h-80 md:w-80" />
+            <div className="landing-orbe-lento absolute left-1/2 top-1/2 h-56 w-56 -translate-x-[30%] -translate-y-[34%] rounded-full bg-[#C9A227]/25 blur-3xl dark:bg-[#C9A227]/25 md:h-72 md:w-72" />
+          </div>
+          {/* La gota rompe ligeramente su columna en lg para una composición con tensión. */}
+          <div className="relative z-10 h-64 w-64 md:h-80 md:w-80 lg:scale-110 lg:-translate-x-2">
             {usar3d ? (
               <Suspense fallback={<GotaEstatica />}>
                 <GotaTresD />
@@ -82,7 +97,7 @@ export function HeroGota({ onNavigate }: HeroGotaProps) {
               <GotaEstatica />
             )}
           </div>
-          <MascotaGota size={92} className="landing-flota absolute -bottom-2 right-0 md:-right-4" />
+          <MascotaGota size={92} className="landing-flota absolute -bottom-2 right-0 z-10 md:-right-4" />
         </div>
       </div>
 

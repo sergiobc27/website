@@ -606,6 +606,20 @@
 .landing-flota {
   animation: icono-float 3.2s ease-in-out infinite;
 }
+/* Orbes de color difuminados detrás de la gota: capa de profundidad media.
+   Deriva lenta y amplia (no es la flotación corta de la gota) para dar
+   sensación de masa atmosférica sin distraer. El bloque global de
+   prefers-reduced-motion la neutraliza. */
+@keyframes orbe-deriva {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(0, -26px, 0) scale(1.06); }
+}
+.landing-orbe {
+  animation: orbe-deriva 13s ease-in-out infinite;
+}
+.landing-orbe-lento {
+  animation: orbe-deriva 17s ease-in-out infinite reverse;
+}
 @keyframes mascota-parpadeo {
   0%, 92%, 100% { transform: scaleY(1); }
   95% { transform: scaleY(0.1); }
