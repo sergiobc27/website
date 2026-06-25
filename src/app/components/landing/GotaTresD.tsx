@@ -19,6 +19,8 @@ function Orbe() {
     <mesh ref={ref} scale={[1.3, 1.5, 1.3]}>
       <sphereGeometry args={[1, 64, 64]} />
       <MeshTransmissionMaterial
+        samples={4}
+        resolution={256}
         thickness={1.2}
         roughness={0.05}
         transmission={1}
@@ -36,7 +38,7 @@ export default function GotaTresD() {
   return (
     <Canvas
       camera={{ position: [0, 0, 4.2], fov: 40 }}
-      dpr={[1, 2]}
+      dpr={[1, 1.5]}
       gl={{ antialias: true, alpha: true }}
       style={{ width: '100%', height: '100%' }}
     >
