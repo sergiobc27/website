@@ -1,0 +1,9 @@
+{
+  // Prototipo LOCAL para comparar modelos de Workers AI. No se despliega.
+  // Uso: npx wrangler dev   (requiere `wrangler login` una vez)
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "proto-modelos",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-04-28",
+  "ai": { "binding": "AI" }
+}
