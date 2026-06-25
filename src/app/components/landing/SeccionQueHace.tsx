@@ -1,4 +1,5 @@
 import { Droplets, LineChart, Map, Terminal, Bot } from 'lucide-react';
+import { Reveal, RevealItem } from './Reveal';
 
 const CAPACIDADES = [
   { icon: Droplets, titulo: 'Datos limpios', texto: 'Series del IDEAM saneadas y listas para usar.' },
@@ -11,20 +12,22 @@ const CAPACIDADES = [
 export function SeccionQueHace() {
   return (
     <section className="px-6 py-16 md:px-10">
-      <div className="mx-auto max-w-6xl">
-        <p className="mb-10 text-center text-xs font-extrabold uppercase tracking-[0.16em] text-primary">
-          Qué hace la plataforma
-        </p>
+      <Reveal className="mx-auto max-w-6xl">
+        <RevealItem>
+          <p className="mb-10 text-center text-xs font-extrabold uppercase tracking-[0.16em] text-primary">
+            Qué hace la plataforma
+          </p>
+        </RevealItem>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {CAPACIDADES.map(({ icon: Icon, titulo, texto }) => (
-            <div key={titulo} className="group rounded-2xl border border-border bg-card p-5 transition-transform hover:-translate-y-1">
+            <RevealItem key={titulo} className="group rounded-2xl border border-border bg-card p-5 transition-transform hover:-translate-y-1">
               <Icon className="anim-bounce mb-3 h-7 w-7 text-secondary" />
               <h3 className="font-bold text-card-foreground">{titulo}</h3>
               <p className="mt-1 text-sm text-muted-foreground">{texto}</p>
-            </div>
+            </RevealItem>
           ))}
         </div>
-      </div>
+      </Reveal>
     </section>
   );
 }
