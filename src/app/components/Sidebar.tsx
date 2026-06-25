@@ -73,16 +73,29 @@ export function SidebarContent({
       <div className="relative border-b border-[#8a1216] p-4">
         {!isCollapsed ? (
           <div className="space-y-2">
-            <img src={logoVertical} alt="Universidad de la Costa CUC" className="mx-auto h-auto w-28" />
+            <button
+              type="button"
+              onClick={() => onNavigate('landing')}
+              aria-label="Ir al inicio"
+              className="block w-full rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#C9A227]"
+            >
+              <img src={logoVertical} alt="Universidad de la Costa CUC" className="mx-auto h-auto w-28" />
+            </button>
             <div className="pt-1 text-center">
-              {/* Marca: NO es <h1> (el h1 lo lleva la vista activa). */}
               <p className="text-xs font-bold leading-4 text-white">AUTOMATIZACIÓN DE DATOS HÍDRICOS DEL IDEAM</p>
               <p className="text-[0.7rem] text-white/80">Por: Sergio Beltran Coley</p>
             </div>
           </div>
         ) : (
           <div className="flex justify-center">
-            <img src={logoCollapsed} alt="CUC" className="h-10 w-10 object-contain" />
+            <button
+              type="button"
+              onClick={() => onNavigate('landing')}
+              aria-label="Ir al inicio"
+              className="rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#C9A227]"
+            >
+              <img src={logoCollapsed} alt="CUC" className="h-10 w-10 object-contain" />
+            </button>
           </div>
         )}
 

@@ -16,6 +16,7 @@ const ComparadorEstaciones = lazyWithRetry(() => import('./components/Comparador
 const Hidrologia = lazyWithRetry(() => import('./components/Hidrologia').then((m) => ({ default: m.Hidrologia })));
 const BibliotecaReferencias = lazyWithRetry(() => import('./components/BibliotecaReferencias').then((m) => ({ default: m.BibliotecaReferencias })));
 const HistoriaIdf = lazyWithRetry(() => import('./components/HistoriaIdf').then((m) => ({ default: m.HistoriaIdf })));
+const Landing = lazyWithRetry(() => import('./components/landing/Landing').then((m) => ({ default: m.Landing })));
 
 // Compatibilidad hacia atrás: convierte un enlace viejo de ficha por hash
 // (#/ficha/DEP/MUN) a la ruta nueva con query (/ficha?dep=DEP&mun=MUN).
@@ -75,7 +76,8 @@ export default function App() {
   // sobre el dashboard (mismo espíritu del shim de ficha por hash).
   useEffect(() => {
     if (window.location.pathname.replace(/\/+$/, '') === '/asistente') {
-      window.history.replaceState(null, '', '/');
+      window.history.replaceState(null, '', '/app');
+      setCurrentView('dashboard');
       window.dispatchEvent(new CustomEvent(OPEN_ASISTENTE_EVENT));
     }
   }, []);
@@ -181,6 +183,17 @@ export default function App() {
         return <Dashboard onNavigate={navigate} />;
     }
   };
+
+  // La landing es portada a pantalla completa: sin sidebar, navbar ni barras.
+  if (currentView === 'landing') {
+    return (
+      <ErrorBoundary key="landing">
+        <Suspense fallback={<div className="flex h-screen items-center justify-center bg-background text-muted-foreground text-sm">Cargando…</div>}>
+          <Landing onNavigate={navigate} />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
