@@ -20,6 +20,8 @@ import {
   normalizarDecimalesEsCO,
   mencionaAqui,
   construirAcciones,
+  departamentoDeMunicipio,
+  construirAccionesFallback,
 } from "../src/worker/chatData.js";
 
 const CATALOGO = {
@@ -653,6 +655,93 @@ test("chat con ubicación: 'aquí' resuelve al municipio del usuario e inyecta c
   assert.match(systemRedactor, /Soledad/);
   assert.ok(bodyTimeseries, "consultó el espejo de datos");
   assert.deepEqual(bodyTimeseries.catalogFilters, { municipalities: ["SOLEDAD"] });
+});
+
+// --- Opción A: geografía determinista + disparador amplio + botón en fallo -----
+
+test("departamentoDeMunicipio resuelve la geografía sin depender del modelo", () => {
+  assert.equal(departamentoDeMunicipio("Barranquilla"), "ATLANTICO");
+  assert.equal(departamentoDeMunicipio("medellín"), "ANTIOQUIA"); // insensible a tildes/caso
+  assert.equal(departamentoDeMunicipio("Neiva"), "HUILA");
+  assert.equal(departamentoDeMunicipio("Ciudad Que No Existe"), null);
+  assert.equal(departamentoDeMunicipio(null), null);
+});
+
+test("resolverLugar deduce el departamento por gazetteer aunque no haya estación IDF ni lo diga el modelo", async () => {
+  const env = { API_ORIGIN: "https://box" };
+  // "Soledad" NO está en el catálogo IDF del fixture: solo el gazetteer
+  // (Soledad -> Atlántico) permite resolver el departamento y luego el municipio.
+  globalThis.fetch = fetchMock({ "/api/municipalities": CATALOGO, "/api/meta": META, "/api/analytics/idf-stations": IDF_CAT });
+  const r = await resolverLugar(env, { lugar: "Soledad", departamento: null });
+  assert.equal(r.departamento, "ATLANTICO");
+  assert.equal(r.municipio, "SOLEDAD");
+});
+
+test("pareceConsultaDatos reconoce más formas naturales de preguntar por datos", () => {
+  assert.equal(pareceConsultaDatos("¿hizo mucho calor en Neiva el año pasado?"), true);
+  assert.equal(pareceConsultaDatos("¿qué tan caliente es Santa Marta?"), true);
+  assert.equal(pareceConsultaDatos("muéstrame la serie histórica de Cali"), true);
+  assert.equal(pareceConsultaDatos("¿está muy seco el Tolima?"), true);
+  // No debe activarse con preguntas conceptuales puras.
+  assert.equal(pareceConsultaDatos("¿qué es una curva IDF?"), false);
+  assert.equal(pareceConsultaDatos("hola, ¿cómo estás?"), false);
+});
+
+test("construirAccionesFallback ofrece redirección AUNQUE la consulta falle", () => {
+  // dato_puntual fallido con departamento conocido -> botón a Analítica con dep.
+  const acc = construirAccionesFallback(
+    { intent: "dato_puntual", variable: "precipitacion", departamento: "ATLANTICO", anioDesde: 2018, anioHasta: 2022 },
+    { ok: false, errorTipo: "sin_datos" },
+  );
+  assert.equal(acc.length >= 1, true);
+  assert.equal(acc[0].view, "analytics");
+  assert.equal(acc[0].params.dep, "ATLANTICO");
+  assert.equal(acc[0].params.years, "2018-2022");
+
+  // temperatura fallida lleva var (datasetId) en el deep-link.
+  const acT = construirAccionesFallback(
+    { intent: "dato_puntual", variable: "temperatura_maxima", departamento: "ANTIOQUIA" },
+    { ok: false, errorTipo: "sin_datos" },
+  );
+  assert.equal(acT[0].params.var, "ccvq-rp9s");
+
+  // idf_tr fallido -> botón a Hidrología.
+  const acIdf = construirAccionesFallback({ intent: "idf_tr", lugar: "X" }, { ok: false, errorTipo: "sin_estacion_idf" });
+  assert.equal(acIdf[0].view, "hydro");
+
+  // Sin departamento -> botón al Mapa de Estaciones para buscar el lugar.
+  const acSinDep = construirAccionesFallback({ intent: "dato_puntual", variable: "precipitacion" }, { ok: false, errorTipo: "lugar_no_encontrado" });
+  assert.equal(acSinDep[0].view, "map");
+
+  // Conceptual / estado de plataforma / sin intent -> sin botones.
+  assert.deepEqual(construirAccionesFallback({ intent: "ninguno" }, { ok: false }), []);
+  assert.deepEqual(construirAccionesFallback({ intent: "estado_plataforma" }, { ok: false }), []);
+  assert.deepEqual(construirAccionesFallback(null, null), []);
+});
+
+test("chat de datos que NO encuentra cifras igual entrega un botón de redirección", async () => {
+  // El modelo extrae el lugar SIN departamento; el gazetteer lo completa
+  // (Soledad -> Atlántico). El espejo no tiene serie -> sin_datos -> el bot
+  // responde con franqueza PERO ofrece el botón "Explóralo en Analítica".
+  const intentJson = JSON.stringify({ intent: "dato_puntual", lugar: "Soledad", variable: "temperatura_maxima", anioDesde: 2023, anioHasta: 2023 });
+  const env = {
+    AI: aiMock([intentJson, "No tengo ese dato con suficiente cobertura, pero puedes verlo en la plataforma."]),
+    API_ORIGIN: "https://box",
+  };
+  globalThis.fetch = async (url) => {
+    const path = new URL(url, "https://x").pathname;
+    if (path === "/api/municipalities") return new Response(JSON.stringify(CATALOGO));
+    if (path === "/api/meta") return new Response(JSON.stringify(META));
+    if (path === "/api/analytics/idf-stations") return new Response(JSON.stringify(IDF_CAT));
+    if (path === "/api/analytics/timeseries") return new Response(JSON.stringify({ points: [] })); // sin datos
+    return new Response("{}", { status: 404 });
+  };
+  const res = await worker.fetch(chatRequest({ messages: [{ role: "user", content: "¿qué temperatura hubo en Soledad en 2023?" }] }), env);
+  const data = await res.json();
+  assert.equal(data.dataUsed, false);
+  assert.ok(Array.isArray(data.acciones) && data.acciones.length >= 1, "ofrece un botón aunque no responda la cifra");
+  assert.equal(data.acciones[0].view, "analytics");
+  assert.equal(data.acciones[0].params.dep, "ATLANTICO"); // departamento puesto por el gazetteer
 });
 
 // Formato es-CO: decimales pegados a unidad pasan a coma, sin romper miles ni LaTeX.

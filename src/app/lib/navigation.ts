@@ -28,7 +28,7 @@ export const NAVIGATE_EVENT = 'ideam:navigate';
 // Vistas a las que un deep-link del Asistente puede llevar: las únicas que leen
 // su estado de la query (useUrlSync). Whitelist de seguridad: el cliente nunca
 // navega a una vista fuera de aquí aunque el payload diga otra cosa.
-export const ACCION_VIEWS = new Set<string>(['hydro', 'analytics', 'extractor']);
+export const ACCION_VIEWS = new Set<string>(['hydro', 'analytics', 'extractor', 'map']);
 
 export interface NavigateDetail {
   view: string;
