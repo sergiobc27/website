@@ -129,6 +129,12 @@
   /* Glow dorado de tarjeta: fuente unica de verdad. Antes estaba duplicado
      como shadow-[0_0_40px_rgba(201,162,39,0.1)] en 33 sitios. Usar shadow-glow. */
   --shadow-glow: 0 0 40px rgba(201, 162, 39, 0.1);
+  /* Sombra DURA dorada (offset visible, blur minimo) para las cifras clave de la
+     landing: ancla la leve rotacion del numero al plano para que no lea como un
+     bug de alineacion. Distinta del --shadow-glow (suave, blur 40). El oro
+     #C9A227 a 0.35 alpha se ve sobre el casi-blanco claro y el casi-negro oscuro.
+     Se aplica via la utilidad .badge-cifra. */
+  --shadow-hard-gold: 4px 4px 0 rgba(201, 162, 39, 0.35);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -598,3 +604,64 @@
 .hl-cta-fantasma { background: transparent; color: var(--hl-ink); border: 1px solid var(--hl-hair); }
 .hl-cta-fantasma:hover { border-color: var(--hl-gold); color: var(--hl-red); }
 .hl-colofon { margin-top: 3rem; border-top: 1px solid var(--hl-hair); padding: 1.4rem 0.2rem 0; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.72rem; line-height: 1.5; color: var(--hl-faint); }
+
+/* ============================================================================
+   Landing de bienvenida: animaciones scoped. icono-float ya está definido arriba.
+   El bloque global de prefers-reduced-motion neutraliza todas estas.
+   ========================================================================== */
+.landing-flota {
+  animation: icono-float 3.2s ease-in-out infinite;
+}
+/* Badge de cifra clave: el numero "aterriza" sobre el plano con una leve
+   rotacion + sombra DURA dorada (--shadow-hard-gold). La rotacion sin sombra
+   leeria como desalineacion; la sombra la ancla. Es text-shadow porque la cifra
+   es texto inline (no una caja). Se alterna el signo de la rotacion entre
+   cifras para que no se inclinen todas igual. inline-block para que la
+   rotacion afecte la caja del glifo. */
+.badge-cifra {
+  display: inline-block;
+  transform: rotate(-7deg);
+  text-shadow: var(--shadow-hard-gold);
+}
+.badge-cifra-alt {
+  transform: rotate(7deg);
+}
+/* Orbes de color difuminados detrás de la gota: capa de profundidad media.
+   Deriva lenta y amplia (no es la flotación corta de la gota) para dar
+   sensación de masa atmosférica sin distraer. El bloque global de
+   prefers-reduced-motion la neutraliza. */
+@keyframes orbe-deriva {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(0, -26px, 0) scale(1.06); }
+}
+.landing-orbe {
+  animation: orbe-deriva 13s ease-in-out infinite;
+}
+.landing-orbe-lento {
+  animation: orbe-deriva 17s ease-in-out infinite reverse;
+}
+@keyframes mascota-parpadeo {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+.mascota-ojos {
+  transform-origin: center;
+  animation: mascota-parpadeo 5s ease-in-out infinite;
+}
+
+/* Divisor de ola entre secciones (componente OndaDivisor). El componente pasa
+   los 4 colores como CSS vars en `style`; aquí elegimos el par claro/oscuro
+   según la clase `.dark` global. Estático, decorativo. El fondo del bloque =
+   sección de arriba; el relleno del path = sección de abajo (el "agua" sube). */
+.onda-divisor {
+  background: var(--onda-arriba);
+}
+.onda-divisor-agua {
+  fill: var(--onda-abajo);
+}
+.dark .onda-divisor {
+  background: var(--onda-arriba-dark);
+}
+.dark .onda-divisor-agua {
+  fill: var(--onda-abajo-dark);
+}
