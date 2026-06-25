@@ -2,10 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { viewToPath, pathToView } from './navigation';
 
 describe('lib/navigation', () => {
-  it('dashboard vive en la raiz', () => {
-    expect(viewToPath('dashboard')).toBe('/');
-    expect(pathToView('/')).toBe('dashboard');
-    expect(pathToView('')).toBe('dashboard');
+  it('la landing vive en la raiz', () => {
+    expect(viewToPath('landing')).toBe('/');
+    expect(pathToView('/')).toBe('landing');
+    expect(pathToView('')).toBe('landing');
+  });
+
+  it('el panel (dashboard) vive en /app', () => {
+    expect(viewToPath('dashboard')).toBe('/app');
+    expect(pathToView('/app')).toBe('dashboard');
+    expect(pathToView('/app/')).toBe('dashboard');
   });
 
   it('las demas vistas son /<vista>', () => {
@@ -14,8 +20,8 @@ describe('lib/navigation', () => {
     expect(pathToView('/hydro/')).toBe('hydro');
   });
 
-  it('ruta desconocida -> dashboard', () => {
-    expect(pathToView('/no-existe')).toBe('dashboard');
-    expect(pathToView('/favicon.ico')).toBe('dashboard');
+  it('ruta desconocida -> landing', () => {
+    expect(pathToView('/no-existe')).toBe('landing');
+    expect(pathToView('/favicon.ico')).toBe('landing');
   });
 });

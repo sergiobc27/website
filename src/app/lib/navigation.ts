@@ -4,20 +4,25 @@
 // 'asistente' ya NO es una vista: el Asistente vive en el widget flotante
 // (AsistenteFlotante); la URL vieja /asistente la migra un shim en App.
 export const VIEWS = [
-  'dashboard', 'analytics', 'map', 'compare', 'ficha', 'hydro', 'historia',
+  'landing', 'dashboard', 'analytics', 'map', 'compare', 'ficha', 'hydro', 'historia',
   'status', 'extractor', 'history', 'settings', 'docs',
 ] as const;
 
-// 'dashboard' vive en la raíz '/'; el resto en '/<vista>'.
+// 'landing' vive en la raíz '/'; el panel ('dashboard') en '/app'; el resto en '/<vista>'.
 export function viewToPath(view: string): string {
-  return view === 'dashboard' ? '/' : `/${view}`;
+  if (view === 'landing') return '/';
+  if (view === 'dashboard') return '/app';
+  return `/${view}`;
 }
 
-// Deriva la vista desde un pathname; segmento desconocido -> 'dashboard'.
+// Deriva la vista desde un pathname. Raíz pelada -> 'landing' (la portada). '/app'
+// es el panel. Segmento desconocido -> 'landing'. ('/landing' y '/dashboard' quedan
+// como alias inofensivos de sus rutas canónicas '/' y '/app').
 export function pathToView(pathname: string): string {
   const seg = pathname.replace(/^\/+|\/+$/g, '').split('/')[0];
-  if (!seg) return 'dashboard';
-  return (VIEWS as readonly string[]).includes(seg) ? seg : 'dashboard';
+  if (!seg) return 'landing';
+  if (seg === 'app') return 'dashboard';
+  return (VIEWS as readonly string[]).includes(seg) ? seg : 'landing';
 }
 
 // Evento global de navegación por deep-link (botones de acción del Asistente).
