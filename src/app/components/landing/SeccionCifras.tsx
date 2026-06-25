@@ -20,6 +20,7 @@ function Contador({ valor, sufijo, reducido }: { valor: number; sufijo: string; 
     }
     const el = ref.current;
     if (!el) return;
+    let rafId = 0;
     const obs = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && !hecho.current) {
@@ -29,15 +30,18 @@ function Contador({ valor, sufijo, reducido }: { valor: number; sufijo: string; 
           const tick = (t: number) => {
             const p = Math.min(1, (t - inicio) / dur);
             setN(Math.round(valor * (1 - Math.pow(1 - p, 3))));
-            if (p < 1) requestAnimationFrame(tick);
+            if (p < 1) rafId = requestAnimationFrame(tick);
           };
-          requestAnimationFrame(tick);
+          rafId = requestAnimationFrame(tick);
         }
       },
       { threshold: 0.4 },
     );
     obs.observe(el);
-    return () => obs.disconnect();
+    return () => {
+      obs.disconnect();
+      cancelAnimationFrame(rafId);
+    };
   }, [valor, reducido]);
 
   return (

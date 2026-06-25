@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { usePrefersReducedMotion } from '../../lib/usePrefersReducedMotion';
 import { construirRafagas } from '../../lib/celebracion';
@@ -6,6 +6,16 @@ import { construirRafagas } from '../../lib/celebracion';
 export function BotonCelebracion() {
   const reducido = usePrefersReducedMotion();
   const [activo, setActivo] = useState(false);
+  const timeouts = useRef<number[]>([]);
+
+  // Limpia los timeouts pendientes si el componente se desmonta a mitad del
+  // festejo (navegación rápida): evita un setState sobre componente desmontado.
+  useEffect(
+    () => () => {
+      timeouts.current.forEach((id) => window.clearTimeout(id));
+    },
+    [],
+  );
 
   const celebrar = async () => {
     setActivo(true);
@@ -13,12 +23,12 @@ export function BotonCelebracion() {
       const confetti = (await import('canvas-confetti')).default;
       const rafagas = construirRafagas(reducido);
       rafagas.forEach((r, i) => {
-        window.setTimeout(() => confetti(r), reducido ? 0 : i * 220);
+        timeouts.current.push(window.setTimeout(() => confetti(r), reducido ? 0 : i * 220));
       });
     } catch {
       /* canvas-confetti no disponible: el botón sigue siendo inocuo */
     } finally {
-      window.setTimeout(() => setActivo(false), 1200);
+      timeouts.current.push(window.setTimeout(() => setActivo(false), 1200));
     }
   };
 
