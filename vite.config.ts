@@ -30,6 +30,9 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
+    // Una sola copia de React/React-DOM: evita el "Invalid hook call / multiple
+    // copies of React" que dispara la pre-optimización de deps nuevas (p. ej. motion).
+    dedupe: ['react', 'react-dom'],
   },
 
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
