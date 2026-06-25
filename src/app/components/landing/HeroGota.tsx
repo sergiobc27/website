@@ -71,17 +71,20 @@ export function HeroGota({ onNavigate }: HeroGotaProps) {
           </RevealItem>
         </Reveal>
 
-        <div className="relative flex items-center justify-center">
-          {/* Capa de profundidad media: orbes difuminados detrás de la gota. Decorativos. */}
-          <div aria-hidden className="pointer-events-none absolute inset-0 z-0 overflow-visible">
-            <div className="landing-orbe absolute left-1/2 top-1/2 h-64 w-64 -translate-x-[58%] -translate-y-[60%] rounded-full bg-[#A3161A]/25 blur-3xl dark:bg-[#A3161A]/30 md:h-80 md:w-80" />
-            <div className="landing-orbe-lento absolute left-1/2 top-1/2 h-56 w-56 -translate-x-[30%] -translate-y-[34%] rounded-full bg-[#C9A227]/25 blur-3xl dark:bg-[#C9A227]/25 md:h-72 md:w-72" />
+        <div className="relative flex min-h-[22rem] items-center justify-center md:min-h-[26rem]">
+          {/* Capa de fondo: resplandor azul centrado + ondas concéntricas que emanan
+              de la gota (una gota cayendo al agua). Decorativo. */}
+          <div aria-hidden className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-visible">
+            <div className="hero-glow absolute h-72 w-72 rounded-full bg-[#3a9fe0]/30 blur-3xl dark:bg-[#3a9fe0]/22 md:h-[24rem] md:w-[24rem]" />
+            <span className="onda-anillo" />
+            <span className="onda-anillo onda-anillo-2" />
+            <span className="onda-anillo onda-anillo-3" />
           </div>
-          {/* La gota rompe ligeramente su columna en lg para una composición con tensión. */}
-          <div className="relative z-10 h-64 w-64 md:h-80 md:w-80 lg:scale-110 lg:-translate-x-2">
+          {/* La gota es el foco: más grande, con halo azul. */}
+          <div className="relative z-10 h-72 w-72 [filter:drop-shadow(0_18px_34px_rgba(43,143,214,0.4))] md:h-[22rem] md:w-[22rem] lg:scale-105">
             <GotaAnimada />
           </div>
-          <MascotaGota size={92} className="landing-flota absolute -bottom-2 right-0 z-10 md:-right-4" />
+          <MascotaGota size={80} className="landing-flota absolute bottom-3 right-6 z-20 md:bottom-8 md:right-4" />
         </div>
       </div>
 

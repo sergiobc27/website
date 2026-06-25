@@ -626,19 +626,40 @@
 .badge-cifra-alt {
   transform: rotate(7deg);
 }
-/* Orbes de color difuminados detrás de la gota: capa de profundidad media.
-   Deriva lenta y amplia (no es la flotación corta de la gota) para dar
-   sensación de masa atmosférica sin distraer. El bloque global de
-   prefers-reduced-motion la neutraliza. */
-@keyframes orbe-deriva {
-  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-  50% { transform: translate3d(0, -26px, 0) scale(1.06); }
+/* Hero hídrico: anillos de onda concéntricos que emanan de la gota (una gota que
+   cae al agua) + un resplandor azul centrado. Reemplaza a los antiguos orbes
+   difuminados. Nítido y con significado, no manchas. El bloque global de
+   prefers-reduced-motion neutraliza estas animaciones. */
+.hero-glow {
+  animation: hero-glow-pulso 6s ease-in-out infinite;
 }
-.landing-orbe {
-  animation: orbe-deriva 13s ease-in-out infinite;
+@keyframes hero-glow-pulso {
+  0%, 100% { opacity: 0.85; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
 }
-.landing-orbe-lento {
-  animation: orbe-deriva 17s ease-in-out infinite reverse;
+.onda-anillo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 240px;
+  height: 240px;
+  margin: -120px 0 0 -120px;
+  border-radius: 9999px;
+  border: 2px solid rgba(58, 159, 224, 0.55);
+  opacity: 0;
+  animation: onda-expandir 4.2s ease-out infinite;
+}
+.onda-anillo-2 {
+  animation-delay: 1.4s;
+  border-color: rgba(201, 162, 39, 0.45);
+}
+.onda-anillo-3 {
+  animation-delay: 2.8s;
+}
+@keyframes onda-expandir {
+  0% { transform: scale(0.35); opacity: 0; }
+  16% { opacity: 0.6; }
+  100% { transform: scale(1.55); opacity: 0; }
 }
 @keyframes mascota-parpadeo {
   0%, 92%, 100% { transform: scaleY(1); }
