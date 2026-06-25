@@ -1,15 +1,10 @@
-import { Suspense, useEffect, useState } from 'react';
 import { ArrowRight, ChevronDown } from 'lucide-react';
 import logoCuc from '../../../imports/Logo_CUC_PNG_letra_blanca_barra_roja_vtcal.png';
 import logoIdeam from '../../../imports/Ideam_(Colombia)_logo.png';
-import { lazyWithRetry } from '../../lib/lazyWithRetry';
 import { usePrefersReducedMotion } from '../../lib/usePrefersReducedMotion';
-import { soporteWebgl } from '../../lib/soporteWebgl';
-import { GotaEstatica } from './GotaEstatica';
+import { GotaAnimada } from './GotaAnimada';
 import { MascotaGota } from './MascotaGota';
 import { Reveal, RevealItem } from './Reveal';
-
-const GotaTresD = lazyWithRetry(() => import('./GotaTresD'));
 
 interface HeroGotaProps {
   onNavigate: (view: string) => void;
@@ -17,11 +12,6 @@ interface HeroGotaProps {
 
 export function HeroGota({ onNavigate }: HeroGotaProps) {
   const reducido = usePrefersReducedMotion();
-  const [webgl, setWebgl] = useState(false);
-  useEffect(() => {
-    setWebgl(soporteWebgl());
-  }, []);
-  const usar3d = webgl && !reducido;
 
   const bajar = () => {
     document.getElementById('landing-proyecto')?.scrollIntoView({ behavior: reducido ? 'auto' : 'smooth' });
@@ -52,7 +42,7 @@ export function HeroGota({ onNavigate }: HeroGotaProps) {
             </p>
           </RevealItem>
           <RevealItem>
-            <h2 className="text-balance text-[2.6rem] font-black leading-[1.02] tracking-tight text-foreground md:text-6xl lg:text-7xl">
+            <h2 className="text-balance text-[2.4rem] font-black leading-[1.04] tracking-tight text-foreground sm:text-5xl md:text-6xl">
               Automatización de datos hídricos del <span className="text-primary">IDEAM</span>
             </h2>
           </RevealItem>
@@ -89,13 +79,7 @@ export function HeroGota({ onNavigate }: HeroGotaProps) {
           </div>
           {/* La gota rompe ligeramente su columna en lg para una composición con tensión. */}
           <div className="relative z-10 h-64 w-64 md:h-80 md:w-80 lg:scale-110 lg:-translate-x-2">
-            {usar3d ? (
-              <Suspense fallback={<GotaEstatica />}>
-                <GotaTresD />
-              </Suspense>
-            ) : (
-              <GotaEstatica />
-            )}
+            <GotaAnimada />
           </div>
           <MascotaGota size={92} className="landing-flota absolute -bottom-2 right-0 z-10 md:-right-4" />
         </div>

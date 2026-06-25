@@ -665,3 +665,32 @@
 .dark .onda-divisor-agua {
   fill: var(--onda-abajo-dark);
 }
+
+/* Gota de agua animada del hero (componente GotaAnimada, SVG puro, sin WebGL).
+   Flotación suave del cuerpo, un brillo que recorre la superficie y burbujas que
+   suben por dentro. Todo CSS, neutralizado por el bloque global de
+   prefers-reduced-motion. */
+@keyframes gota-flota {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-9px); }
+}
+.gota-flota {
+  animation: gota-flota 4s ease-in-out infinite;
+  transform-box: fill-box;
+}
+@keyframes gota-shimmer {
+  0% { transform: translateX(-60px) skewX(-16deg); }
+  55%, 100% { transform: translateX(230px) skewX(-16deg); }
+}
+.gota-shimmer {
+  animation: gota-shimmer 5.5s ease-in-out infinite;
+}
+@keyframes gota-burbuja {
+  0% { transform: translateY(0); opacity: 0; }
+  18% { opacity: 0.7; }
+  85% { opacity: 0.5; }
+  100% { transform: translateY(-52px); opacity: 0; }
+}
+.gota-burbuja-1 { animation: gota-burbuja 4.4s ease-in infinite; }
+.gota-burbuja-2 { animation: gota-burbuja 5.6s ease-in 1.1s infinite; }
+.gota-burbuja-3 { animation: gota-burbuja 6.4s ease-in 2.3s infinite; }
