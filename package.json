@@ -16,7 +16,7 @@
     "e2e:prod": "playwright test tests/e2e/ideam-production.spec.ts",
     "warm:catalogs": "node scripts/warm-catalog-bundles.mjs",
     "tail": "wrangler tail",
-    "test": "node --test tests/worker.test.mjs",
+    "test": "node --test tests/worker.test.mjs tests/chat-data.test.mjs",
     "test:unit": "vitest run"
   },
   "dependencies": {

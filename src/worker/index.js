@@ -16,6 +16,8 @@ import {
   consultarDatos,
   promptDeDatos,
   construirAcciones,
+  construirAccionesFallback,
+  departamentoDeMunicipio,
   extraerSugerencias,
   limpiarFugasDeJson,
   sugerenciasFallback,
@@ -577,6 +579,13 @@ async function handleChat(request, env) {
     if (pareceConsultaDatos(ultimo)) {
       intent = await extraerIntencion(env, CHAT_MODEL, history);
       if (intent && intent.intent !== "ninguno") {
+        // Geografía DETERMINISTA: si el modelo dio el municipio pero no el
+        // departamento, lo completa el gazetteer (no depende de que el modelo
+        // sepa geografía). Sirve tanto para consultar como para el botón de fallo.
+        if (intent.lugar && !intent.departamento) {
+          const dep = departamentoDeMunicipio(intent.lugar);
+          if (dep) intent = { ...intent, departamento: dep };
+        }
         // "Dónde estoy": si el usuario alude a su ubicación ("aquí", "mi zona") —
         // o pide un valor puntual/IDF sin nombrar lugar— y hay ubicación activa,
         // resolvemos al municipio del usuario antes de consultar el espejo.
@@ -647,7 +656,11 @@ async function handleChat(request, env) {
       suggestions = sugerenciasFallback(intent);
     }
     // Botones de acción (deep-links) que el CÓDIGO arma desde el intent resuelto.
-    const acciones = dataUsed ? construirAcciones(intent, resultadoDatos) : [];
+    // Con datos: enlaces precisos. Sin datos (pero era pregunta de datos y no fue
+    // un rechazo): igual ofrece DÓNDE verlo en la plataforma (lo que pidió Sergio).
+    const acciones = dataUsed
+      ? construirAcciones(intent, resultadoDatos)
+      : (intent && !esRechazo ? construirAccionesFallback(intent, resultadoDatos) : []);
     return chatJson({ reply, suggestions, acciones, dataUsed, usage: (result && result.usage) || null });
   } catch (err) {
     // El 502 de cara al usuario es mudo; este log deja la causa real en Workers

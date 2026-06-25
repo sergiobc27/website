@@ -5,6 +5,8 @@
  * Spec: docs/superpowers/specs/2026-06-11-ia-pregunta-datos-design.md
  */
 
+import { MUNICIPIO_DEPARTAMENTO } from "./gazetteerMunicipios.js";
+
 // Variables consultables -> dataset del espejo. La agregación típica define la
 // métrica del cagg: precipitación se SUMA (lámina total), el resto se PROMEDIA.
 export const VARIABLES = {
@@ -25,11 +27,16 @@ const INTENTS = new Set(["dato_puntual", "idf_tr", "ranking", "estado_plataforma
 const DATA_HINTS = new RegExp(
   [
     "lluvi", "llovi", "llov", "lluev", "precipitaci",
-    "temperatura", "humedad", "viento", "presion", "presión", "nivel",
+    "temperatura", "humedad", "humed", "viento", "presion", "presión", "nivel",
     "cuant", "cuánt", "promedio", "media\\b", "total", "maxim", "máxim", "minim", "mínim",
     "intensidad", "\\btr\\b", "periodo de retorno", "período de retorno", "estacion", "estación",
     "top\\s*\\d", "donde\\s+\\S+\\s+(mas|más|menos)", "dónde", "rank", "compar",
     "actualizado", "frescura", "ultimo dato", "último dato",
+    // Formas naturales adicionales (un falso positivo solo cuesta la mini llamada
+    // del extractor; un falso negativo pierde la feature en esa pregunta).
+    "calor", "calient", "frio", "frío", "grado", "record", "récord",
+    "historic", "histórico", "histor", "serie", "evolucion", "evolución", "tendencia",
+    "seco", "sequi", "lluev", "cayo", "cayó", "agua", "sopla", "rafaga", "ráfaga", "caudal",
     "\\b(19|20)\\d{2}\\b",
   ].join("|"),
   "i",
@@ -52,6 +59,14 @@ export function normalizarTexto(s) {
     .replace(/[̀-ͯ]/g, "")
     .trim()
     .toUpperCase();
+}
+
+// Geografía DETERMINISTA: departamento de un municipio según la tabla generada
+// del propio espejo (scripts/build-gazetteer.mjs). Quita la dependencia de que
+// el modelo "sepa" que Barranquilla es del Atlántico. null si no es único/no existe.
+export function departamentoDeMunicipio(lugar) {
+  if (!lugar) return null;
+  return MUNICIPIO_DEPARTAMENTO[normalizarTexto(lugar)] || null;
 }
 
 const NF = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 1 });
@@ -101,10 +116,13 @@ function matchLista(lista, objetivo) {
 // estaciones IDF (GET cacheado, ~770 filas) trae municipio+departamento.
 export async function resolverLugar(env, { lugar, departamento }) {
   const out = { municipio: null, departamento: null };
-  if (departamento) {
+  // Si el modelo no dio el departamento, dedúcelo del municipio con el gazetteer
+  // determinista. Así "Barranquilla" resuelve aunque el modelo no sepa geografía.
+  const dep = departamento || departamentoDeMunicipio(lugar);
+  if (dep) {
     const meta = await boxJson(env, "/api/meta");
-    const dep = normalizarTexto(departamento);
-    out.departamento = ((meta && meta.departments) || []).find((d) => normalizarTexto(d) === dep) || null;
+    const depN = normalizarTexto(dep);
+    out.departamento = ((meta && meta.departments) || []).find((d) => normalizarTexto(d) === depN) || null;
   }
   if (!lugar) return out;
   const objetivo = normalizarTexto(lugar);
@@ -404,7 +422,8 @@ async function estadoPlataforma(env) {
 }
 
 // Vistas a las que un botón de acción puede deep-linkear (whitelist de seguridad).
-const ACCION_VIEWS = new Set(["hydro", "analytics", "extractor"]);
+// "map" se usa en el fallback (buscar el lugar cuando no se pudo resolver).
+const ACCION_VIEWS = new Set(["hydro", "analytics", "extractor", "map"]);
 
 function limpiarParams(o) {
   const out = {};
@@ -451,6 +470,28 @@ export function construirAcciones(intent, resultado) {
     });
   }
   return acc.filter((a) => ACCION_VIEWS.has(a.view)).slice(0, 3);
+}
+
+// Botones de redirección cuando la consulta de datos NO pudo responder (lugar no
+// hallado, sin datos, espejo caído...). El bot igual ofrece DÓNDE verlo en la
+// plataforma. Determinista (no lo arma el modelo). [] para conceptual/estado.
+export function construirAccionesFallback(intent, _resultado) {
+  if (!intent) return [];
+  const tipo = intent.intent;
+  if (tipo === "ninguno" || tipo === "estado_plataforma") return [];
+  if (tipo === "idf_tr") {
+    return [{ label: "Búscala en Hidrología →", view: "hydro", params: {} }];
+  }
+  // dato_puntual / ranking
+  const v = VARIABLES[intent.variable || "precipitacion"];
+  const varParam = v.id !== "s54a-sgyg" ? v.id : undefined; // precip es el default de Analítica
+  const years = intent.anioDesde && intent.anioHasta ? `${intent.anioDesde}-${intent.anioHasta}` : undefined;
+  const dep = intent.departamento ? normalizarTexto(intent.departamento) : undefined;
+  if (dep) {
+    return [{ label: "Explóralo en Analítica →", view: "analytics", params: limpiarParams({ dep, var: varParam, years }) }];
+  }
+  // Sin departamento que pueda fijar el filtro: que busque el lugar en el mapa.
+  return [{ label: "Búscalo en el Mapa de Estaciones →", view: "map", params: {} }];
 }
 
 export const SUGERENCIAS_PROMPT = `ÚLTIMA LÍNEA OBLIGATORIA (para la interfaz, invisible al usuario): termina SIEMPRE tu respuesta con una línea EXACTAMENTE así:
