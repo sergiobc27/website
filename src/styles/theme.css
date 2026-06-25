@@ -648,3 +648,20 @@
   transform-origin: center;
   animation: mascota-parpadeo 5s ease-in-out infinite;
 }
+
+/* Divisor de ola entre secciones (componente OndaDivisor). El componente pasa
+   los 4 colores como CSS vars en `style`; aquí elegimos el par claro/oscuro
+   según la clase `.dark` global. Estático, decorativo. El fondo del bloque =
+   sección de arriba; el relleno del path = sección de abajo (el "agua" sube). */
+.onda-divisor {
+  background: var(--onda-arriba);
+}
+.onda-divisor-agua {
+  fill: var(--onda-abajo);
+}
+.dark .onda-divisor {
+  background: var(--onda-arriba-dark);
+}
+.dark .onda-divisor-agua {
+  fill: var(--onda-abajo-dark);
+}

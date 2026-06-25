@@ -5,6 +5,7 @@ import { SeccionQueHace } from './SeccionQueHace';
 import { SeccionCifras } from './SeccionCifras';
 import { SeccionCreditos } from './SeccionCreditos';
 import { CierreConfeti } from './CierreConfeti';
+import { OndaDivisor } from './OndaDivisor';
 
 interface LandingProps {
   onNavigate: (view: string) => void;
@@ -23,8 +24,24 @@ export function Landing({ onNavigate }: LandingProps) {
         <HeroGota onNavigate={onNavigate} />
         <SeccionProblemaSolucion />
         <SeccionQueHace />
+        {/* QueHace (bg-background) → Cifras (banda cálida). El agua cálida sube
+            hacia la sección neutra. Colores = bgs reales de ambas secciones. */}
+        <OndaDivisor
+          colorArriba="#ffffff"
+          colorAbajo="#fbf7ee"
+          colorArribaDark="#0f0f0f"
+          colorAbajoDark="#15110a"
+        />
         <SeccionCifras />
         <SeccionCreditos />
+        {/* Créditos (bg-background) → Cierre (noche #15110a en ambos modos). El
+            agua oscura sube: el dato fluye hacia la noche de la celebración. */}
+        <OndaDivisor
+          colorArriba="#ffffff"
+          colorAbajo="#15110a"
+          colorArribaDark="#0f0f0f"
+          colorAbajoDark="#15110a"
+        />
         <CierreConfeti onNavigate={onNavigate} />
       </div>
     </MotionConfig>
