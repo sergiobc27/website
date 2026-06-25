@@ -598,3 +598,19 @@
 .hl-cta-fantasma { background: transparent; color: var(--hl-ink); border: 1px solid var(--hl-hair); }
 .hl-cta-fantasma:hover { border-color: var(--hl-gold); color: var(--hl-red); }
 .hl-colofon { margin-top: 3rem; border-top: 1px solid var(--hl-hair); padding: 1.4rem 0.2rem 0; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.72rem; line-height: 1.5; color: var(--hl-faint); }
+
+/* ============================================================================
+   Landing de bienvenida: animaciones scoped. icono-float ya está definido arriba.
+   El bloque global de prefers-reduced-motion neutraliza todas estas.
+   ========================================================================== */
+.landing-flota {
+  animation: icono-float 3.2s ease-in-out infinite;
+}
+@keyframes mascota-parpadeo {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+.mascota-ojos {
+  transform-origin: center;
+  animation: mascota-parpadeo 5s ease-in-out infinite;
+}
