@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, BarChart3 } from 'lucide-react';
+import { InfoGrafica } from './InfoGrafica';
 import { ChartDownloadButton } from './ChartDownloadButton';
 import { ControlSelect } from './ControlSelect';
 import { HeatmapClimatico } from './HeatmapClimatico';
@@ -465,6 +466,7 @@ export function Analytics() {
             <p className="text-sm text-muted-foreground">{scopeLabel}</p>
           </div>
           <div className="flex shrink-0 items-center gap-3">
+            <InfoGrafica id="serie-temporal" />
             {seriesData.length > 0 && (
               <ChartDownloadButton targetRef={chartRef} title={`${metricLabel} de ${selectedDataset?.name || datasetId}`} subtitle={scopeLabel} filenameParts={['analitica', selectedDataset?.name || datasetId]} />
             )}
@@ -512,6 +514,9 @@ export function Analytics() {
                 {isPrecip ? 'Lámina mensual media y extremos por mes' : 'Promedio histórico y extremos por mes'} · {scopeLabel}
               </p>
             </div>
+            <div className="flex shrink-0 items-center gap-3">
+              <InfoGrafica id="climatologia" />
+            </div>
           </div>
           {isLoadingPanels ? (
             <SkeletonLoader rows={4} />
@@ -537,6 +542,9 @@ export function Analytics() {
             <div>
               <h3 className="font-bold text-card-foreground">Top 10 departamentos</h3>
               <p className="text-sm text-muted-foreground">Por volumen de observaciones de {selectedDataset?.name || datasetId}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-3">
+              <InfoGrafica id="top-departamentos" />
             </div>
           </div>
           {isLoadingPanels ? (
@@ -577,6 +585,9 @@ export function Analytics() {
                 </Formula>
                 <span>(<V>P</V> = lluvia del mes; <MeanBar><V>P</V></MeanBar> = promedio histórico de ese mes)</span>
               </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-3">
+              <InfoGrafica id="anomalias" />
             </div>
           </div>
           {anomalyData.length === 0 ? (

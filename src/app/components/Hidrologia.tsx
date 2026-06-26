@@ -9,6 +9,7 @@ import { useUrlSync } from '../lib/urlState';
 import logoCucUrl from '../../imports/Logo_CUC_PNG_letra_blanca_barra_roja_vtcal.png';
 import logoIdeamUrl from '../../imports/Ideam_(Colombia)_logo.png';
 import { AlertTriangle, BarChart4, CheckCircle2, CloudRain, Droplets, FileDown, Mail, Navigation, Plus, Search, Waves } from 'lucide-react';
+import { InfoGrafica } from './InfoGrafica';
 import {
   Bar,
   Area,
@@ -764,6 +765,7 @@ export function Hidrologia() {
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-3">
+                <InfoGrafica id="idf" />
                 {idf?.available && (
                   <>
                     <ChartDownloadButton
@@ -918,6 +920,7 @@ export function Hidrologia() {
                   <p className="text-sm text-muted-foreground">{returnPeriods?.recommended ?? 'Ajuste de extremos'} sobre {returnPeriods?.n ?? 0} máximos anuales{returnPeriods?.recommended ? ' · recomendada por AIC' : ''}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
+                  <InfoGrafica id="periodos-retorno" />
                   {returnPeriods?.reliability && (() => {
                     const r = returnPeriods.reliability;
                     const cfg = {
@@ -1017,7 +1020,9 @@ export function Hidrologia() {
                   <h3 className="font-bold text-card-foreground">Monitor de sequía · SPI-{spiScale}</h3>
                   <p className="text-sm text-muted-foreground">Índice de Precipitación Estandarizada (últimos 10 años)</p>
                 </div>
-                <div className="flex gap-1">
+                <div className="flex shrink-0 items-center gap-3">
+                  <InfoGrafica id="spi" />
+                  <div className="flex gap-1">
                   {([3, 6, 12] as const).map((scale) => (
                     <button
                       key={scale}
@@ -1031,6 +1036,7 @@ export function Hidrologia() {
                       {scale}m
                     </button>
                   ))}
+                  </div>
                 </div>
               </div>
               {!spi ? (
@@ -1075,16 +1081,19 @@ export function Hidrologia() {
                   <h3 className="font-bold text-card-foreground">Hietograma mensual</h3>
                   <p className="text-sm text-muted-foreground">Lluvia acumulada por mes del año elegido</p>
                 </div>
-                <select
-                  value={hyetographYear}
-                  onChange={(event) => setHyetographYear(event.target.value)}
-                  className="h-8 rounded-lg border border-border bg-background px-2 text-xs text-card-foreground outline-none focus:border-accent"
-                  aria-label="Año del hietograma"
-                >
-                  {years.map((year) => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </select>
+                <div className="flex shrink-0 items-center gap-3">
+                  <InfoGrafica id="hietograma" />
+                  <select
+                    value={hyetographYear}
+                    onChange={(event) => setHyetographYear(event.target.value)}
+                    className="h-8 rounded-lg border border-border bg-background px-2 text-xs text-card-foreground outline-none focus:border-accent"
+                    aria-label="Año del hietograma"
+                  >
+                    {years.map((year) => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               {!hyetograph ? (
                 <SkeletonLoader rows={4} />
@@ -1113,7 +1122,10 @@ export function Hidrologia() {
                       : 'Distribución de frecuencias'}
                   </p>
                 </div>
-                <BarChart4 className="h-5 w-5 shrink-0 text-accent" />
+                <div className="flex shrink-0 items-center gap-3">
+                  <InfoGrafica id="histograma" />
+                  <BarChart4 className="h-5 w-5 shrink-0 text-accent" />
+                </div>
               </div>
               {!histogramData ? (
                 <SkeletonLoader rows={4} />

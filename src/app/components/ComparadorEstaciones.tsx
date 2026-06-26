@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { GitCompareArrows, Plus, Search, X } from 'lucide-react';
+import { InfoGrafica } from './InfoGrafica';
 import { ChartDownloadButton } from './ChartDownloadButton';
 import { useUrlSync } from '../lib/urlState';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts';
@@ -357,15 +358,20 @@ export function ComparadorEstaciones() {
         <>
           <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
             <div className="mb-6 flex items-center justify-between gap-4">
-              <h3 className="font-bold text-card-foreground">{datasetId === PRECIP_DATASET ? 'Total anual' : 'Promedio anual'} de {datasetName}{unitSuffix(datasetUnit(datasetId))} · series superpuestas</h3>
-              {!isLoading && chartData.length > 0 && (
-                <ChartDownloadButton
-                  targetRef={chartRef}
-                  title={`Comparador · ${datasetName}`}
-                  subtitle={`${selectedCodes.length} estaciones`}
-                  filenameParts={['comparador', datasetName]}
-                />
-              )}
+              <div>
+                <h3 className="font-bold text-card-foreground">{datasetId === PRECIP_DATASET ? 'Total anual' : 'Promedio anual'} de {datasetName}{unitSuffix(datasetUnit(datasetId))} · series superpuestas</h3>
+              </div>
+              <div className="flex shrink-0 items-center gap-3">
+                <InfoGrafica id="comparador-series" />
+                {!isLoading && chartData.length > 0 && (
+                  <ChartDownloadButton
+                    targetRef={chartRef}
+                    title={`Comparador · ${datasetName}`}
+                    subtitle={`${selectedCodes.length} estaciones`}
+                    filenameParts={['comparador', datasetName]}
+                  />
+                )}
+              </div>
             </div>
             {isLoading ? (
               <SkeletonLoader rows={4} />
@@ -409,6 +415,7 @@ export function ComparadorEstaciones() {
                   <p className="text-sm text-muted-foreground">Intensidad (mm/h) vs duración para Tr = {idfTr} años · solo estaciones pluviográficas</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                  <InfoGrafica id="comparador-idf" />
                   {hasIdf && (
                     <ChartDownloadButton
                       targetRef={idfChartRef}

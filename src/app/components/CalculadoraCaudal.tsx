@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Calculator, Info } from 'lucide-react';
+import { InfoGrafica } from './InfoGrafica';
 import { Formula, Frac, Sub, Sup, V } from './Formula';
 import { fmt } from '../lib/format';
 import { tiemposConcentracion, type MetodoTc } from '../lib/hydro/tc';
@@ -76,7 +77,10 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
           <h3 className="font-bold text-card-foreground">Calculadora de caudal de diseño (método racional)</h3>
           <p className="text-sm text-muted-foreground">Tc por varios métodos → intensidad de la IDF → C ponderado por frecuencia → caudal pico → verificación con Manning.</p>
         </div>
-        <Calculator className="h-5 w-5 shrink-0 text-accent" />
+        <div className="flex shrink-0 items-center gap-3">
+          <InfoGrafica id="metodo-racional" />
+          <Calculator className="h-5 w-5 shrink-0 text-accent" />
+        </div>
       </div>
 
       <div className="space-y-3">

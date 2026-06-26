@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Maximize2, X } from 'lucide-react';
+import { InfoGrafica } from './InfoGrafica';
 import { apiJson, ApiError } from '../lib/ideamApi';
 import { fmt } from '../lib/format';
 import { ControlSelect } from './ControlSelect';
@@ -179,6 +180,7 @@ export function HeatmapClimatico({ datasetId, department, metric, anioMin, anioM
           <p className="text-sm text-muted-foreground">{department || 'Todo el país'} · intensidad de lluvia</p>
         </div>
         <div className="flex shrink-0 items-center gap-3">
+          <InfoGrafica id="heatmap" />
           <ChartDownloadButton targetRef={gridRef} title="Mapa de calor climático" subtitle={department || 'Todo el país'} filenameParts={['heatmap', vista]} />
           <button type="button" onClick={() => setExpandido(true)} className="rounded-md border border-border p-2 text-muted-foreground transition-colors hover:bg-muted/60" aria-label="Expandir a pantalla completa">
             <Maximize2 className="h-4 w-4" />

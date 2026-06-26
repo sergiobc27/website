@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Building2, Check, Link2, MapPin, CalendarRange, Database } from 'lucide-react';
+import { InfoGrafica } from './InfoGrafica';
 import { ChartDownloadButton } from './ChartDownloadButton';
 import { Area, AreaChart, Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { SkeletonLoader } from './SkeletonLoader';
@@ -265,15 +266,20 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
               <div className="mb-6 flex items-center justify-between gap-4">
-                <h3 className="font-bold text-card-foreground">Climatología mensual{unitSuffix(unidad)}</h3>
-                {!isLoading && !climatologyData.every((m) => m.media === null) && (
-                  <ChartDownloadButton
-                    targetRef={chartRef}
-                    title="Climatología mensual"
-                    subtitle={municipality ? `${municipality}, ${department}` : department}
-                    filenameParts={['climatologia', municipality || department]}
-                  />
-                )}
+                <div>
+                  <h3 className="font-bold text-card-foreground">Climatología mensual{unitSuffix(unidad)}</h3>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <InfoGrafica id="climatologia" />
+                  {!isLoading && !climatologyData.every((m) => m.media === null) && (
+                    <ChartDownloadButton
+                      targetRef={chartRef}
+                      title="Climatología mensual"
+                      subtitle={municipality ? `${municipality}, ${department}` : department}
+                      filenameParts={['climatologia', municipality || department]}
+                    />
+                  )}
+                </div>
               </div>
               {isLoading ? (
                 <SkeletonLoader rows={4} />
@@ -297,7 +303,14 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
             </div>
 
             <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
-              <h3 className="mb-6 font-bold text-card-foreground">{isPrecip ? 'Total anual (mm/año)' : `Promedio anual${unitSuffix(unidad)}`}</h3>
+              <div className="mb-6 flex items-center justify-between gap-4">
+                <div>
+                  <h3 className="font-bold text-card-foreground">{isPrecip ? 'Total anual (mm/año)' : `Promedio anual${unitSuffix(unidad)}`}</h3>
+                </div>
+                <div className="flex shrink-0 items-center">
+                  <InfoGrafica id="serie-temporal" />
+                </div>
+              </div>
               {isLoading ? (
                 <SkeletonLoader rows={4} />
               ) : yearlyData.length === 0 ? (
