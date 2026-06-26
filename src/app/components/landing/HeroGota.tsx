@@ -1,7 +1,9 @@
-import { ArrowRight, ChevronDown } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowRight, ChevronDown, Sun, Moon, Github, Package } from 'lucide-react';
 import logoCuc from '../../../imports/Logo_CUC_PNG_letra_blanca_barra_roja_vtcal.png';
 import logoIdeam from '../../../imports/Ideam_(Colombia)_logo.png';
 import { usePrefersReducedMotion } from '../../lib/usePrefersReducedMotion';
+import { getThemeChoice, applyTheme, resolveIsDark, type ThemeChoice } from '../../lib/theme';
 import { GotaAnimada } from './GotaAnimada';
 import { Reveal, RevealItem } from './Reveal';
 
@@ -11,6 +13,13 @@ interface HeroGotaProps {
 
 export function HeroGota({ onNavigate }: HeroGotaProps) {
   const reducido = usePrefersReducedMotion();
+  const [theme, setTheme] = useState<ThemeChoice>(getThemeChoice);
+  const oscuro = resolveIsDark(theme);
+  const cambiarTema = () => {
+    const next: ThemeChoice = oscuro ? 'light' : 'dark';
+    setTheme(next);
+    applyTheme(next);
+  };
 
   const bajar = () => {
     document.getElementById('landing-proyecto')?.scrollIntoView({ behavior: reducido ? 'auto' : 'smooth' });
@@ -18,11 +27,42 @@ export function HeroGota({ onNavigate }: HeroGotaProps) {
 
   return (
     <header className="relative flex min-h-screen flex-col bg-gradient-to-b from-background to-[#fbf7ee] dark:to-[#15110a]">
-      <nav className="flex items-center px-6 py-4 md:px-10">
+      <nav className="flex items-center justify-between px-6 py-4 md:px-10">
         <div className="flex items-center gap-3">
           <img src={logoCuc} alt="Universidad de la Costa CUC" className="h-12 w-auto" />
           <span className="text-muted-foreground text-sm">+</span>
           <img src={logoIdeam} alt="IDEAM" className="h-9 w-auto" />
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={cambiarTema}
+            className="group rounded-lg p-2 text-muted-foreground transition-transform duration-150 hover:scale-110 hover:text-primary"
+            title="Cambiar tema"
+            aria-label="Cambiar tema (claro u oscuro)"
+          >
+            {oscuro ? <Sun className="anim-wiggle h-5 w-5" /> : <Moon className="anim-wiggle h-5 w-5" />}
+          </button>
+          <a
+            href="https://github.com/sergiobc27/ideam-data-automator"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group rounded-lg p-2 text-muted-foreground transition-transform duration-150 hover:scale-110 hover:text-primary"
+            title="Código en GitHub"
+            aria-label="Repositorio del proyecto en GitHub (abre en una pestaña nueva)"
+          >
+            <Github className="anim-wiggle h-5 w-5" />
+          </a>
+          <a
+            href="https://pypi.org/project/ideam-data-automator/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group rounded-lg p-2 text-muted-foreground transition-transform duration-150 hover:scale-110 hover:text-primary"
+            title="Paquete en PyPI (ideam-data-automator)"
+            aria-label="Paquete en PyPI (abre en una pestaña nueva)"
+          >
+            <Package className="anim-wiggle h-5 w-5" />
+          </a>
         </div>
       </nav>
 
