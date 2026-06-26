@@ -3,11 +3,13 @@ import { Formula, Sup, V } from '../Formula';
 import { fmt } from '../../lib/format';
 import {
   MATERIALES,
-  V_MIN_AUTOLIMPIEZA,
+  TAU_MIN_AUTOLIMPIEZA,
   capacidadCircular,
   profundidadNormalCircular,
   profundidadNormalTrapecio,
-  chequeoVelocidad,
+  esfuerzoCortante,
+  chequeoCortante,
+  chequeoVelocidadMax,
   chequeoSuficiencia,
   chequeoLlenado,
 } from '../../lib/hydro/manning';
@@ -23,7 +25,7 @@ export function SeccionManning({ q, pendienteCuenca }: { q: number; pendienteCue
   const [materialIdx, setMaterialIdx] = useState(0);
   const [nMann, setNMann] = useState(String(MATERIALES[0].n));
   const [vMax, setVMax] = useState(String(MATERIALES[0].vMax));
-  const [vMin, setVMin] = useState(String(V_MIN_AUTOLIMPIEZA));
+  const [tauMin, setTauMin] = useState(String(TAU_MIN_AUTOLIMPIEZA));
   const [sCond, setSCond] = useState(pendienteCuenca); // %, por defecto la de la cuenca
   const [sCondTocado, setSCondTocado] = useState(false);
 
@@ -42,8 +44,8 @@ export function SeccionManning({ q, pendienteCuenca }: { q: number; pendienteCue
 
   const res = useMemo(() => {
     const n = parseFloat(nMann);
-    const s = parseFloat(sCond) / 100; // pendiente: % → m/m (adimensional)
-    const vmin = parseFloat(vMin);
+    const s = parseFloat(sCond) / 100; // % → m/m
+    const tmin = parseFloat(tauMin);
     const vmax = parseFloat(vMax);
     if (!(q > 0) || !(n > 0) || !(s > 0)) return null;
 
@@ -52,14 +54,17 @@ export function SeccionManning({ q, pendienteCuenca }: { q: number; pendienteCue
       if (!(D > 0)) return null;
       const cap = capacidadCircular(D, n, s);
       const sol = profundidadNormalCircular(q, D, n, s);
+      const tau = esfuerzoCortante(sol.r, s);
       return {
         tipo: 'circular' as const,
         cap,
         sol,
+        tau,
         chequeos: [
           chequeoSuficiencia(q, cap.q),
           chequeoLlenado(sol.llenado),
-          chequeoVelocidad(sol.v, vmin, vmax),
+          chequeoCortante(tau, tmin),
+          chequeoVelocidadMax(sol.v, vmax),
         ],
       };
     }
@@ -67,12 +72,12 @@ export function SeccionManning({ q, pendienteCuenca }: { q: number; pendienteCue
     const z = parseFloat(talud);
     if (!(b > 0) || !(z >= 0)) return null;
     const sol = profundidadNormalTrapecio(q, b, z, n, s);
-    return {
-      tipo: 'trapezoidal' as const,
-      sol,
-      chequeos: [chequeoVelocidad(sol.v, vmin, vmax)],
-    };
-  }, [q, seccion, diametro, base, talud, nMann, sCond, vMin, vMax]);
+    const tau = esfuerzoCortante(sol.r, s);
+    const chequeos = sol.excedeCapacidad
+      ? [{ estado: 'rojo' as const, motivo: 'La sección no transporta el Q de diseño: aumenta el ancho de base o el talud.' }]
+      : [chequeoCortante(tau, tmin), chequeoVelocidadMax(sol.v, vmax)];
+    return { tipo: 'trapezoidal' as const, sol, tau, chequeos };
+  }, [q, seccion, diametro, base, talud, nMann, sCond, tauMin, vMax]);
 
   return (
     <div className="space-y-4">
@@ -114,10 +119,10 @@ export function SeccionManning({ q, pendienteCuenca }: { q: number; pendienteCue
         <Field label="Pendiente del conducto (%)" help="Pendiente longitudinal del conducto. Por defecto sigue la pendiente de la cuenca; al editarla queda fija e independiente.">
           <NumberInput value={sCond} onChange={(v) => { setSCond(v); setSCondTocado(true); }} step="0.1" />
         </Field>
-        <Field label="Vel. mín. autolimpieza (m/s)" help="Velocidad mínima para que el conducto no sedimente (sea autolimpiante). RAS 0330 (2017) usa ≈ 0,75 m/s.">
-          <NumberInput value={vMin} onChange={setVMin} step="0.05" />
+        <Field label="Esfuerzo cortante mín. τ (Pa)" help="Criterio de autolimpieza del RAS 0330 (2017), Art. 149: la velocidad mínima en alcantarillado pluvial es la que genera un esfuerzo cortante de pared ≥ 2,0 Pa. τ = γ·R·S.">
+          <NumberInput value={tauMin} onChange={setTauMin} step="0.5" />
         </Field>
-        <Field label="Vel. máx. material (m/s)" help="Velocidad máxima admisible para no erosionar el material del conducto. Depende del material (p. ej. concreto ≈ 5 m/s).">
+        <Field label="Vel. máx. material (m/s)" help="Velocidad máxima para no erosionar el material. RAS 0330 (2017), Art. 150: 5,0 m/s (hasta 10 m/s con revestimiento especial).">
           <NumberInput value={vMax} onChange={setVMax} step="0.5" />
         </Field>
       </div>
@@ -130,12 +135,14 @@ export function SeccionManning({ q, pendienteCuenca }: { q: number; pendienteCue
                 <Resultado titulo="Capacidad a tubo lleno" valor={fmt(res.cap.q, 3)} unidad="m³/s" />
                 <Resultado titulo="Relación de llenado y/D" valor={fmt(res.sol.llenado * 100, 0)} unidad="%" />
                 <Resultado titulo="Velocidad (a Q diseño)" valor={fmt(res.sol.v, 2)} unidad="m/s" />
+                <Resultado titulo="Esfuerzo cortante τ" valor={fmt(res.tau, 2)} unidad="Pa" />
               </>
             )}
             {res.tipo === 'trapezoidal' && (
               <>
                 <Resultado titulo="Profundidad normal y" valor={fmt(res.sol.y, 3)} unidad="m" />
                 <Resultado titulo="Velocidad (a Q diseño)" valor={fmt(res.sol.v, 2)} unidad="m/s" />
+                <Resultado titulo="Esfuerzo cortante τ" valor={fmt(res.tau, 2)} unidad="Pa" />
               </>
             )}
           </div>
@@ -151,8 +158,9 @@ export function SeccionManning({ q, pendienteCuenca }: { q: number; pendienteCue
         <V>Q</V>&nbsp;=&nbsp;(1/<V>n</V>) · <V>A</V> · <V>R</V><Sup>2/3</Sup> · <V>S</V><Sup>1/2</Sup>
       </Formula>
       <p className="text-xs text-muted-foreground">
-        Manning (1891) · R = A/P (radio hidráulico). Velocidad mínima de autolimpieza y máxima por material según RAS 0330
-        (2017); valores de n y velocidad máxima editables. Confírmalos con la norma vigente.
+        Manning (1891) · R = A/P (radio hidráulico). Autolimpieza por esfuerzo cortante τ = γ·R·S ≥ 2,0 Pa
+        (RAS 0330, Art. 149); velocidad máxima 5,0 m/s (Art. 150); llenado máximo y/D = 93% (Art. 151). Valores
+        de n, τ mínimo y velocidad máxima editables; confírmalos con la norma vigente.
       </p>
     </div>
   );
