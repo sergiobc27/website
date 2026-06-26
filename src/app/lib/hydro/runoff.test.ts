@@ -29,13 +29,29 @@ describe('qRacional = C·I·A/360', () => {
   });
 });
 
-describe('OBRAS_TR — selector obra → Tr', () => {
-  it('expone opciones con Tr sugerido y cita', () => {
+describe('OBRAS_TR — selector obra → Tr (literal a la norma)', () => {
+  const por = (label: string) => OBRAS_TR.find((o) => o.label === label);
+
+  it('todas las opciones tienen Tr > 0 y cita textual', () => {
     expect(OBRAS_TR.length).toBeGreaterThan(0);
     for (const o of OBRAS_TR) {
-      expect(typeof o.label).toBe('string');
       expect(o.tr).toBeGreaterThan(0);
       expect(typeof o.fuente).toBe('string');
+      expect(o.fuente).toMatch(/INVÍAS \(2009\), Tabla 2\.8|RAS 0330 \(2017\), Art\. 135, Tabla 16/);
     }
+  });
+
+  it('valores viales literales de la Tabla 2.8 (INVÍAS)', () => {
+    expect(por('Cuneta')?.tr).toBe(5);
+    expect(por('Alcantarilla ≤ 0,90 m de diámetro')?.tr).toBe(10);
+    expect(por('Alcantarilla > 0,90 m de diámetro')?.tr).toBe(20);
+    expect(por('Puente menor (luz < 10 m)')?.tr).toBe(25);
+    expect(por('Puente (luz ≥ 50 m)')?.tr).toBe(100);
+  });
+
+  it('valores urbanos literales de la Tabla 16 (RAS Art. 135)', () => {
+    expect(por('Tramo inicial residencial (< 2 ha)')?.tr).toBe(3);
+    expect(por('Alcantarillado pluvial (> 10 ha)')?.tr).toBe(10);
+    expect(por('Canal abierto (> 1000 ha)')?.tr).toBe(100);
   });
 });

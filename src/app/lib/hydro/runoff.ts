@@ -39,15 +39,26 @@ export function qRacional(c: number, i_mmh: number, a_ha: number): number {
   return (c * i_mmh * a_ha) / 360;
 }
 
-// Periodos de retorno de diseño sugeridos por tipo de obra. Valores típicos de las
-// normas colombianas; el Tr es sobrescribible y se debe confirmar con la edición
-// vigente de la norma para la obra concreta.
+// Períodos de retorno de diseño, LITERALES de la norma citada. El Tr es
+// sobrescribible; aquí solo se sugiere el de la fuente.
+// Vial: Manual de Drenaje INVÍAS (2009), Tabla 2.8 (pág. 2-31).
+// Urbano: RAS 0330 de 2017, Art. 135, Tabla 16 (por área tributaria).
 export const OBRAS_TR: Array<{ label: string; tr: number; fuente: string }> = [
-  { label: 'Cuneta / drenaje vial menor', tr: 10, fuente: 'INVÍAS, Manual de Drenaje (2009)' },
-  { label: 'Alcantarilla / box-culvert vial', tr: 25, fuente: 'INVÍAS, Manual de Drenaje (2009)' },
-  { label: 'Pontón / puente menor', tr: 50, fuente: 'INVÍAS, Manual de Drenaje (2009)' },
-  { label: 'Puente', tr: 100, fuente: 'INVÍAS, Manual de Drenaje (2009)' },
-  { label: 'Drenaje urbano — riesgo bajo', tr: 5, fuente: 'RAS 0330 (2017)' },
-  { label: 'Drenaje urbano — riesgo medio', tr: 10, fuente: 'RAS 0330 (2017)' },
-  { label: 'Drenaje urbano — riesgo alto', tr: 25, fuente: 'RAS 0330 (2017)' },
+  // Drenaje vial — INVÍAS (2009), Tabla 2.8
+  { label: 'Cuneta', tr: 5, fuente: 'INVÍAS (2009), Tabla 2.8' },
+  { label: 'Zanja de coronación', tr: 10, fuente: 'INVÍAS (2009), Tabla 2.8' },
+  { label: 'Estructura de caída', tr: 10, fuente: 'INVÍAS (2009), Tabla 2.8' },
+  { label: 'Alcantarilla ≤ 0,90 m de diámetro', tr: 10, fuente: 'INVÍAS (2009), Tabla 2.8' },
+  { label: 'Alcantarilla > 0,90 m de diámetro', tr: 20, fuente: 'INVÍAS (2009), Tabla 2.8' },
+  { label: 'Puente menor (luz < 10 m)', tr: 25, fuente: 'INVÍAS (2009), Tabla 2.8' },
+  { label: 'Puente (luz 10–50 m)', tr: 50, fuente: 'INVÍAS (2009), Tabla 2.8' },
+  { label: 'Puente (luz ≥ 50 m)', tr: 100, fuente: 'INVÍAS (2009), Tabla 2.8' },
+  { label: 'Drenaje subsuperficial', tr: 2, fuente: 'INVÍAS (2009), Tabla 2.8' },
+  // Drenaje urbano — RAS 0330 (2017), Art. 135, Tabla 16
+  { label: 'Tramo inicial residencial (< 2 ha)', tr: 3, fuente: 'RAS 0330 (2017), Art. 135, Tabla 16' },
+  { label: 'Tramo inicial comercial/industrial (< 2 ha)', tr: 5, fuente: 'RAS 0330 (2017), Art. 135, Tabla 16' },
+  { label: 'Alcantarillado pluvial (2–10 ha)', tr: 5, fuente: 'RAS 0330 (2017), Art. 135, Tabla 16' },
+  { label: 'Alcantarillado pluvial (> 10 ha)', tr: 10, fuente: 'RAS 0330 (2017), Art. 135, Tabla 16' },
+  { label: 'Canal abierto (< 1000 ha)', tr: 50, fuente: 'RAS 0330 (2017), Art. 135, Tabla 16' },
+  { label: 'Canal abierto (> 1000 ha)', tr: 100, fuente: 'RAS 0330 (2017), Art. 135, Tabla 16' },
 ];
