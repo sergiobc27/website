@@ -31,9 +31,12 @@ export function CierreConfeti({ onNavigate }: CierreConfetiProps) {
     <section className="relative overflow-hidden bg-[#15110a] px-6 py-20 text-center md:px-10">
       <Reveal className="mx-auto max-w-3xl">
         <RevealItem>
-          <div className="mx-auto mb-8 h-52 w-72 max-w-full md:h-64 md:w-[28rem]">
+          <div className="mx-auto mb-3 h-52 w-72 max-w-full md:h-64 md:w-[28rem]">
             <CurvaIdfAnimada className="h-full w-full" />
           </div>
+          <p className="mb-8 text-xs font-bold uppercase tracking-[0.18em] text-[#d8c98c]">
+            El resultado: curvas IDF reales
+          </p>
         </RevealItem>
         <RevealItem>
           <h2 className="text-3xl font-extrabold text-[#f5edda] md:text-4xl">

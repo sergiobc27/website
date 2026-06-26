@@ -716,6 +716,9 @@
    dibujan solas en bucle (stroke-dashoffset), un punto de dato pulsa y unas gotas
    caen. Todo CSS, neutralizado por el bloque global de prefers-reduced-motion
    (con reduced-motion las curvas quedan dibujadas y visibles). */
+.curva-idf-svg {
+  filter: drop-shadow(0 2px 12px rgba(91, 184, 239, 0.28));
+}
 .curva-idf {
   stroke-dasharray: 400;
   stroke-dashoffset: 400;

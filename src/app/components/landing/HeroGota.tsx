@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowRight, ChevronDown, Sun, Moon, Github, Package } from 'lucide-react';
+import { ArrowRight, ChevronDown, Sun, Moon, Github, Package, Globe } from 'lucide-react';
 import logoCuc from '../../../imports/Logo_CUC_PNG_letra_blanca_barra_roja_vtcal.png';
 import logoIdeam from '../../../imports/Ideam_(Colombia)_logo.png';
 import { usePrefersReducedMotion } from '../../lib/usePrefersReducedMotion';
@@ -62,6 +62,16 @@ export function HeroGota({ onNavigate }: HeroGotaProps) {
             aria-label="Paquete en PyPI (abre en una pestaña nueva)"
           >
             <Package className="anim-wiggle h-5 w-5" />
+          </a>
+          <a
+            href="https://sergiobc.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group rounded-lg p-2 text-muted-foreground transition-transform duration-150 hover:scale-110 hover:text-primary"
+            title="Sitio personal: sergiobc.com"
+            aria-label="Sitio personal de Sergio Beltran Coley (abre en una pestaña nueva)"
+          >
+            <Globe className="anim-wiggle h-5 w-5" />
           </a>
         </div>
       </nav>
