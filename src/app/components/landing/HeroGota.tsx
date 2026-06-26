@@ -3,7 +3,6 @@ import logoCuc from '../../../imports/Logo_CUC_PNG_letra_blanca_barra_roja_vtcal
 import logoIdeam from '../../../imports/Ideam_(Colombia)_logo.png';
 import { usePrefersReducedMotion } from '../../lib/usePrefersReducedMotion';
 import { GotaAnimada } from './GotaAnimada';
-import { MascotaGota } from './MascotaGota';
 import { Reveal, RevealItem } from './Reveal';
 
 interface HeroGotaProps {
@@ -80,11 +79,10 @@ export function HeroGota({ onNavigate }: HeroGotaProps) {
             <span className="onda-anillo onda-anillo-2" />
             <span className="onda-anillo onda-anillo-3" />
           </div>
-          {/* La gota es el foco: más grande, con halo azul. */}
-          <div className="relative z-10 h-72 w-72 [filter:drop-shadow(0_18px_34px_rgba(43,143,214,0.4))] md:h-[22rem] md:w-[22rem] lg:scale-105">
+          {/* La gota es el foco único: más grande, con halo azul. */}
+          <div className="relative z-10 h-72 w-72 [filter:drop-shadow(0_18px_34px_rgba(43,143,214,0.4))] md:h-[24rem] md:w-[24rem] lg:scale-105">
             <GotaAnimada />
           </div>
-          <MascotaGota size={80} className="landing-flota absolute bottom-3 right-6 z-20 md:bottom-8 md:right-4" />
         </div>
       </div>
 

@@ -661,15 +661,6 @@
   16% { opacity: 0.6; }
   100% { transform: scale(1.55); opacity: 0; }
 }
-@keyframes mascota-parpadeo {
-  0%, 92%, 100% { transform: scaleY(1); }
-  95% { transform: scaleY(0.1); }
-}
-.mascota-ojos {
-  transform-origin: center;
-  animation: mascota-parpadeo 5s ease-in-out infinite;
-}
-
 /* Divisor de ola entre secciones (componente OndaDivisor). El componente pasa
    los 4 colores como CSS vars en `style`; aquí elegimos el par claro/oscuro
    según la clase `.dark` global. Estático, decorativo. El fondo del bloque =
@@ -715,3 +706,41 @@
 .gota-burbuja-1 { animation: gota-burbuja 4.4s ease-in infinite; }
 .gota-burbuja-2 { animation: gota-burbuja 5.6s ease-in 1.1s infinite; }
 .gota-burbuja-3 { animation: gota-burbuja 6.4s ease-in 2.3s infinite; }
+
+/* Curvas IDF animadas del cierre (componente CurvaIdfAnimada). Las 3 curvas se
+   dibujan solas en bucle (stroke-dashoffset), un punto de dato pulsa y unas gotas
+   caen. Todo CSS, neutralizado por el bloque global de prefers-reduced-motion
+   (con reduced-motion las curvas quedan dibujadas y visibles). */
+.curva-idf {
+  stroke-dasharray: 340;
+  stroke-dashoffset: 340;
+  animation: idf-dibujar 5.5s ease-in-out infinite;
+}
+.curva-2 { animation-delay: 0.5s; }
+.curva-3 { animation-delay: 1s; }
+@keyframes idf-dibujar {
+  0% { stroke-dashoffset: 340; opacity: 0.15; }
+  12% { opacity: 1; }
+  45%, 78% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 340; opacity: 0.15; }
+}
+.idf-punto {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: idf-pulso 2.2s ease-in-out infinite;
+}
+@keyframes idf-pulso {
+  0%, 100% { transform: scale(1); opacity: 0.95; }
+  50% { transform: scale(1.6); opacity: 0.45; }
+}
+.idf-gota {
+  transform-box: fill-box;
+  animation: idf-caer 3s ease-in infinite;
+}
+.idf-gota-2 { animation-delay: 1.4s; }
+@keyframes idf-caer {
+  0% { transform: translateY(0); opacity: 0; }
+  15% { opacity: 0.9; }
+  70% { opacity: 0.6; }
+  100% { transform: translateY(150px); opacity: 0; }
+}
