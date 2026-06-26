@@ -155,9 +155,10 @@ export function chequeoSuficiencia(Qd: number, qCap: number): { estado: Estado; 
   return { estado: 'verde', motivo: `Capacidad suficiente (Q de diseño = ${(qCap > 0 ? (100 * Qd) / qCap : 0).toFixed(0)}% de la capacidad).` };
 }
 
-// Chequeo de llenado (sección circular): RAS limita y/D ≤ 0,85.
+// Chequeo de llenado (sección circular): RAS 0330 (2017), Art. 151, limita la
+// profundidad de flujo al 93% del diámetro en alcantarillado pluvial/combinado.
 export function chequeoLlenado(llenado: number): { estado: Estado; motivo: string } {
-  if (llenado > 0.85) return { estado: 'rojo', motivo: `Llenado y/D = ${(llenado * 100).toFixed(0)}% > 85% (RAS 0330): revisar diámetro.` };
-  if (llenado > 0.75) return { estado: 'amarillo', motivo: `Llenado y/D = ${(llenado * 100).toFixed(0)}%: cercano al límite del 85%.` };
-  return { estado: 'verde', motivo: `Llenado y/D = ${(llenado * 100).toFixed(0)}% (≤ 85%, RAS 0330).` };
+  if (llenado > 0.93) return { estado: 'rojo', motivo: `Llenado y/D = ${(llenado * 100).toFixed(0)}% > 93% (RAS 0330, Art. 151): revisar diámetro.` };
+  if (llenado > 0.85) return { estado: 'amarillo', motivo: `Llenado y/D = ${(llenado * 100).toFixed(0)}%: acercándose al máximo del 93% (RAS Art. 151).` };
+  return { estado: 'verde', motivo: `Llenado y/D = ${(llenado * 100).toFixed(0)}% (≤ 93%, RAS 0330 Art. 151).` };
 }

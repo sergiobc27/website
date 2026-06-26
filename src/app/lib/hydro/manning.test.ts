@@ -7,6 +7,7 @@ import {
   esfuerzoCortante,
   chequeoCortante,
   TAU_MIN_AUTOLIMPIEZA,
+  chequeoLlenado,
 } from './manning';
 
 // Caso analítico circular: D=0,5 m, n=0,013, S=0,01.
@@ -61,6 +62,12 @@ describe('chequeoVelocidad (autolimpieza / erosión, RAS 0330)', () => {
   it('rojo sobre la máxima del material', () => {
     expect(chequeoVelocidad(6, 0.75, 5).estado).toBe('rojo');
   });
+});
+
+describe('chequeoLlenado (RAS 0330, Art. 151: máx 93% en pluvial)', () => {
+  it('rojo si y/D > 0,93', () => { expect(chequeoLlenado(0.95).estado).toBe('rojo'); });
+  it('amarillo entre 0,85 y 0,93', () => { expect(chequeoLlenado(0.90).estado).toBe('amarillo'); });
+  it('verde por debajo de 0,85', () => { expect(chequeoLlenado(0.70).estado).toBe('verde'); });
 });
 
 describe('esfuerzoCortante τ = γ·R·S (RAS 0330, Art. 149)', () => {
