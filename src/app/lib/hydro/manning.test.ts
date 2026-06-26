@@ -8,6 +8,7 @@ import {
   chequeoCortante,
   TAU_MIN_AUTOLIMPIEZA,
   chequeoLlenado,
+  chequeoVelocidadMax,
 } from './manning';
 
 // Caso analítico circular: D=0,5 m, n=0,013, S=0,01.
@@ -90,4 +91,10 @@ describe('chequeoCortante (autolimpieza por cortante, RAS Art. 149)', () => {
   it('amarillo si está apenas por encima del mínimo', () => {
     expect(chequeoCortante(2.1, TAU_MIN_AUTOLIMPIEZA).estado).toBe('amarillo');
   });
+});
+
+describe('chequeoVelocidadMax (erosión, RAS 0330 Art. 150)', () => {
+  it('verde por debajo de la máxima', () => { expect(chequeoVelocidadMax(3, 5).estado).toBe('verde'); });
+  it('amarillo al acercarse a la máxima (>90%)', () => { expect(chequeoVelocidadMax(4.8, 5).estado).toBe('amarillo'); });
+  it('rojo sobre la máxima del material', () => { expect(chequeoVelocidadMax(6, 5).estado).toBe('rojo'); });
 });

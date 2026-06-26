@@ -148,6 +148,14 @@ export function chequeoVelocidad(v: number, vMin: number, vMax: number): { estad
   return { estado: 'verde', motivo: `v = ${v.toFixed(2)} m/s dentro del rango (${vMin}–${vMax} m/s).` };
 }
 
+// Chequeo de erosión: solo el techo de velocidad (la autolimpieza va por cortante).
+// RAS 0330 (2017), Art. 150: velocidad máxima 5,0 m/s (10 m/s con revestimiento).
+export function chequeoVelocidadMax(v: number, vMax: number): { estado: Estado; motivo: string } {
+  if (v > vMax) return { estado: 'rojo', motivo: `v = ${v.toFixed(2)} m/s > ${vMax} m/s: riesgo de erosión del material (RAS 0330, Art. 150).` };
+  if (v > vMax * 0.9) return { estado: 'amarillo', motivo: `v = ${v.toFixed(2)} m/s: cerca del máximo (${vMax} m/s, RAS Art. 150).` };
+  return { estado: 'verde', motivo: `v = ${v.toFixed(2)} m/s ≤ ${vMax} m/s (RAS 0330, Art. 150).` };
+}
+
 // Chequeo de suficiencia: el conducto debe poder transportar el Q de diseño.
 export function chequeoSuficiencia(Qd: number, qCap: number): { estado: Estado; motivo: string } {
   if (Qd > qCap) return { estado: 'rojo', motivo: `Q de diseño (${Qd.toFixed(3)} m³/s) supera la capacidad (${qCap.toFixed(3)} m³/s): sección insuficiente.` };
