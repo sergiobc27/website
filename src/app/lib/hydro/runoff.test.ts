@@ -43,8 +43,8 @@ describe('OBRAS_TR — selector obra → Tr (literal a la norma)', () => {
 
   it('valores viales literales de la Tabla 2.8 (INVÍAS)', () => {
     expect(por('Cuneta')?.tr).toBe(5);
-    expect(por('Alcantarilla ≤ 0,90 m de diámetro')?.tr).toBe(10);
-    expect(por('Alcantarilla > 0,90 m de diámetro')?.tr).toBe(20);
+    expect(por('Alcantarilla de 0,90 m de diámetro')?.tr).toBe(10);
+    expect(por('Alcantarilla mayor a 0,90 m de diámetro')?.tr).toBe(20);
     expect(por('Puente menor (luz < 10 m)')?.tr).toBe(25);
     expect(por('Puente (luz ≥ 50 m)')?.tr).toBe(100);
   });
