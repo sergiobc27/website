@@ -3,7 +3,6 @@ import {
   capacidadCircular,
   profundidadNormalCircular,
   profundidadNormalTrapecio,
-  chequeoVelocidad,
   esfuerzoCortante,
   chequeoCortante,
   TAU_MIN_AUTOLIMPIEZA,
@@ -50,18 +49,6 @@ describe('profundidadNormalTrapecio (rectangular z=0)', () => {
   it('reporta el radio hidráulico R = A/P (b=1, y=0,5 → R ≈ 0,25)', () => {
     const r = profundidadNormalTrapecio(1.5263, 1, 0, 0.013, 0.01);
     expect(r.r).toBeCloseTo(0.25, 2);
-  });
-});
-
-describe('chequeoVelocidad (autolimpieza / erosión, RAS 0330)', () => {
-  it('verde dentro de rango', () => {
-    expect(chequeoVelocidad(1.923, 0.75, 5).estado).toBe('verde');
-  });
-  it('rojo bajo la mínima de autolimpieza', () => {
-    expect(chequeoVelocidad(0.5, 0.75, 5).estado).toBe('rojo');
-  });
-  it('rojo sobre la máxima del material', () => {
-    expect(chequeoVelocidad(6, 0.75, 5).estado).toBe('rojo');
   });
 });
 

@@ -117,8 +117,6 @@ export const MATERIALES: Array<{ label: string; n: number; vMax: number }> = [
   { label: 'Mampostería / piedra', n: 0.02, vMax: 4 },
 ];
 
-export const V_MIN_AUTOLIMPIEZA = 0.75; // m/s — RAS 0330 (2017), velocidad mínima.
-
 // Peso específico del agua [N/m³] para el esfuerzo cortante de pared.
 const GAMMA_AGUA = 9810;
 
@@ -137,15 +135,6 @@ export function chequeoCortante(tau: number, tauMin: number): { estado: Estado; 
   if (tau < tauMin) return { estado: 'rojo', motivo: `τ = ${tau.toFixed(2)} Pa < ${tauMin} Pa: no autolimpiante (RAS 0330, Art. 149).` };
   if (tau < tauMin * 1.15) return { estado: 'amarillo', motivo: `τ = ${tau.toFixed(2)} Pa: apenas sobre el mínimo de autolimpieza (${tauMin} Pa, RAS Art. 149).` };
   return { estado: 'verde', motivo: `τ = ${tau.toFixed(2)} Pa ≥ ${tauMin} Pa: autolimpiante (RAS 0330, Art. 149).` };
-}
-
-// Chequeo de velocidad: sedimentación (< vMin) o erosión (> vMax). Amarillo si está
-// dentro de rango pero a menos del 10% de cualquiera de los límites.
-export function chequeoVelocidad(v: number, vMin: number, vMax: number): { estado: Estado; motivo: string } {
-  if (v < vMin) return { estado: 'rojo', motivo: `v = ${v.toFixed(2)} m/s < ${vMin} m/s: riesgo de sedimentación (no autolimpiante).` };
-  if (v > vMax) return { estado: 'rojo', motivo: `v = ${v.toFixed(2)} m/s > ${vMax} m/s: riesgo de erosión del material.` };
-  if (v < vMin * 1.1 || v > vMax * 0.9) return { estado: 'amarillo', motivo: `v = ${v.toFixed(2)} m/s: cerca de un límite (autolimpieza ${vMin} / máx. ${vMax} m/s).` };
-  return { estado: 'verde', motivo: `v = ${v.toFixed(2)} m/s dentro del rango (${vMin}–${vMax} m/s).` };
 }
 
 // Chequeo de erosión: solo el techo de velocidad (la autolimpieza va por cortante).

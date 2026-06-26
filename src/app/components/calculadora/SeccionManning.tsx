@@ -73,12 +73,10 @@ export function SeccionManning({ q, pendienteCuenca }: { q: number; pendienteCue
     if (!(b > 0) || !(z >= 0)) return null;
     const sol = profundidadNormalTrapecio(q, b, z, n, s);
     const tau = esfuerzoCortante(sol.r, s);
-    return {
-      tipo: 'trapezoidal' as const,
-      sol,
-      tau,
-      chequeos: [chequeoCortante(tau, tmin), chequeoVelocidadMax(sol.v, vmax)],
-    };
+    const chequeos = sol.excedeCapacidad
+      ? [{ estado: 'rojo' as const, motivo: 'La sección no transporta el Q de diseño: aumenta el ancho de base o el talud.' }]
+      : [chequeoCortante(tau, tmin), chequeoVelocidadMax(sol.v, vmax)];
+    return { tipo: 'trapezoidal' as const, sol, tau, chequeos };
   }, [q, seccion, diametro, base, talud, nMann, sCond, tauMin, vMax]);
 
   return (
