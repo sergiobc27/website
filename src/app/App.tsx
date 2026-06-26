@@ -16,6 +16,7 @@ const ComparadorEstaciones = lazyWithRetry(() => import('./components/Comparador
 const Hidrologia = lazyWithRetry(() => import('./components/Hidrologia').then((m) => ({ default: m.Hidrologia })));
 const BibliotecaReferencias = lazyWithRetry(() => import('./components/BibliotecaReferencias').then((m) => ({ default: m.BibliotecaReferencias })));
 const HistoriaIdf = lazyWithRetry(() => import('./components/HistoriaIdf').then((m) => ({ default: m.HistoriaIdf })));
+const Metodologia = lazyWithRetry(() => import('./components/Metodologia').then((m) => ({ default: m.Metodologia })));
 const Landing = lazyWithRetry(() => import('./components/landing/Landing').then((m) => ({ default: m.Landing })));
 
 // Compatibilidad hacia atrás: convierte un enlace viejo de ficha por hash
@@ -142,6 +143,7 @@ export default function App() {
       ficha: ['Inicio', 'Ficha Climática'],
       hydro: ['Inicio', 'Hidrología'],
       historia: ['Inicio', 'La historia del dato'],
+      metodologia: ['Inicio', 'Metodología'],
       status: ['Inicio', 'Estado del Espejo'],
       extractor: ['Inicio', 'Extractor de Datos'],
       history: ['Inicio', 'Historial de Descargas'],
@@ -168,6 +170,8 @@ export default function App() {
         return <Hidrologia />;
       case 'historia':
         return <HistoriaIdf onNavigate={navigate} />;
+      case 'metodologia':
+        return <Metodologia />;
       case 'ficha':
         // La ficha lee dep/mun de la query (useUrlSync); no necesita props.
         return <FichaClimatica />;
