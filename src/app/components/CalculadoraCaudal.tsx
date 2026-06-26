@@ -3,12 +3,15 @@ import { Calculator, Info } from 'lucide-react';
 import { Formula, Frac, Sub, Sup, V } from './Formula';
 import { fmt } from '../lib/format';
 import { tiemposConcentracion, type MetodoTc } from '../lib/hydro/tc';
-import { TIPOS_SUPERFICIE, SUPERFICIES_IMPERMEABLES, cAjustado, qRacional, OBRAS_TR } from '../lib/hydro/runoff';
+import { TIPOS_SUPERFICIE, SUPERFICIES_IMPERMEABLES, cAjustado, qRacional, OBRAS_TR, factorFrecuencia } from '../lib/hydro/runoff';
 import { CITAS } from '../lib/hydro/normas';
 import { SeccionColapsable, Field, NumberInput, Select } from './calculadora/SeccionColapsable';
 import { SeccionTc } from './calculadora/SeccionTc';
 import { SeccionCoefC } from './calculadora/SeccionCoefC';
 import { SeccionManning } from './calculadora/SeccionManning';
+import { TablaNormaView } from './calculadora/TablaNormaView';
+import { TABLA_TR_VIAL, TABLA_TR_URBANO } from '../lib/hydro/tablasNorma';
+import { CalculoPasoAPaso } from './calculadora/CalculoPasoAPaso';
 
 const RETURN_PERIODS = [2, 5, 10, 25, 50, 100];
 
@@ -107,6 +110,15 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
           {obraIdx >= 0 && (
             <p className="mt-2 text-xs text-muted-foreground">Tr {OBRAS_TR[obraIdx].tr} años sugerido por {OBRAS_TR[obraIdx].fuente}. Puedes sobrescribirlo.</p>
           )}
+          <details className="mt-3 rounded-lg border border-border">
+            <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-card-foreground">
+              Ver las tablas de período de retorno de la norma
+            </summary>
+            <div className="space-y-4 border-t border-border px-3 py-3">
+              <TablaNormaView tabla={TABLA_TR_VIAL} />
+              <TablaNormaView tabla={TABLA_TR_URBANO} />
+            </div>
+          </details>
         </SeccionColapsable>
 
         {/* 2 · Tiempo de concentración */}
@@ -143,6 +155,29 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
             </>
           ) : (
             <p className="text-sm text-muted-foreground">Completa los parámetros de cuenca para obtener el caudal.</p>
+          )}
+        </SeccionColapsable>
+
+        {/* 4b · Cálculo paso a paso */}
+        <SeccionColapsable titulo="Cálculo paso a paso" descripcion="La aritmética con tus valores, con su referencia" inicialAbierta={false}>
+          {result && tcUsado != null ? (
+            <CalculoPasoAPaso
+              L={L}
+              S={S}
+              A={A}
+              tcs={tcs}
+              tcUsado={tcUsado}
+              tcMetodo={tcMetodo}
+              cBase={parseFloat(cBase)}
+              cf={factorFrecuencia(tr)}
+              cAjust={cAjust}
+              tr={tr}
+              equation={equation}
+              intensidad={result.intensidad}
+              q={result.q}
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">Completa los parámetros para ver el desarrollo.</p>
           )}
         </SeccionColapsable>
 

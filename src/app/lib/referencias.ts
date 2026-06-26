@@ -115,6 +115,14 @@ export const REFERENCIAS: Referencia[] = [
     usadoEn: ['Calculadora'],
   },
   {
+    id: 'chow-applied-1988',
+    apa: 'Chow, V. T., Maidment, D. R., & Mays, L. W. (1988). Applied Hydrology. McGraw-Hill.',
+    pais: 'Internacional',
+    tema: 'Métodos hidrológicos e hidráulica',
+    anio: 1988,
+    usadoEn: ['Calculadora', 'Período de retorno'],
+  },
+  {
     id: 'velez-botero-2011',
     apa: 'Vélez Upegui, J. J., & Botero Gutiérrez, A. (2011). Estimación del tiempo de concentración y tiempo de rezago en la cuenca experimental urbana de la quebrada San Luis, Manizales. Dyna, 78(165), 58-71.',
     pais: 'Colombia',

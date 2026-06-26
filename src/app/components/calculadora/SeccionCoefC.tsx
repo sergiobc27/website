@@ -1,6 +1,10 @@
+import { useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { fmt } from '../../lib/format';
 import { TIPOS_SUPERFICIE, factorFrecuencia } from '../../lib/hydro/runoff';
 import { Field, NumberInput, Select } from './SeccionColapsable';
+import { TablaNormaView } from './TablaNormaView';
+import { TABLA_C_URBANA, TABLA_C_RURAL, TABLA_CF } from '../../lib/hydro/tablasNorma';
 
 export function SeccionCoefC({
   superficieIdx,
@@ -53,9 +57,12 @@ export function SeccionCoefC({
         <Celda titulo="C de diseño" valor={fmt(cAjust, 2)} destacado />
       </div>
 
+      <DetalleTablas />
+
       <p className="text-xs text-muted-foreground">
-        C de diseño = mín(1; C base · Cf). El factor de frecuencia Cf (Ven Te Chow; adoptado por INVÍAS) eleva C para
-        Tr altos. Ajusta C base dentro de su rango según la pendiente del terreno (a mayor pendiente, valor más alto).
+        C de diseño = mín(1; C base · Cf). El C base sale de la tabla de coeficiente de escorrentía del Manual de
+        Drenaje INVÍAS (2009), Tablas 2.9 (urbano) y 2.10 (rural). El factor de frecuencia Cf eleva C para Tr altos
+        (Chow, Maidment &amp; Mays, 1988). Ajusta C base dentro de su rango según la pendiente (a mayor pendiente, más alto).
       </p>
     </div>
   );
@@ -66,6 +73,30 @@ function Celda({ titulo, valor, destacado }: { titulo: string; valor: string; de
     <div className={`rounded-lg border p-3 ${destacado ? 'border-accent bg-accent/10' : 'border-border bg-background'}`}>
       <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{titulo}</p>
       <p className={`font-mono text-lg font-bold ${destacado ? 'text-accent' : 'text-card-foreground'}`}>{valor}</p>
+    </div>
+  );
+}
+
+function DetalleTablas() {
+  const [abierto, setAbierto] = useState(false);
+  return (
+    <div className="rounded-lg border border-border">
+      <button
+        type="button"
+        onClick={() => setAbierto((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs font-semibold text-card-foreground"
+        aria-expanded={abierto}
+      >
+        Ver las tablas de la norma (coeficiente C y factor Cf)
+        <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${abierto ? 'rotate-180' : ''}`} />
+      </button>
+      {abierto && (
+        <div className="space-y-4 border-t border-border px-3 py-3">
+          <TablaNormaView tabla={TABLA_C_URBANA} />
+          <TablaNormaView tabla={TABLA_C_RURAL} />
+          <TablaNormaView tabla={TABLA_CF} />
+        </div>
+      )}
     </div>
   );
 }
