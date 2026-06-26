@@ -31,8 +31,8 @@ export function CurvaIdfAnimada({ className = '' }: CurvaIdfAnimadaProps) {
 
       <circle className="idf-punto" cx="48" cy="38" r="4.5" fill="#fff7e6" />
 
-      <text transform="rotate(-90 20 96)" x="20" y="96" fill="#a89f8c" fontSize="11" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif">intensidad</text>
-      <text x="156" y="190" fill="#a89f8c" fontSize="11" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif">duración</text>
+      <text transform="rotate(-90 18 96)" x="18" y="96" fill="#ead9ad" fontSize="13" fontWeight="700" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" letterSpacing="0.06em">INTENSIDAD</text>
+      <text x="156" y="192" fill="#ead9ad" fontSize="13" fontWeight="700" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif" letterSpacing="0.06em">DURACIÓN</text>
     </svg>
   );
 }

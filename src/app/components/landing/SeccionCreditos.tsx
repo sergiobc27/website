@@ -1,3 +1,4 @@
+import { Globe } from 'lucide-react';
 import logoCuc from '../../../imports/Logo_CUC_PNG_letra_blanca_barra_roja_vtcal.png';
 import logoIdeam from '../../../imports/Ideam_(Colombia)_logo.png';
 import { Reveal, RevealItem } from './Reveal';
@@ -15,7 +16,17 @@ export function SeccionCreditos() {
         </RevealItem>
         <RevealItem>
           <p className="mt-8 text-lg text-foreground">
-            Creado por <span className="font-bold">Sergio Beltran Coley</span>
+            Creado por{' '}
+            <a
+              href="https://sergiobc.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group inline-flex items-center gap-1.5 font-bold text-primary underline-offset-4 transition-colors hover:underline"
+              title="Sitio personal: sergiobc.com"
+            >
+              Sergio Beltran Coley
+              <Globe className="anim-wiggle h-4 w-4" />
+            </a>
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
             Universidad de la Costa CUC · Datos abiertos del IDEAM
