@@ -717,17 +717,17 @@
    caen. Todo CSS, neutralizado por el bloque global de prefers-reduced-motion
    (con reduced-motion las curvas quedan dibujadas y visibles). */
 .curva-idf {
-  stroke-dasharray: 340;
-  stroke-dashoffset: 340;
+  stroke-dasharray: 400;
+  stroke-dashoffset: 400;
   animation: idf-dibujar 5.5s ease-in-out infinite;
 }
 .curva-2 { animation-delay: 0.5s; }
 .curva-3 { animation-delay: 1s; }
 @keyframes idf-dibujar {
-  0% { stroke-dashoffset: 340; opacity: 0.15; }
+  0% { stroke-dashoffset: 400; opacity: 0.15; }
   12% { opacity: 1; }
   45%, 78% { stroke-dashoffset: 0; opacity: 1; }
-  100% { stroke-dashoffset: 340; opacity: 0.15; }
+  100% { stroke-dashoffset: 400; opacity: 0.15; }
 }
 .idf-punto {
   transform-box: fill-box;
