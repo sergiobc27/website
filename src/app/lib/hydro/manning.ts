@@ -116,6 +116,26 @@ export const MATERIALES: Array<{ label: string; n: number; vMax: number }> = [
 
 export const V_MIN_AUTOLIMPIEZA = 0.75; // m/s — RAS 0330 (2017), velocidad mínima.
 
+// Peso específico del agua [N/m³] para el esfuerzo cortante de pared.
+const GAMMA_AGUA = 9810;
+
+// Esfuerzo cortante medio de pared τ = γ·R·S [Pa]. R = radio hidráulico, S en m/m.
+export function esfuerzoCortante(r: number, s: number): number {
+  if (!(r > 0) || !(s > 0)) return 0;
+  return GAMMA_AGUA * r * s;
+}
+
+// RAS 0330 (2017), Art. 149: la velocidad mínima en alcantarillado pluvial/combinado
+// es la que genera un esfuerzo cortante de pared ≥ 2,0 Pa (criterio de autolimpieza).
+export const TAU_MIN_AUTOLIMPIEZA = 2.0; // Pa
+
+// Chequeo de autolimpieza por esfuerzo cortante (sustituye al de velocidad mínima fija).
+export function chequeoCortante(tau: number, tauMin: number): { estado: Estado; motivo: string } {
+  if (tau < tauMin) return { estado: 'rojo', motivo: `τ = ${tau.toFixed(2)} Pa < ${tauMin} Pa: no autolimpiante (RAS 0330, Art. 149).` };
+  if (tau < tauMin * 1.15) return { estado: 'amarillo', motivo: `τ = ${tau.toFixed(2)} Pa: apenas sobre el mínimo de autolimpieza (${tauMin} Pa, RAS Art. 149).` };
+  return { estado: 'verde', motivo: `τ = ${tau.toFixed(2)} Pa ≥ ${tauMin} Pa: autolimpiante (RAS 0330, Art. 149).` };
+}
+
 // Chequeo de velocidad: sedimentación (< vMin) o erosión (> vMax). Amarillo si está
 // dentro de rango pero a menos del 10% de cualquiera de los límites.
 export function chequeoVelocidad(v: number, vMin: number, vMax: number): { estado: Estado; motivo: string } {

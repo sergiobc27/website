@@ -4,6 +4,9 @@ import {
   profundidadNormalCircular,
   profundidadNormalTrapecio,
   chequeoVelocidad,
+  esfuerzoCortante,
+  chequeoCortante,
+  TAU_MIN_AUTOLIMPIEZA,
 } from './manning';
 
 // Caso analítico circular: D=0,5 m, n=0,013, S=0,01.
@@ -49,5 +52,27 @@ describe('chequeoVelocidad (autolimpieza / erosión, RAS 0330)', () => {
   });
   it('rojo sobre la máxima del material', () => {
     expect(chequeoVelocidad(6, 0.75, 5).estado).toBe('rojo');
+  });
+});
+
+describe('esfuerzoCortante τ = γ·R·S (RAS 0330, Art. 149)', () => {
+  it('τ = 9810·R·S; R=0,125 m, S=0,01 → 12,26 Pa', () => {
+    expect(esfuerzoCortante(0.125, 0.01)).toBeCloseTo(12.2625, 3);
+  });
+  it('devuelve 0 con entradas no válidas', () => {
+    expect(esfuerzoCortante(0, 0.01)).toBe(0);
+    expect(esfuerzoCortante(0.1, 0)).toBe(0);
+  });
+});
+
+describe('chequeoCortante (autolimpieza por cortante, RAS Art. 149)', () => {
+  it('verde si τ ≥ 2,0 Pa con margen', () => {
+    expect(chequeoCortante(12.26, TAU_MIN_AUTOLIMPIEZA).estado).toBe('verde');
+  });
+  it('rojo si τ < 2,0 Pa', () => {
+    expect(chequeoCortante(1.5, TAU_MIN_AUTOLIMPIEZA).estado).toBe('rojo');
+  });
+  it('amarillo si está apenas por encima del mínimo', () => {
+    expect(chequeoCortante(2.1, TAU_MIN_AUTOLIMPIEZA).estado).toBe('amarillo');
   });
 });
