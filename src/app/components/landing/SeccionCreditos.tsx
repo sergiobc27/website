@@ -10,9 +10,12 @@ export function SeccionCreditos() {
         <RevealItem>
           <p className="mb-8 text-xs font-extrabold uppercase tracking-[0.16em] text-secondary">Créditos</p>
         </RevealItem>
-        <RevealItem className="flex flex-wrap items-center justify-center gap-8">
-          <img src={logoCuc} alt="Universidad de la Costa CUC" className="h-16 w-auto" />
-          <img src={logoIdeam} alt="IDEAM, fuente de datos" className="h-12 w-auto" />
+        <RevealItem className="flex justify-center">
+          <div className="inline-flex items-center gap-5 rounded-2xl bg-white px-7 py-4 shadow-[0_6px_24px_rgba(0,0,0,0.10)] ring-1 ring-black/5 md:gap-6 md:px-9 md:py-5">
+            <img src={logoCuc} alt="Universidad de la Costa CUC" className="h-16 w-auto md:h-20" />
+            <span className="h-14 w-px bg-black/10 md:h-16" aria-hidden="true" />
+            <img src={logoIdeam} alt="IDEAM, fuente de datos" className="h-16 w-auto md:h-20" />
+          </div>
         </RevealItem>
         <RevealItem>
           <p className="mt-8 text-lg text-foreground">
