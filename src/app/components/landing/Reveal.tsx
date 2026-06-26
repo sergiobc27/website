@@ -3,12 +3,12 @@ import type { ReactNode } from 'react';
 
 const contenedor: Variants = {
   hidden: {},
-  show: { transition: { staggerChildren: 0.07, delayChildren: 0.04 } },
+  show: { transition: { staggerChildren: 0.1, delayChildren: 0.05 } },
 };
 
 const item: Variants = {
-  hidden: { opacity: 0, y: 16 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.55, ease: [0.16, 1, 0.3, 1] } },
+  hidden: { opacity: 0, y: 28, scale: 0.97 },
+  show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } },
 };
 
 interface RevealProps {

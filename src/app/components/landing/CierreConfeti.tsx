@@ -1,6 +1,7 @@
 import { ArrowRight, BookOpen } from 'lucide-react';
-import { MascotaGota } from './MascotaGota';
-import { BotonCelebracion } from './BotonCelebracion';
+import { usePrefersReducedMotion } from '../../lib/usePrefersReducedMotion';
+import { construirRafagas } from '../../lib/celebracion';
+import { CurvaIdfAnimada } from './CurvaIdfAnimada';
 import { Reveal, RevealItem } from './Reveal';
 
 interface CierreConfetiProps {
@@ -8,35 +9,52 @@ interface CierreConfetiProps {
 }
 
 export function CierreConfeti({ onNavigate }: CierreConfetiProps) {
+  const reducido = usePrefersReducedMotion();
+
+  // Un solo botón: "Entrar a la plataforma" dispara los fuegos + confeti (colores
+  // CUC) y luego entra al panel. canvas-confetti se importa de forma diferida al
+  // primer uso y su canvas vive fuera de React, así que el festejo sigue mientras
+  // se hace la transición. Con prefers-reduced-motion el efecto es mínimo.
+  const entrarConFestejo = async () => {
+    try {
+      const confetti = (await import('canvas-confetti')).default;
+      construirRafagas(reducido).forEach((r, i) => {
+        window.setTimeout(() => confetti(r), reducido ? 0 : i * 200);
+      });
+    } catch {
+      /* canvas-confetti no disponible: igual entramos */
+    }
+    window.setTimeout(() => onNavigate('dashboard'), reducido ? 150 : 850);
+  };
+
   return (
     <section className="relative overflow-hidden bg-[#15110a] px-6 py-20 text-center md:px-10">
       <Reveal className="mx-auto max-w-3xl">
         <RevealItem>
-          <MascotaGota size={110} className="landing-flota mx-auto mb-6" />
+          <div className="mx-auto mb-8 h-40 w-60 max-w-full md:h-48 md:w-80">
+            <CurvaIdfAnimada className="h-full w-full" />
+          </div>
         </RevealItem>
         <RevealItem>
           <h2 className="text-3xl font-extrabold text-[#f5edda] md:text-4xl">
             Los datos abiertos también se celebran
           </h2>
           <p className="mt-3 text-[#bdb39a]">
-            Entra a explorar la plataforma, o lánzate un pequeño festejo.
+            Entra a explorar la plataforma y celébralo con nosotros.
           </p>
         </RevealItem>
-        <RevealItem className="mt-8 flex flex-wrap items-center justify-center gap-3">
+        <RevealItem className="mt-8 flex flex-col items-center gap-4">
           <button
             type="button"
-            onClick={() => onNavigate('dashboard')}
-            className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 font-bold text-primary-foreground transition-transform hover:scale-105"
+            onClick={entrarConFestejo}
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-7 py-3.5 text-lg font-bold text-primary-foreground shadow-lg shadow-primary/30 transition-transform hover:scale-105 active:scale-95"
           >
             Entrar a la plataforma <ArrowRight className="h-5 w-5" />
           </button>
-          <BotonCelebracion />
-        </RevealItem>
-        <RevealItem>
           <button
             type="button"
             onClick={() => onNavigate('historia')}
-            className="mx-auto mt-6 inline-flex items-center gap-1.5 text-sm text-[#d8c98c] underline-offset-4 hover:underline"
+            className="inline-flex items-center gap-1.5 text-sm text-[#d8c98c] underline-offset-4 hover:underline"
           >
             <BookOpen className="h-4 w-4" /> Lee la historia completa del dato
           </button>
