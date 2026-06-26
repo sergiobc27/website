@@ -1,4 +1,6 @@
 import { MotionConfig } from 'motion/react';
+import { useEffect } from 'react';
+import { usePrefersReducedMotion } from '../../lib/usePrefersReducedMotion';
 import { HeroGota } from './HeroGota';
 import { SeccionProblemaSolucion } from './SeccionProblemaSolucion';
 import { SeccionQueHace } from './SeccionQueHace';
@@ -17,9 +19,26 @@ interface LandingProps {
 // MotionConfig reducedMotion="user" centraliza el respeto a prefers-reduced-motion
 // para todas las animaciones de motion de la landing (WCAG 2.3.3).
 export function Landing({ onNavigate }: LandingProps) {
+  const reducido = usePrefersReducedMotion();
+
+  // Resplandor que sigue el cursor por toda la portada: un mousemove actualiza
+  // las variables CSS de posición (coords de viewport). No se monta con
+  // prefers-reduced-motion.
+  useEffect(() => {
+    if (reducido) return;
+    const onMove = (e: MouseEvent) => {
+      const root = document.documentElement;
+      root.style.setProperty('--cursor-x', `${e.clientX}px`);
+      root.style.setProperty('--cursor-y', `${e.clientY}px`);
+    };
+    window.addEventListener('mousemove', onMove);
+    return () => window.removeEventListener('mousemove', onMove);
+  }, [reducido]);
+
   return (
     <MotionConfig reducedMotion="user">
       <div className="landing h-screen overflow-y-auto bg-background text-foreground scrollbar-thin scrollbar-track-transparent">
+        {!reducido && <div className="cursor-glow" aria-hidden />}
         <h1 className="sr-only">Automatización de datos hídricos del IDEAM, trabajo de grado de Sergio Beltran Coley</h1>
         <HeroGota onNavigate={onNavigate} />
         <SeccionProblemaSolucion />

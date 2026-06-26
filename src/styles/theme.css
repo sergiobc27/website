@@ -129,12 +129,6 @@
   /* Glow dorado de tarjeta: fuente unica de verdad. Antes estaba duplicado
      como shadow-[0_0_40px_rgba(201,162,39,0.1)] en 33 sitios. Usar shadow-glow. */
   --shadow-glow: 0 0 40px rgba(201, 162, 39, 0.1);
-  /* Sombra DURA dorada (offset visible, blur minimo) para las cifras clave de la
-     landing: ancla la leve rotacion del numero al plano para que no lea como un
-     bug de alineacion. Distinta del --shadow-glow (suave, blur 40). El oro
-     #C9A227 a 0.35 alpha se ve sobre el casi-blanco claro y el casi-negro oscuro.
-     Se aplica via la utilidad .badge-cifra. */
-  --shadow-hard-gold: 4px 4px 0 rgba(201, 162, 39, 0.35);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -612,19 +606,30 @@
 .landing-flota {
   animation: icono-float 3.2s ease-in-out infinite;
 }
-/* Badge de cifra clave: el numero "aterriza" sobre el plano con una leve
-   rotacion + sombra DURA dorada (--shadow-hard-gold). La rotacion sin sombra
-   leeria como desalineacion; la sombra la ancla. Es text-shadow porque la cifra
-   es texto inline (no una caja). Se alterna el signo de la rotacion entre
-   cifras para que no se inclinen todas igual. inline-block para que la
-   rotacion afecte la caja del glifo. */
-.badge-cifra {
-  display: inline-block;
-  transform: rotate(-7deg);
-  text-shadow: var(--shadow-hard-gold);
+/* Resplandor que sigue el cursor por toda la portada. Un mousemove actualiza
+   --cursor-x/--cursor-y (coords de viewport) en el contenedor .landing; este
+   glow fijo se posiciona ahí. Decorativo y sutil. prefers-reduced-motion lo
+   oculta (regla más abajo) y el listener no se monta con reduced-motion. */
+.cursor-glow {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 420px;
+  height: 420px;
+  margin: -210px 0 0 -210px;
+  border-radius: 9999px;
+  pointer-events: none;
+  z-index: 40;
+  transform: translate3d(var(--cursor-x, -1000px), var(--cursor-y, -1000px), 0);
+  background: radial-gradient(circle, rgba(58, 159, 224, 0.16), rgba(58, 159, 224, 0) 65%);
+  transition: opacity 0.3s ease;
+  will-change: transform;
 }
-.badge-cifra-alt {
-  transform: rotate(7deg);
+.dark .cursor-glow {
+  background: radial-gradient(circle, rgba(91, 184, 239, 0.14), rgba(91, 184, 239, 0) 65%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cursor-glow { display: none; }
 }
 /* Hero hídrico: anillos de onda concéntricos que emanan de la gota (una gota que
    cae al agua) + un resplandor azul centrado. Reemplaza a los antiguos orbes

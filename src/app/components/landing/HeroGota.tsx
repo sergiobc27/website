@@ -18,19 +18,12 @@ export function HeroGota({ onNavigate }: HeroGotaProps) {
 
   return (
     <header className="relative flex min-h-screen flex-col bg-gradient-to-b from-background to-[#fbf7ee] dark:to-[#15110a]">
-      <nav className="flex items-center justify-between px-6 py-4 md:px-10">
+      <nav className="flex items-center px-6 py-4 md:px-10">
         <div className="flex items-center gap-3">
           <img src={logoCuc} alt="Universidad de la Costa CUC" className="h-12 w-auto" />
           <span className="text-muted-foreground text-sm">+</span>
           <img src={logoIdeam} alt="IDEAM" className="h-9 w-auto" />
         </div>
-        <button
-          type="button"
-          onClick={() => onNavigate('dashboard')}
-          className="inline-flex items-center gap-1.5 rounded-full border border-[#d8c98c] px-4 py-1.5 text-sm font-semibold text-secondary transition-colors hover:border-primary hover:text-primary"
-        >
-          Entrar <ArrowRight className="h-4 w-4" />
-        </button>
       </nav>
 
       <div className="relative mx-auto grid w-full max-w-6xl flex-1 grid-cols-1 items-center gap-8 px-6 py-10 md:grid-cols-2 md:px-10">

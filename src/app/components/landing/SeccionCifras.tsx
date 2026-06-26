@@ -58,12 +58,12 @@ export function SeccionCifras() {
   return (
     <section className="bg-gradient-to-b from-[#fbf7ee] to-[#fbe9c9] px-6 py-16 dark:from-[#15110a] dark:to-[#1b1407] md:px-10">
       <Reveal className="mx-auto grid max-w-5xl grid-cols-2 gap-6 md:grid-cols-4">
-        {CIFRAS.map(({ valor, sufijo, etiqueta, color }, i) => (
+        {CIFRAS.map(({ valor, sufijo, etiqueta, color }) => (
           <RevealItem key={etiqueta} className="text-center">
-            <div className={`badge-cifra ${i % 2 === 1 ? 'badge-cifra-alt' : ''} text-4xl font-extrabold md:text-5xl ${color}`}>
+            <div className={`text-5xl font-black leading-none tracking-tight md:text-7xl ${color}`}>
               <Contador valor={valor} sufijo={sufijo} reducido={reducido} />
             </div>
-            <div className="mt-1 text-xs text-muted-foreground">{etiqueta}</div>
+            <div className="mt-2 text-xs font-medium text-muted-foreground md:text-sm">{etiqueta}</div>
           </RevealItem>
         ))}
       </Reveal>
