@@ -32,6 +32,10 @@ describe('profundidadNormalCircular (solver por bisección)', () => {
     const r = profundidadNormalCircular(99, 0.5, 0.013, 0.01);
     expect(r.excedeCapacidad).toBe(true);
   });
+  it('reporta el radio hidráulico R ≈ 0,125 m a media sección', () => {
+    const r = profundidadNormalCircular(0.1888, 0.5, 0.013, 0.01);
+    expect(r.r).toBeCloseTo(0.125, 2);
+  });
 });
 
 describe('profundidadNormalTrapecio (rectangular z=0)', () => {
@@ -40,6 +44,10 @@ describe('profundidadNormalTrapecio (rectangular z=0)', () => {
     const r = profundidadNormalTrapecio(1.5263, 1, 0, 0.013, 0.01);
     expect(r.y).toBeCloseTo(0.5, 2);
     expect(r.v).toBeCloseTo(3.053, 2);
+  });
+  it('reporta el radio hidráulico R = A/P (b=1, y=0,5 → R ≈ 0,25)', () => {
+    const r = profundidadNormalTrapecio(1.5263, 1, 0, 0.013, 0.01);
+    expect(r.r).toBeCloseTo(0.25, 2);
   });
 });
 

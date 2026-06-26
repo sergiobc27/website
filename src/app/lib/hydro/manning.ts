@@ -39,6 +39,8 @@ export interface SolverResultado {
   y: number;
   /** Velocidad a esa profundidad [m/s]. */
   v: number;
+  /** Radio hidráulico R = A/P a la profundidad de diseño [m]. */
+  r: number;
   /** true si el Q de diseño supera la capacidad práctica de la sección. */
   excedeCapacidad: boolean;
 }
@@ -51,10 +53,10 @@ export function profundidadNormalCircular(Qd: number, D: number, n: number, s: n
     return manningQ(n, area, perim, s);
   };
   const qMax = qAt(F_MAX);
-  if (!(Qd > 0)) return { llenado: 0, y: 0, v: 0, excedeCapacidad: false };
+  if (!(Qd > 0)) return { llenado: 0, y: 0, v: 0, r: 0, excedeCapacidad: false };
   if (Qd >= qMax) {
-    const { area } = geomCircular(D, F_MAX);
-    return { llenado: F_MAX, y: F_MAX * D, v: area > 0 ? qMax / area : 0, excedeCapacidad: true };
+    const { area, perim } = geomCircular(D, F_MAX);
+    return { llenado: F_MAX, y: F_MAX * D, v: area > 0 ? qMax / area : 0, r: perim > 0 ? area / perim : 0, excedeCapacidad: true };
   }
   let lo = 1e-6;
   let hi = F_MAX;
@@ -66,8 +68,8 @@ export function profundidadNormalCircular(Qd: number, D: number, n: number, s: n
     else hi = mid;
   }
   const f = (lo + hi) / 2;
-  const { area } = geomCircular(D, f);
-  return { llenado: f, y: f * D, v: area > 0 ? Qd / area : 0, excedeCapacidad: false };
+  const { area, perim } = geomCircular(D, f);
+  return { llenado: f, y: f * D, v: area > 0 ? Qd / area : 0, r: perim > 0 ? area / perim : 0, excedeCapacidad: false };
 }
 
 // Profundidad normal en canal trapezoidal (rectangular = z=0) para un Q dado.
@@ -78,20 +80,20 @@ export function profundidadNormalTrapecio(
   z: number,
   n: number,
   s: number,
-): { y: number; v: number; excedeCapacidad: boolean } {
+): { y: number; v: number; r: number; excedeCapacidad: boolean } {
   const qAt = (y: number) => {
     const area = (b + z * y) * y;
     const perim = b + 2 * y * Math.sqrt(1 + z * z);
     return manningQ(n, area, perim, s);
   };
-  if (!(Qd > 0)) return { y: 0, v: 0, excedeCapacidad: false };
+  if (!(Qd > 0)) return { y: 0, v: 0, r: 0, excedeCapacidad: false };
   let hi = 0.01;
   let guard = 0;
   while (qAt(hi) < Qd && guard < 60) {
     hi *= 2;
     guard++;
   }
-  if (qAt(hi) < Qd) return { y: hi, v: 0, excedeCapacidad: true };
+  if (qAt(hi) < Qd) return { y: hi, v: 0, r: 0, excedeCapacidad: true };
   let lo = 0;
   for (let i = 0; i < 80; i++) {
     const mid = (lo + hi) / 2;
@@ -100,7 +102,8 @@ export function profundidadNormalTrapecio(
   }
   const y = (lo + hi) / 2;
   const area = (b + z * y) * y;
-  return { y, v: area > 0 ? Qd / area : 0, excedeCapacidad: false };
+  const perim = b + 2 * y * Math.sqrt(1 + z * z);
+  return { y, v: area > 0 ? Qd / area : 0, r: perim > 0 ? area / perim : 0, excedeCapacidad: false };
 }
 
 // Materiales típicos: n de Manning y velocidad máxima admisible (valores de
