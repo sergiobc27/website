@@ -3,7 +3,7 @@
 // A = área de la cuenca [ha]. Salida en minutos. Cada método devuelve null si
 // sus entradas no son válidas (evita NaN en la UI).
 
-const MIN_DISENO = 10; // Piso de diseño RAS 0330 para evitar intensidades irreales.
+const MIN_DISENO = 10; // Piso de diseño: extremo del rango 3–10 min del RAS 0330 (Art. 135, num. 4).
 
 export type MetodoTc = 'kirpich' | 'temez' | 'giandotti';
 

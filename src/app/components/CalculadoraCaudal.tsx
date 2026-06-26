@@ -166,7 +166,7 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
               <Formula className="text-sm text-card-foreground"><V>I</V>&nbsp;=&nbsp;<Frac num={<><V>K</V> · <V>T</V><Sup><V>m</V></Sup></>} den={<><V>D</V><Sup><V>n</V></Sup></>} /></Formula>
               <span>·curva IDF ajustada de esta estación (D = Tc).</span>
             </p>
-            <p>· Validez del método racional: áreas pequeñas según RAS 0330/2017 (urbano, A &lt; 80 ha) y Manual de Drenaje INVÍAS (A ≤ 2,5 km²). C según la cobertura real del área aportante.</p>
+            <p>· Validez del método racional: área &lt; 80 ha (RAS 0330/2017, Art. 135) y A ≤ 2,5 km² (Manual de Drenaje INVÍAS 2009, sección 2.5.5.1). C según la cobertura real del área aportante.</p>
             <p>· Frontera de alcance: producto HIDROLÓGICO (caudal e intensidad de diseño). El dimensionamiento estructural-hidráulico de la obra se rige por NSR-10 / AASHTO / INVÍAS y queda fuera de esta herramienta.</p>
             <p className="text-accent">· Resultado orientativo de pre-dimensionamiento; para diseño definitivo valida con la normativa y un especialista.</p>
             <div className="mt-2 space-y-1 border-t border-border pt-2">

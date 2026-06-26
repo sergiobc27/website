@@ -85,7 +85,7 @@ export function SeccionTc({
       {tcs.pisoAplicado && (
         <div className="flex items-start gap-2 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-accent">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>La mediana cae por debajo de 10 min; se aplica el piso de diseño de 10 min (RAS 0330) para evitar intensidades irreales.</span>
+          <span>La mediana cae por debajo de 10 min; se aplica el piso de diseño de 10 min (extremo del rango de 3 a 10 min del RAS 0330, Art. 135, num. 4) para evitar intensidades irreales.</span>
         </div>
       )}
       {avisoKirpich && (
