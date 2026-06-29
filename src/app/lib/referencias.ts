@@ -145,6 +145,7 @@ export const REFERENCIAS: Referencia[] = [
     pais: 'Internacional',
     tema: 'Métodos hidrológicos e hidráulica',
     anio: 1986,
+    usadoEn: ['Asistente'],
   },
   {
     id: 'neh-630-scs-cn',
@@ -153,6 +154,7 @@ export const REFERENCIAS: Referencia[] = [
     tema: 'Métodos hidrológicos e hidráulica',
     anio: 2004,
     url: 'https://irrigationtoolbox.com/NEH/Part630_Hydrology/H_210_630_10.pdf',
+    usadoEn: ['Asistente'],
   },
   {
     id: 'snyder-1938',
@@ -203,6 +205,15 @@ export const REFERENCIAS: Referencia[] = [
     tema: 'Estadística de extremos',
     anio: 2001,
     url: 'https://doi.org/10.1007/978-1-4471-3675-0',
+    usadoEn: ['Período de retorno'],
+  },
+  {
+    id: 'beirlant-2004',
+    apa: 'Beirlant, J., Goegebeur, Y., Segers, J., & Teugels, J. (2004). Statistics of extremes: Theory and applications. Wiley.',
+    pais: 'Internacional',
+    tema: 'Estadística de extremos',
+    anio: 2004,
+    url: 'https://doi.org/10.1002/0470012382',
     usadoEn: ['Período de retorno'],
   },
   {
@@ -388,3 +399,32 @@ export const REFERENCIAS: Referencia[] = [
     anio: 2012,
   },
 ];
+
+// ── PDFs hospedados (R2) ──────────────────────────────────────────────────────
+// ids cuyo PDF está en el bucket R2 y se sirve en /fuentes/<id>.pdf (mismo origen,
+// con noindex). Las referencias que no están aquí solo muestran su enlace "Ver
+// fuente". Mantener en sync con la carpeta `fuentes-normativas/` y la subida a R2.
+export const REFS_CON_PDF = new Set<string>([
+  'ras-0330', 'invias-drenaje-2009', 'magna-sirgas', 'vargas-diazgranados-1998', 'temez-1978',
+  'velez-botero-2011', 'chow-1959', 'chow-applied-1988', 'coles-2001', 'beirlant-2004',
+  'poveda-2004', 'wmo-168-2008', 'mckee-1993', 'scs-tr55-1986', 'neh-630-scs-cn', 'rusle-1997',
+  'fao-56-1998', 'nsr10-titulo-h', 'kirpich-1940', 'fhwa-hds2-2002', 'fhwa-hds5-2012',
+  'hec-18-2012', 'green-ampt-1911', 'thornthwaite-mather-1957', 'ena-2022', 'erosion-ideam-2015',
+  'ogc-api-features', 'geojson-rfc7946', 'manning-1891', 'stephens-1974',
+]);
+
+// Aclaración cuando el PDF hospedado NO es exactamente la cita (sustituto legítimo
+// y de acceso libre, o variante de la misma fuente).
+export const PDF_NOTAS: Record<string, string> = {
+  'manning-1891':
+    'El PDF es Fischenich (2000), nota técnica del US Army Corps (dominio público) que documenta y cita el artículo original de Manning (1891). El original de 1891 está en HathiTrust (Full View).',
+  'stephens-1974':
+    'El PDF es el reporte técnico de 1972 (Stanford-ONR No. 186), precursor de acceso libre y de contenido equivalente al artículo de JASA (1974) citado.',
+  'ras-0330':
+    'Se muestra la versión de texto buscable de la Resolución 0330 de 2017; el escaneo oficial también está disponible.',
+};
+
+/** URL del PDF servido desde R2, o undefined si la referencia no tiene archivo. */
+export function pdfUrl(id: string): string | undefined {
+  return REFS_CON_PDF.has(id) ? `/fuentes/${id}.pdf` : undefined;
+}
