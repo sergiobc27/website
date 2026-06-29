@@ -155,12 +155,92 @@ export default {
       }), cacheable ? { cf: { cacheEverything: true } } : undefined);
     }
 
+    // PDFs de las fuentes/referencias del proyecto, servidos desde R2 (mismo
+    // origen, con noindex). run_worker_first incluye /fuentes/* para que el
+    // Worker conteste antes que los assets estáticos.
+    if (url.pathname.startsWith("/fuentes/")) {
+      return handleFuente(url, request, env);
+    }
+
     // Los assets estáticos los sirve Cloudflare directamente (run_worker_first
-    // está acotado a /api/*), así que las cabeceras de seguridad de documento
-    // se definen en el archivo `dist/_headers` (public/_headers), no aquí.
+    // está acotado a /api/* y /fuentes/*), así que las cabeceras de seguridad de
+    // documento se definen en el archivo `dist/_headers` (public/_headers), no aquí.
     return env.ASSETS.fetch(request);
   },
 };
+
+// --- PDFs de fuentes/referencias (R2) -----------------------------------------
+
+// Sirve /fuentes/<id>.pdf desde el bucket R2 `FUENTES`. Solo GET/HEAD, con la
+// clave saneada (^[a-z0-9-]+\.pdf$ — evita traversal), X-Robots-Tag: noindex y
+// soporte de Range para que los PDF grandes (RAS, ENA 2022) se transmitan por
+// partes en el visor embebido en vez de cargarse completos.
+async function handleFuente(url, request, env) {
+  if (!env.FUENTES) {
+    return new Response("Almacenamiento de fuentes no disponible.", { status: 503 });
+  }
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return new Response("Método no permitido.", { status: 405, headers: { allow: "GET, HEAD" } });
+  }
+
+  let key;
+  try {
+    key = decodeURIComponent(url.pathname.slice("/fuentes/".length));
+  } catch {
+    return new Response("Ruta inválida.", { status: 400 });
+  }
+  if (!/^[a-z0-9-]+\.pdf$/.test(key)) {
+    return new Response("No encontrado.", { status: 404 });
+  }
+
+  const rangeHeader = request.headers.get("range");
+  let object;
+  if (rangeHeader) {
+    const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+    if (m && (m[1] !== "" || m[2] !== "")) {
+      const r = {};
+      if (m[1] !== "") {
+        r.offset = Number(m[1]);
+        if (m[2] !== "") r.length = Number(m[2]) - Number(m[1]) + 1;
+      } else {
+        r.suffix = Number(m[2]);
+      }
+      object = await env.FUENTES.get(key, { range: r });
+    } else {
+      object = await env.FUENTES.get(key);
+    }
+  } else {
+    object = await env.FUENTES.get(key);
+  }
+
+  if (!object) {
+    return new Response("No encontrado.", { status: 404, headers: { "cache-control": "no-store" } });
+  }
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("content-type", "application/pdf");
+  headers.set("content-disposition", "inline");
+  headers.set("cache-control", "public, max-age=86400");
+  headers.set("x-robots-tag", "noindex");
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("accept-ranges", "bytes");
+  if (object.httpEtag) headers.set("etag", object.httpEtag);
+
+  const body = request.method === "HEAD" ? null : object.body;
+
+  if (rangeHeader && object.range) {
+    const size = object.size;
+    let start = object.range.offset ?? 0;
+    let end = size - 1;
+    if (object.range.length != null) end = start + object.range.length - 1;
+    else if (object.range.suffix != null) start = size - object.range.suffix;
+    headers.set("content-range", `bytes ${start}-${end}/${size}`);
+    return new Response(body, { status: 206, headers });
+  }
+
+  return new Response(body, { status: 200, headers });
+}
 
 // --- Asistente / tutor hidrológico (Workers AI) -------------------------------
 
