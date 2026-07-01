@@ -1,5 +1,5 @@
 import { Info } from 'lucide-react';
-import { Formula, Sub, Sup, V } from '../Formula';
+import { Formula, Frac, Sub, Sup, V } from '../Formula';
 import { fmt } from '../../lib/format';
 import type { MetodoTc, TiemposTc } from '../../lib/hydro/tc';
 import { Field, Select } from './SeccionColapsable';
@@ -97,7 +97,7 @@ export function SeccionTc({
 
       <div className="space-y-1 text-xs text-muted-foreground">
         <Formula className="text-sm text-card-foreground">
-          <V>T</V><Sub>c</Sub>&nbsp;(Témez)&nbsp;=&nbsp;0,3 · (<V>L</V><Sub>km</Sub> / <V>S</V><Sup>0,25</Sup>)<Sup>0,76</Sup>
+          <V>T</V><Sub>c</Sub>&nbsp;(Témez)&nbsp;=&nbsp;0,3 · (<Frac num={<><V>L</V><Sub>km</Sub></>} den={<><V>S</V><Sup>0,25</Sup></>} />)<Sup>0,76</Sup>
         </Formula>
       </div>
     </div>
