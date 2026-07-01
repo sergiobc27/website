@@ -11,6 +11,15 @@ import type { ReactNode } from 'react';
 const VB = '0 0 220 80';
 const BASE = 64; // línea base para barras/escenas
 
+// Contorno nacional de Colombia continental: se parte de los límites
+// departamentales DANE (public/colombia-departamentos.json), se DISUELVEN en una
+// sola frontera por cancelación de aristas compartidas, se simplifica
+// (Douglas-Peucker ~7 km) y se proyecta centrado en el lienzo 220×80. Queda una
+// única forma limpia (sin costuras internas) que sirve de mapa para el apartado de
+// coropleta, sobre el que una "ola" de color va pintando el territorio.
+const COLOMBIA =
+  'M92.1,21.4L92.3,22.2L92.8,22.2L92.4,23L93.2,22.9L93.2,21L92.4,20.1L95.3,18.3L96.2,16.7L98.1,16.4L98.4,15.4L97.9,15.1L98.7,13.1L98.6,12.7L97.9,13.2L98.7,12.5L98.7,11.3L99.8,10.3L101.6,9L104,9.5L104.2,8.4L104.9,7.8L108.2,8.2L111,6.3L113,5.5L113.3,4L114.2,3.9L114.3,4.3L114.6,3.4L115.9,3L117.3,3.6L117.8,4.9L116.9,5.8L114.4,6.5L113.2,8.7L112.1,9L110.1,12.7L110,14.6L108.2,17.6L109.6,17L110,17.9L110.7,17.9L111.3,20L112.4,21.2L112.5,22.7L112.1,23.1L112,24.1L112.3,25.4L113.4,25.5L114.2,27.2L115.4,26.9L118.4,27.3L120,26.8L121.6,27.5L122.5,27.3L125.6,31.2L126.5,31.3L127,30.7L128.9,31.1L132,30.8L132.8,30.2L134.3,30.7L134.5,31.6L133.7,32.4L133.7,33.7L132.5,34.9L132.8,35.9L132.4,38L133.6,41.6L134.2,41.7L135.1,43.5L132.7,45.9L133.8,46.1L134,46.6L135.5,48L137.1,53.1L136.1,53.3L135.6,50.8L134.2,49L132.4,50.7L131,49.7L130.7,50.3L131.2,50.8L125.2,50.5L123.8,50.8L123.8,53.5L126.5,53.7L127,55.5L125.9,55.6L125.3,55.1L123,56L122.9,58.8L123.5,59.8L124.9,60.5L124.8,61.6L125.8,63.4L123.4,77L122.2,75.3L121,75.5L120,75.2L122.8,70.6L122.7,70.1L122.4,70.4L122.1,69.7L121.6,69.7L121.8,69.4L120.7,69.1L120.5,69.4L120.2,68.8L118.7,68.1L118.7,68.5L117,68.9L115.5,67.8L114.7,68.8L114.1,68.6L113.7,69.3L111.4,68.9L111.3,69.3L111,69L110.1,69.4L110.1,68.8L109.6,68.9L109,68.3L109.5,67.7L109.2,66.5L107.4,66.1L107.7,65.4L107,64L106,63.8L105.1,62.8L104.1,62.7L103.5,60.5L102.2,59.8L101.7,59L101.5,59.3L100.1,58.4L99.7,58.7L98.2,57.9L97.2,57.9L96.4,56.8L95.1,56.3L94.5,56.5L94.6,57L93.8,57.2L91.6,56.6L90.2,56.6L89.8,55.5L89,55L89.1,54.5L87.6,54.6L84.9,52.8L82.9,51L83.6,50L85,50.2L84.5,49.1L84.5,48.6L84.9,48.6L85,47.1L85.6,46.7L86,47.2L86.7,46.3L87,46.8L87.9,46L88.3,46.2L89,45.3L89,44.5L91.8,40.8L90.7,41L91,40.1L90.6,40.1L90.3,40.7L90,39.9L90.3,39.6L89.7,39.7L90.5,38.1L90.5,37L90.7,37.1L90.3,36.2L90.2,33.9L89.6,33.7L90.9,32.4L89.9,30.5L90.6,29.2L90.3,28.4L89.8,28.6L89,27.7L89.2,27.2L88.1,26L88.4,25.1L89,24.8L88.9,24.1L89.6,24.8L91.2,23.1L90.1,20.5L90.4,19.8L92.1,21.4ZM86.8,45L86.5,44.8L86.9,44.6L86.8,45Z';
+
 function Marco({ children, label }: { children: ReactNode; label: string }) {
   return (
     <figure
@@ -370,27 +379,43 @@ const ESCENAS: Record<string, ReactNode> = {
       <Trazo d="M20,40 C70,46 120,50 200,52" delay={0.3} color="#2563eb" width={2} />
     </>
   ),
-  // Mapa coropleta: regiones que se colorean según su valor.
+  // Mapa coropleta: la silueta real de Colombia que una ola de color va pintando,
+  // igual que una coropleta colorea el territorio según el valor de la variable.
   'mapa-coropleta': (
     <>
-      {[
-        { d: 'M30,20 L80,16 L88,44 L44,52 Z', delay: 0 },
-        { d: 'M88,44 L80,16 L134,20 L138,50 Z', delay: 0.3 },
-        { d: 'M44,52 L88,44 L138,50 L120,70 L54,68 Z', delay: 0.6 },
-        { d: 'M134,20 L182,26 L188,58 L138,50 Z', delay: 0.9 },
-      ].map((r, i) => (
-        <motion.path
-          key={i}
-          d={r.d}
-          stroke="currentColor"
-          strokeOpacity="0.4"
-          strokeWidth="1.2"
-          fill="currentColor"
-          initial={{ fillOpacity: 0.1 }}
-          animate={{ fillOpacity: [0.1, 0.6, 0.1] }}
-          transition={{ duration: 2.6, repeat: Infinity, delay: r.delay }}
+      <defs>
+        <clipPath id="co-clip">
+          <path d={COLOMBIA} />
+        </clipPath>
+        <linearGradient id="co-sweep" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="currentColor" stopOpacity="0" />
+          <stop offset="50%" stopColor="currentColor" stopOpacity="0.85" />
+          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {/* Mapa base: contorno nítido de Colombia + relleno tenue que respira. */}
+      <motion.path
+        d={COLOMBIA}
+        fill="currentColor"
+        stroke="currentColor"
+        strokeWidth="0.9"
+        strokeLinejoin="round"
+        initial={{ fillOpacity: 0.12, strokeOpacity: 0.4 }}
+        animate={{ fillOpacity: [0.12, 0.26, 0.12], strokeOpacity: [0.4, 0.6, 0.4] }}
+        transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      {/* Ola de color que "pinta" el mapa, recortada a la silueta de Colombia. */}
+      <g clipPath="url(#co-clip)">
+        <motion.rect
+          y="0"
+          width="34"
+          height="80"
+          fill="url(#co-sweep)"
+          initial={{ x: 49 }}
+          animate={{ x: [49, 138] }}
+          transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut', repeatDelay: 0.5 }}
         />
-      ))}
+      </g>
     </>
   ),
 };
