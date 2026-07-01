@@ -1,8 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { FileText, X, ExternalLink, Info } from 'lucide-react';
 import { REFERENCIAS, pdfUrl, PDF_NOTAS } from '../lib/referencias';
+import { usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
 
 /**
  * Visor de PDF embebido y animado, compartido por la biblioteca de referencias,
@@ -14,11 +15,48 @@ export function VisorPdf({ refId, onClose }: { refId: string; onClose: () => voi
   const ref = REFERENCIAS.find((r) => r.id === refId);
   const src = pdfUrl(refId);
   const nota = PDF_NOTAS[refId];
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const reducido = usePrefersReducedMotion();
 
-  // Cerrar con Escape y bloquear el scroll del fondo mientras está abierto.
+  // Gestión de foco del diálogo (WCAG 2.4.3): al abrir se guarda el elemento
+  // que lo disparó y se enfoca el contenedor; al cerrar, el foco vuelve a él.
+  // Solo al montar/desmontar, para no re-enfocar en re-renders del padre.
+  useEffect(() => {
+    const disparador = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialogRef.current?.focus();
+    return () => {
+      disparador?.focus();
+    };
+  }, []);
+
+  // Cerrar con Escape, ciclar Tab/Shift+Tab dentro del diálogo y bloquear el
+  // scroll del fondo mientras está abierto.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const dialogo = dialogRef.current;
+      if (!dialogo) return;
+      const focusables = Array.from(
+        dialogo.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), iframe, [tabindex]:not([tabindex="-1"])'),
+      );
+      if (focusables.length === 0) return;
+      const primero = focusables[0];
+      const ultimo = focusables[focusables.length - 1];
+      const activo = document.activeElement;
+      if (!(activo instanceof HTMLElement) || !dialogo.contains(activo)) {
+        e.preventDefault();
+        primero.focus();
+      } else if (e.shiftKey && (activo === primero || activo === dialogo)) {
+        e.preventDefault();
+        ultimo.focus();
+      } else if (!e.shiftKey && activo === ultimo) {
+        e.preventDefault();
+        primero.focus();
+      }
     };
     document.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
@@ -33,19 +71,21 @@ export function VisorPdf({ refId, onClose }: { refId: string; onClose: () => voi
 
   return createPortal(
     <motion.div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm sm:p-6"
+      ref={dialogRef}
+      tabIndex={-1}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-3 outline-none backdrop-blur-sm sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-label={`PDF: ${ref.apa}`}
       onClick={onClose}
-      initial={{ opacity: 0 }}
+      initial={reducido ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.2 }}
     >
       <motion.div
         className="flex h-full max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-accent/40 bg-card shadow-glow"
         onClick={(e) => e.stopPropagation()}
-        initial={{ opacity: 0, scale: 0.94, y: 18 }}
+        initial={reducido ? false : { opacity: 0, scale: 0.94, y: 18 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 320, damping: 28 }}
       >
@@ -53,7 +93,7 @@ export function VisorPdf({ refId, onClose }: { refId: string; onClose: () => voi
         <motion.div
           className="h-1 w-full bg-gradient-to-r from-accent/30 via-accent to-accent/30"
           style={{ transformOrigin: 'left' }}
-          initial={{ scaleX: 0 }}
+          initial={reducido ? false : { scaleX: 0 }}
           animate={{ scaleX: 1 }}
           transition={{ duration: 0.5, ease: 'easeOut' }}
         />

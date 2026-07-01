@@ -113,7 +113,7 @@ function sparklineSvg(points: Array<{ bucket: string; value: number | null }>, l
   const last = escapeHtml(valid[valid.length - 1].bucket.slice(0, 4));
   return `
     <div style="font-weight:600; margin-bottom:2px;">${escapeHtml(label)} · promedio anual</div>
-    <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Serie anual de la estación">
+    <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Serie anual de ${escapeHtml(label)} de la estación, de ${first} a ${last}">
       <path d="${path}" fill="none" stroke="#C9A227" stroke-width="1.6" />
     </svg>
     <div style="display:flex; justify-content:space-between; opacity:.65; font-size:11px;">
