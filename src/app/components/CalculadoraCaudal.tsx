@@ -3,7 +3,7 @@ import { Calculator, Info } from 'lucide-react';
 import { InfoGrafica } from './InfoGrafica';
 import { Formula, Frac, Sub, Sup, V } from './Formula';
 import { fmt } from '../lib/format';
-import { tiemposConcentracion, type MetodoTc } from '../lib/hydro/tc';
+import { tiemposConcentracion, FACTOR_RECORRIDO, type MetodoTc, type Recorrido } from '../lib/hydro/tc';
 import { TIPOS_SUPERFICIE, SUPERFICIES_IMPERMEABLES, cAjustado, qRacional, OBRAS_TR, factorFrecuencia } from '../lib/hydro/runoff';
 import { CITAS } from '../lib/hydro/normas';
 import { SeccionColapsable, Field, NumberInput, Select } from './calculadora/SeccionColapsable';
@@ -28,6 +28,7 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
   const [longitud, setLongitud] = useState('800'); // m
   const [pendiente, setPendiente] = useState('2'); // %
   const [tcMetodo, setTcMetodo] = useState<MetodoTc | 'recomendado'>('recomendado');
+  const [recorrido, setRecorrido] = useState<Recorrido>('rural');
   const [superficieIdx, setSuperficieIdx] = useState(2); // zona comercial/densa
   const [cBase, setCBase] = useState(String(TIPOS_SUPERFICIE[2].c));
 
@@ -35,7 +36,7 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
   const L = parseFloat(longitud);
   const S = parseFloat(pendiente);
 
-  const tcs = useMemo(() => tiemposConcentracion(L, S / 100, A), [L, S, A]);
+  const tcs = useMemo(() => tiemposConcentracion(L, S / 100, A, FACTOR_RECORRIDO[recorrido]), [L, S, A, recorrido]);
 
   const tcUsado = useMemo(() => {
     if (tcMetodo === 'recomendado') return tcs.recomendado;
@@ -127,7 +128,7 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
 
         {/* 2 · Tiempo de concentración */}
         <SeccionColapsable titulo="2 · Tiempo de concentración (Tc)" descripcion="Kirpich · Témez · Giandotti: rango y recomendado">
-          <SeccionTc tcs={tcs} metodo={tcMetodo} setMetodo={(m) => setTcMetodo(m as MetodoTc | 'recomendado')} tcUsado={tcUsado} avisoKirpich={avisoKirpich} />
+          <SeccionTc tcs={tcs} metodo={tcMetodo} setMetodo={(m) => setTcMetodo(m as MetodoTc | 'recomendado')} tcUsado={tcUsado} recorrido={recorrido} setRecorrido={(r) => setRecorrido(r as Recorrido)} avisoKirpich={avisoKirpich} />
         </SeccionColapsable>
 
         {/* 3 · Coeficiente C */}
