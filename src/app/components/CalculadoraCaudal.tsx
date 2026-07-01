@@ -4,7 +4,7 @@ import { InfoGrafica } from './InfoGrafica';
 import { Formula, Frac, Sub, Sup, V } from './Formula';
 import { fmt } from '../lib/format';
 import { tiemposConcentracion, FACTOR_RECORRIDO, type MetodoTc, type Recorrido } from '../lib/hydro/tc';
-import { cAjustado, qRacional, OBRAS_TR, factorFrecuencia } from '../lib/hydro/runoff';
+import { cAjustado, qRacional, factorFrecuencia } from '../lib/hydro/runoff';
 import { CITAS } from '../lib/hydro/normas';
 import { SeccionColapsable, Field, NumberInput, Select } from './calculadora/SeccionColapsable';
 import { SeccionTc } from './calculadora/SeccionTc';
@@ -23,7 +23,7 @@ interface Props {
 
 export function CalculadoraCaudal({ equation, durations }: Props) {
   const [tr, setTr] = useState(10);
-  const [obraIdx, setObraIdx] = useState(-1); // -1 = personalizado
+  const [trSel, setTrSel] = useState<{ tabla: 'vial' | 'urbano'; fila: number } | null>(null);
   const [area, setArea] = useState('5'); // hectáreas
   const [longitud, setLongitud] = useState('800'); // m
   const [pendiente, setPendiente] = useState('2'); // %
@@ -60,11 +60,6 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
 
   const avisoKirpich = cContexto === 'urbana';
 
-  const onObra = (i: string) => {
-    const idx = Number(i);
-    setObraIdx(idx);
-    if (idx >= 0) setTr(OBRAS_TR[idx].tr);
-  };
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
       <div className="mb-4 flex items-center justify-between gap-4">
@@ -82,18 +77,11 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
         {/* 1 · Parámetros de cuenca */}
         <SeccionColapsable titulo="1 · Parámetros de cuenca" descripcion="Geometría y período de retorno de diseño">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <Field label="Tipo de obra (sugiere Tr)">
-              <Select
-                value={obraIdx}
-                onChange={onObra}
-                options={[{ value: -1, label: 'Personalizado' }, ...OBRAS_TR.map((o, i) => ({ value: i, label: `${o.label} (Tr ${o.tr}a)`}))]}
-              />
-            </Field>
-            <Field label="Período de retorno (años)">
+            <Field label="Período de retorno Tr (años)">
               <Select
                 value={tr}
-                onChange={(v) => { setTr(Number(v)); setObraIdx(-1); }}
-                options={RETURN_PERIODS.map((t) => ({ value: t, label: `${t} años` }))}
+                onChange={(v) => { setTr(Number(v)); setTrSel(null); }}
+                options={[...new Set([...RETURN_PERIODS, tr])].sort((a, b) => a - b).map((t) => ({ value: t, label: `${t} años` }))}
               />
             </Field>
             <Field label="Área de la cuenca (hectáreas)">
@@ -106,16 +94,28 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
               <NumberInput value={pendiente} onChange={setPendiente} step="0.1" />
             </Field>
           </div>
-          {obraIdx >= 0 && (
-            <p className="mt-2 text-xs text-muted-foreground">Tr {OBRAS_TR[obraIdx].tr} años sugerido por {OBRAS_TR[obraIdx].fuente}. Puedes sobrescribirlo.</p>
+          {trSel && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Tr {tr} años · {String((trSel.tabla === 'vial' ? TABLA_TR_VIAL : TABLA_TR_URBANO).filas[trSel.fila][0])} (elegido de la tabla). Puedes sobrescribirlo con el selector de arriba.
+            </p>
           )}
-          <details className="mt-3 rounded-lg border border-border">
+          <details className="mt-3 rounded-lg border border-border" open>
             <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-card-foreground">
-              Ver las tablas de período de retorno de la norma
+              Elegir Tr por tipo de obra: clic en el valor de la tabla de la norma
             </summary>
             <div className="space-y-4 border-t border-border px-3 py-3">
-              <TablaNormaView tabla={TABLA_TR_VIAL} />
-              <TablaNormaView tabla={TABLA_TR_URBANO} />
+              <TablaNormaView
+                tabla={TABLA_TR_VIAL}
+                colsValor={[1]}
+                onCelda={(f, _c, v) => { setTr(Number(v)); setTrSel({ tabla: 'vial', fila: f }); }}
+                activa={trSel?.tabla === 'vial' ? { fila: trSel.fila, col: 1 } : null}
+              />
+              <TablaNormaView
+                tabla={TABLA_TR_URBANO}
+                colsValor={[1]}
+                onCelda={(f, _c, v) => { setTr(Number(v)); setTrSel({ tabla: 'urbano', fila: f }); }}
+                activa={trSel?.tabla === 'urbano' ? { fila: trSel.fila, col: 1 } : null}
+              />
             </div>
           </details>
         </SeccionColapsable>
