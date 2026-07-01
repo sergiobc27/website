@@ -5,6 +5,8 @@ import { TIPOS_SUPERFICIE, factorFrecuencia } from '../../lib/hydro/runoff';
 import { Field, NumberInput, Select } from './SeccionColapsable';
 import { TablaNormaView } from './TablaNormaView';
 import { TABLA_C_URBANA, TABLA_C_RURAL, TABLA_CF } from '../../lib/hydro/tablasNorma';
+import { VariablesLista } from '../VariablesLista';
+import { variablesDe } from '../../lib/metodologia/contenido';
 
 export function SeccionCoefC({
   superficieIdx,
@@ -64,6 +66,7 @@ export function SeccionCoefC({
         Drenaje INVÍAS (2009), Tablas 2.9 (urbano) y 2.10 (rural). El factor de frecuencia Cf eleva C para Tr altos
         (Chow, Maidment &amp; Mays, 1988). Ajusta C base dentro de su rango según la pendiente (a mayor pendiente, más alto).
       </p>
+      <VariablesLista variables={variablesDe('factor-cf')} />
     </div>
   );
 }

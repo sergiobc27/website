@@ -13,6 +13,10 @@ import type { Fuente } from '../hydro/fuentes';
 export interface Variable {
   simbolo: ReactNode;
   definicion: string;
+  /** Cómo se consigue el valor: de dónde se toma, dónde se mide, de qué depende o
+   * si la calcula la propia app. Opcional: solo las variables que de verdad "se
+   * consiguen" lo llevan (no las constantes ni los operadores como 360 o ln). */
+  comoSeObtiene?: string;
 }
 
 export interface EntradaMetodo {
@@ -52,10 +56,10 @@ export const METODOLOGIA: Record<string, EntradaMetodo> = {
       </Formula>
     ),
     variables: [
-      { simbolo: 'Q', definicion: 'caudal pico de diseño (m³/s)' },
-      { simbolo: 'C', definicion: 'coeficiente de escorrentía (0 a 1, sin unidad)' },
-      { simbolo: 'I', definicion: 'intensidad de la lluvia de diseño (mm/h)' },
-      { simbolo: 'A', definicion: 'área de la cuenca que aporta (ha)' },
+      { simbolo: 'Q', definicion: 'caudal pico de diseño (m³/s)', comoSeObtiene: 'Es el resultado de la fórmula: lo calcula la app con C, I y A. Luego se compara con la capacidad del conducto (Manning).' },
+      { simbolo: 'C', definicion: 'coeficiente de escorrentía (0 a 1, sin unidad)', comoSeObtiene: 'De una tabla según la superficie del área que drena (pavimento, techo, prado, tierra) y a veces la pendiente. En la calculadora lo eliges por tipo de superficie; las tablas son INVÍAS 2.9 y 2.10.' },
+      { simbolo: 'I', definicion: 'intensidad de la lluvia de diseño (mm/h)', comoSeObtiene: 'De la curva IDF de la estación: entras con el período de retorno (Tr) y una duración igual al tiempo de concentración (Tc), y lees la intensidad. La app la toma de la IDF ajustada.' },
+      { simbolo: 'A', definicion: 'área de la cuenca que aporta (ha)', comoSeObtiene: 'Se mide delimitando en un plano o SIG (planchas del IGAC, Google Earth) toda el área que drena hacia el punto de interés; se expresa en hectáreas.' },
       { simbolo: '360', definicion: 'factor que ajusta las unidades (de mm/h y ha a m³/s)' },
     ],
     fuentes: [
@@ -79,9 +83,9 @@ export const METODOLOGIA: Record<string, EntradaMetodo> = {
       </Formula>
     ),
     variables: [
-      { simbolo: <><V>T</V><Sub>c</Sub></>, definicion: 'tiempo de concentración (min)' },
-      { simbolo: 'L', definicion: 'longitud del cauce principal (m)' },
-      { simbolo: 'S', definicion: 'pendiente media del cauce (m/m)' },
+      { simbolo: <><V>T</V><Sub>c</Sub></>, definicion: 'tiempo de concentración (min)', comoSeObtiene: 'No se mide: la calcula la app con Kirpich, Témez y Giandotti a partir de L y S, y toma la mediana (con un piso de diseño de 10 min).' },
+      { simbolo: 'L', definicion: 'longitud del cauce principal (m)', comoSeObtiene: 'Se mide sobre el cauce principal, desde el punto más alejado de la cuenca hasta la salida, en un plano o SIG; en metros.' },
+      { simbolo: 'S', definicion: 'pendiente media del cauce (m/m)', comoSeObtiene: 'Diferencia de cotas entre el punto más alto y la salida, dividida por la longitud del cauce. Se saca de curvas de nivel (planchas IGAC) o de un modelo de elevación (DEM); en m/m.' },
     ],
     fuentes: [
       cita('kirpich-1940', 'p. 362'),
@@ -121,9 +125,9 @@ export const METODOLOGIA: Record<string, EntradaMetodo> = {
       </Formula>
     ),
     variables: [
-      { simbolo: <><V>C</V><Sub>diseño</Sub></>, definicion: 'coeficiente de escorrentía de diseño' },
-      { simbolo: 'C', definicion: 'coeficiente base según la superficie' },
-      { simbolo: <><V>C</V><Sub>f</Sub></>, definicion: 'factor de frecuencia (sube C para períodos de retorno altos)' },
+      { simbolo: <><V>C</V><Sub>diseño</Sub></>, definicion: 'coeficiente de escorrentía de diseño', comoSeObtiene: 'Lo calcula la app: es C corregido por Cf, con tope de 1,0.' },
+      { simbolo: 'C', definicion: 'coeficiente base según la superficie', comoSeObtiene: 'Tabla según el tipo de superficie del área aportante (INVÍAS 2.9 urbano, 2.10 rural). En la calculadora lo eliges por superficie.' },
+      { simbolo: <><V>C</V><Sub>f</Sub></>, definicion: 'factor de frecuencia (sube C para períodos de retorno altos)', comoSeObtiene: 'Depende del período de retorno (Tr): la app lo aplica según la tabla (1,0 hasta Tr 10; 1,1 a 25; 1,2 a 50; 1,25 a 100).' },
     ],
     fuentes: [
       {
@@ -150,11 +154,11 @@ export const METODOLOGIA: Record<string, EntradaMetodo> = {
       </Formula>
     ),
     variables: [
-      { simbolo: 'Q', definicion: 'caudal que transporta el conducto (m³/s)' },
-      { simbolo: 'n', definicion: 'coeficiente de rugosidad de Manning (según el material)' },
-      { simbolo: 'A', definicion: 'área mojada de la sección (m²)' },
-      { simbolo: 'R', definicion: 'radio hidráulico = área mojada ÷ perímetro mojado (m)' },
-      { simbolo: 'S', definicion: 'pendiente del conducto (m/m)' },
+      { simbolo: 'Q', definicion: 'caudal que transporta el conducto (m³/s)', comoSeObtiene: 'Lo calcula la fórmula con la geometría, n y S. Se compara con el caudal de diseño (el del método racional): el conducto debe poder con él.' },
+      { simbolo: 'n', definicion: 'coeficiente de rugosidad de Manning (según el material)', comoSeObtiene: 'Tabla según el material del conducto (concreto, PVC, gres, tierra…). En la calculadora lo eliges por material; los valores son de Chow.' },
+      { simbolo: 'A', definicion: 'área mojada de la sección (m²)', comoSeObtiene: 'Área ocupada por el agua; depende de la geometría del conducto y del nivel de llenado. La calcula la app al resolver la profundidad para el caudal.' },
+      { simbolo: 'R', definicion: 'radio hidráulico = área mojada ÷ perímetro mojado (m)', comoSeObtiene: 'Lo calcula la app con la geometría de la sección (área mojada dividida por el perímetro mojado).' },
+      { simbolo: 'S', definicion: 'pendiente del conducto (m/m)', comoSeObtiene: 'Es de diseño: la defines tú según el trazado (cota de entrada menos cota de salida, dividido por la longitud del tramo); en m/m.' },
     ],
     fuentes: [
       cita('manning-1891', 'ecuación de flujo en canales'),
@@ -178,10 +182,10 @@ export const METODOLOGIA: Record<string, EntradaMetodo> = {
       </Formula>
     ),
     variables: [
-      { simbolo: 'I', definicion: 'intensidad de la lluvia (mm/h)' },
-      { simbolo: 'T', definicion: 'período de retorno (años)' },
-      { simbolo: 'D', definicion: 'duración de la lluvia (min)' },
-      { simbolo: <><V>K</V>, <V>m</V>, <V>n</V></>, definicion: 'coeficientes de ajuste regional de la curva' },
+      { simbolo: 'I', definicion: 'intensidad de la lluvia (mm/h)', comoSeObtiene: 'Se lee de la curva IDF entrando con el período de retorno (Tr) y una duración; para diseño de drenaje esa duración es el tiempo de concentración (Tc).' },
+      { simbolo: 'T', definicion: 'período de retorno (años)', comoSeObtiene: 'Se elige por el tipo de obra según la tabla de la norma (RAS Tabla 16 o INVÍAS Tabla 2.8).' },
+      { simbolo: 'D', definicion: 'duración de la lluvia (min)', comoSeObtiene: 'Para diseño de drenaje se usa la duración igual al tiempo de concentración (Tc) de la cuenca.' },
+      { simbolo: <><V>K</V>, <V>m</V>, <V>n</V></>, definicion: 'coeficientes de ajuste regional de la curva', comoSeObtiene: 'Los estima la app: ajusta por regresión (log-log) los máximos de lluvia de la estación por duración, o se toman regionalizados (Vargas y Díaz-Granados).' },
     ],
     fuentes: [
       cita('vargas-diazgranados-1998', 'curvas IDF regionalizadas para Colombia'),
@@ -206,10 +210,10 @@ export const METODOLOGIA: Record<string, EntradaMetodo> = {
       </Formula>
     ),
     variables: [
-      { simbolo: <><V>x</V><Sub>T</Sub></>, definicion: 'lluvia estimada para el período de retorno T (mm)' },
-      { simbolo: 'T', definicion: 'período de retorno (años)' },
-      { simbolo: 'μ', definicion: 'parámetro de ubicación de la distribución Gumbel' },
-      { simbolo: 'β', definicion: 'parámetro de escala de la distribución Gumbel' },
+      { simbolo: <><V>x</V><Sub>T</Sub></>, definicion: 'lluvia estimada para el período de retorno T (mm)', comoSeObtiene: 'Es el resultado: la calcula la fórmula para el Tr elegido, con μ y β.' },
+      { simbolo: 'T', definicion: 'período de retorno (años)', comoSeObtiene: 'Se elige por el tipo de obra según la tabla de la norma (RAS Tabla 16 o INVÍAS Tabla 2.8).' },
+      { simbolo: 'μ', definicion: 'parámetro de ubicación de la distribución Gumbel', comoSeObtiene: 'Lo estima la app por L-momentos a partir de la serie de máximos anuales de lluvia de la estación.' },
+      { simbolo: 'β', definicion: 'parámetro de escala de la distribución Gumbel', comoSeObtiene: 'Igual que μ, lo estima la app por L-momentos de la serie de máximos anuales de la estación.' },
       { simbolo: 'ln', definicion: 'logaritmo natural' },
     ],
     fuentes: [
@@ -299,8 +303,8 @@ export const METODOLOGIA: Record<string, EntradaMetodo> = {
       </Formula>
     ),
     variables: [
-      { simbolo: 'P', definicion: 'lluvia del mes (mm)' },
-      { simbolo: <><Bar><V>P</V></Bar></>, definicion: 'promedio histórico de ese mismo mes (mm)' },
+      { simbolo: 'P', definicion: 'lluvia del mes (mm)', comoSeObtiene: 'Es el dato observado del mes: viene de la estación del IDEAM.' },
+      { simbolo: <><Bar><V>P</V></Bar></>, definicion: 'promedio histórico de ese mismo mes (mm)', comoSeObtiene: 'Lo calcula la app: el promedio de ese mismo mes en toda la serie histórica de la estación.' },
     ],
     fuentes: [cita('poveda-2004', 'variabilidad climática en Colombia')],
   },
@@ -392,3 +396,9 @@ export const SECCIONES_METODOLOGIA: Array<{ titulo: string; ids: string[] }> = [
     ],
   },
 ];
+
+/** Variables de un método del registro, para reutilizar la MISMA lista (con su
+ * "cómo se consigue") en la calculadora sin duplicar contenido. */
+export function variablesDe(id: string): Variable[] {
+  return METODOLOGIA[id]?.variables ?? [];
+}
