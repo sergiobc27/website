@@ -968,7 +968,7 @@ export function Hidrologia() {
                     <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-sm">
                       <span className="text-muted-foreground">Cuantil de Gumbel (referencia, L-momentos):</span>
                       <Formula className="text-base font-semibold text-card-foreground">
-                        <V>x</V><Sub>T</Sub>&nbsp;=&nbsp;<V>μ</V> − <V>β</V> · ln(−ln(1 − 1/<V>T</V>))
+                        <V>x</V><Sub>T</Sub>&nbsp;=&nbsp;<V>μ</V> − <V>β</V> · ln(−ln(1 − <Frac num={<>1</>} den={<V>T</V>} />))
                       </Formula>
                       <span className="text-xs text-muted-foreground">
                         (<V>μ</V> = {fmt(returnPeriods.gumbel.mu, 2)}, <V>β</V> = {fmt(returnPeriods.gumbel.beta, 2)} mm/día · L-momentos; <V>T</V> en años)

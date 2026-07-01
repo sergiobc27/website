@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Formula, Sup, V } from '../Formula';
+import { Formula, Frac, Sup, V } from '../Formula';
 import { fmt } from '../../lib/format';
 import {
   MATERIALES,
@@ -155,7 +155,7 @@ export function SeccionManning({ q, pendienteCuenca }: { q: number; pendienteCue
       )}
 
       <Formula className="text-sm text-card-foreground">
-        <V>Q</V>&nbsp;=&nbsp;(1/<V>n</V>) · <V>A</V> · <V>R</V><Sup>2/3</Sup> · <V>S</V><Sup>1/2</Sup>
+        <V>Q</V>&nbsp;=&nbsp;<Frac num={<>1</>} den={<V>n</V>} /> · <V>A</V> · <V>R</V><Sup>2/3</Sup> · <V>S</V><Sup>1/2</Sup>
       </Formula>
       <p className="text-xs text-muted-foreground">
         Manning (1891) · R = A/P (radio hidráulico). Autolimpieza por esfuerzo cortante τ = γ·R·S ≥ 2,0 Pa
