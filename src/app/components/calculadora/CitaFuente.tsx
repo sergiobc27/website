@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { FileText } from 'lucide-react';
+import { FileText, ExternalLink } from 'lucide-react';
 import { Tooltip } from '../Tooltip';
 import { referenciaDe, type Fuente } from '../../lib/hydro/fuentes';
-import { pdfUrl } from '../../lib/referencias';
+import { pdfUrl, doiDe } from '../../lib/referencias';
 import { VisorPdf } from '../VisorPdf';
 
 /** Muestra "INVÍAS (2009), Tabla 2.9" con tooltip de la cita APA completa y, si
@@ -15,6 +15,7 @@ export function CitaFuente({ fuente }: { fuente: Fuente }) {
   const autorAnio = ref ? `${ref.apa.split('(')[0].trim()} (${ref.anio})` : fuente.ref;
   const etiqueta = `${autorAnio}, ${fuente.localizador}`;
   const tienePdf = ref ? !!pdfUrl(ref.id) : false;
+  const doi = doiDe(ref);
 
   return (
     <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -28,6 +29,18 @@ export function CitaFuente({ fuente }: { fuente: Fuente }) {
           )}
         </span>
       </Tooltip>
+      {ref?.url && (
+        <a
+          href={ref.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-0.5 font-mono text-[10px] text-accent hover:underline"
+          title={doi ? `DOI: ${doi}` : ref.url}
+        >
+          {doi ? `DOI: ${doi}` : 'fuente'}
+          <ExternalLink className="h-3 w-3" />
+        </a>
+      )}
       {tienePdf && ref && (
         <motion.button
           type="button"

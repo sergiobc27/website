@@ -409,3 +409,21 @@ export const PDF_NOTAS: Record<string, string> = {
 export function pdfUrl(id: string): string | undefined {
   return REFS_CON_PDF.has(id) ? `/fuentes/${id}.pdf` : undefined;
 }
+
+/** Si la referencia se ubica por DOI (url doi.org/…), devuelve el DOI "10.xxxx/…";
+ * si no, null. Sirve para mostrar el identificador citable en la interfaz. */
+export function doiDe(ref: Pick<Referencia, 'url'> | undefined): string | null {
+  const m = ref?.url?.match(/^https?:\/\/(?:dx\.)?doi\.org\/(.+)$/i);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+/** Cuando no hay DOI, el host del enlace estable equivalente (p. ej.
+ * "minvivienda.gov.co") para mostrarlo como identificador de la fuente. */
+export function hostFuente(ref: Pick<Referencia, 'url'> | undefined): string | null {
+  if (!ref?.url) return null;
+  try {
+    return new URL(ref.url).hostname.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+}
