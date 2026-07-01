@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Library, Search, ExternalLink, Copy, Check, FileText, X, Info } from 'lucide-react';
-import { REFERENCIAS, TEMAS, pdfUrl, PDF_NOTAS, type Referencia, type Tema } from '../lib/referencias';
+import { useMemo, useState } from 'react';
+import { motion } from 'motion/react';
+import { Library, Search, ExternalLink, Copy, Check, FileText } from 'lucide-react';
+import { REFERENCIAS, TEMAS, pdfUrl, type Referencia, type Tema } from '../lib/referencias';
+import { VisorPdf } from './VisorPdf';
 
 type PaisFiltro = 'todos' | 'Colombia' | 'Internacional';
 
@@ -114,7 +116,7 @@ export function BibliotecaReferencias() {
         </div>
       )}
     </div>
-    {pdfView && <VisorPdf r={pdfView} onClose={() => setPdfView(null)} />}
+    {pdfView && <VisorPdf refId={pdfView.id} onClose={() => setPdfView(null)} />}
     </>
   );
 }
@@ -151,14 +153,17 @@ function Ficha({
         ))}
         <span className="ml-auto flex items-center gap-2">
           {tienePdf && (
-            <button
+            <motion.button
               type="button"
               onClick={onVerPdf}
-              className="inline-flex items-center gap-1 font-medium text-accent transition-colors hover:underline"
+              whileHover={{ scale: 1.06 }}
+              whileTap={{ scale: 0.94 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+              className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 font-semibold text-accent ring-1 ring-inset ring-accent/30 transition-colors hover:bg-accent/20"
               aria-label="Ver PDF"
             >
               <FileText className="h-3.5 w-3.5" /> Ver PDF
-            </button>
+            </motion.button>
           )}
           <button
             type="button"
@@ -180,68 +185,6 @@ function Ficha({
             </a>
           )}
         </span>
-      </div>
-    </div>
-  );
-}
-
-function VisorPdf({ r, onClose }: { r: Referencia; onClose: () => void }) {
-  const src = pdfUrl(r.id)!;
-  const nota = PDF_NOTAS[r.id];
-
-  // Cerrar con Escape y bloquear el scroll del fondo mientras está abierto.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [onClose]);
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-6"
-      role="dialog"
-      aria-modal="true"
-      aria-label={`PDF: ${r.apa}`}
-      onClick={onClose}
-    >
-      <div
-        className="flex h-full max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-glow"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start gap-3 border-b border-border p-3">
-          <FileText className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
-          <p className="min-w-0 flex-1 text-xs leading-snug text-card-foreground">{r.apa}</p>
-          <a
-            href={src}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-accent hover:text-accent"
-          >
-            Abrir en pestaña <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex shrink-0 items-center justify-center rounded-lg border border-border p-1 text-muted-foreground transition-colors hover:border-accent hover:text-accent"
-            aria-label="Cerrar visor"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        {nota && (
-          <p className="flex items-start gap-2 border-b border-border bg-amber-500/10 px-3 py-2 text-[11px] leading-snug text-amber-300">
-            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            {nota}
-          </p>
-        )}
-        <iframe src={src} title={r.apa} className="min-h-0 w-full flex-1 bg-white" />
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { MotionConfig } from 'motion/react';
+import { useEffect, useState } from 'react';
+import { MotionConfig, motion } from 'motion/react';
 import { BookOpenText, AlertTriangle } from 'lucide-react';
 import { Reveal, RevealItem } from './landing/Reveal';
 import { CitaFuente } from './calculadora/CitaFuente';
@@ -22,15 +22,22 @@ const TABLAS_POR_ID: Record<string, TablaNorma[]> = {
 };
 
 export function Metodologia() {
+  const [destacado, setDestacado] = useState<string | null>(null);
+
   // Deep-link: al abrir /metodologia#<id> (desde el botón i de una gráfica),
-  // desplaza la sección a la vista.
+  // desplaza la sección a la vista y la resalta con un destello animado.
   useEffect(() => {
     const id = window.location.hash.replace('#', '');
     if (!id) return;
     const t = window.setTimeout(() => {
       document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setDestacado(id);
     }, 120);
-    return () => window.clearTimeout(t);
+    const t2 = window.setTimeout(() => setDestacado(null), 2800);
+    return () => {
+      window.clearTimeout(t);
+      window.clearTimeout(t2);
+    };
   }, []);
 
   return (
@@ -62,7 +69,7 @@ export function Metodologia() {
             <Reveal className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               {seccion.ids.map((id) => {
                 const entrada = METODOLOGIA[id];
-                return entrada ? <Tarjeta key={id} entrada={entrada} /> : null;
+                return entrada ? <Tarjeta key={id} entrada={entrada} destacado={destacado === id} /> : null;
               })}
             </Reveal>
           </section>
@@ -72,12 +79,21 @@ export function Metodologia() {
   );
 }
 
-function Tarjeta({ entrada }: { entrada: EntradaMetodo }) {
+function Tarjeta({ entrada, destacado }: { entrada: EntradaMetodo; destacado: boolean }) {
   const tablas = TABLAS_POR_ID[entrada.id];
   return (
     <RevealItem>
       {/* scroll-mt para que el deep-link no quede tapado por la navbar overlay. */}
-      <article id={entrada.id} className="scroll-mt-24 h-full rounded-xl border border-border bg-card p-5 shadow-glow">
+      <article id={entrada.id} className="relative scroll-mt-24 h-full rounded-xl border border-border bg-card p-5 shadow-glow">
+        {destacado && (
+          <motion.span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 rounded-xl ring-2 ring-accent"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0, 1, 1, 0] }}
+            transition={{ duration: 2.6, times: [0, 0.12, 0.72, 1], ease: 'easeInOut' }}
+          />
+        )}
         <h4 className="font-bold text-card-foreground">{entrada.titulo}</h4>
         <p className="mt-1 text-sm font-medium text-accent">{entrada.resumen}</p>
 

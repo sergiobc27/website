@@ -63,14 +63,17 @@ export function InfoGrafica({ id }: { id: string }) {
             </div>
           )}
 
-          <button
+          <motion.button
             type="button"
             onClick={irAMetodologia}
-            className="group inline-flex items-center gap-1 text-xs font-semibold text-accent hover:underline"
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+            className="group mt-1 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-accent/10 px-3 py-2 text-xs font-semibold text-accent ring-1 ring-inset ring-accent/30 transition-colors hover:bg-accent/20"
           >
-            Ver metodología completa
-            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-          </button>
+            Saber más: explicación técnica y PDF
+            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
+          </motion.button>
         </motion.div>
       </PopoverContent>
     </Popover>
