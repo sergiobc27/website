@@ -202,7 +202,7 @@ export const METODOLOGIA: Record<string, EntradaMetodo> = {
       'Cuantificar el riesgo: una obra para Tr 50 se diseña contra la lluvia que se espera, en promedio, una vez cada 50 años. La bondad del ajuste se verifica con la prueba de Kolmogorov-Smirnov.',
     formula: (
       <Formula>
-        <V>x</V><Sub>T</Sub>&nbsp;=&nbsp;<V>μ</V> − <V>β</V> · ln(−ln(1 − 1/<V>T</V>))
+        <V>x</V><Sub>T</Sub>&nbsp;=&nbsp;<V>μ</V> − <V>β</V> · ln(−ln(1 − <Frac num={<>1</>} den={<V>T</V>} />))
       </Formula>
     ),
     variables: [
