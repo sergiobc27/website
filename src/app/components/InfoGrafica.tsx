@@ -2,6 +2,7 @@ import { motion } from 'motion/react';
 import { Info, ArrowRight } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { CitaFuente } from './calculadora/CitaFuente';
+import { VariablesLista } from './VariablesLista';
 import { METODOLOGIA } from '../lib/metodologia/contenido';
 
 /**
@@ -53,6 +54,10 @@ export function InfoGrafica({ id }: { id: string }) {
             <div className="rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-card-foreground">
               {entrada.formula}
             </div>
+          )}
+
+          {entrada.variables && entrada.variables.length > 0 && (
+            <VariablesLista variables={entrada.variables} />
           )}
 
           {entrada.fuentes.length > 0 && (
