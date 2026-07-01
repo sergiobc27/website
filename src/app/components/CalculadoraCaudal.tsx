@@ -4,11 +4,11 @@ import { InfoGrafica } from './InfoGrafica';
 import { Formula, Frac, Sub, Sup, V } from './Formula';
 import { fmt } from '../lib/format';
 import { tiemposConcentracion, FACTOR_RECORRIDO, type MetodoTc, type Recorrido } from '../lib/hydro/tc';
-import { TIPOS_SUPERFICIE, SUPERFICIES_IMPERMEABLES, cAjustado, qRacional, OBRAS_TR, factorFrecuencia } from '../lib/hydro/runoff';
+import { cAjustado, qRacional, OBRAS_TR, factorFrecuencia } from '../lib/hydro/runoff';
 import { CITAS } from '../lib/hydro/normas';
 import { SeccionColapsable, Field, NumberInput, Select } from './calculadora/SeccionColapsable';
 import { SeccionTc } from './calculadora/SeccionTc';
-import { SeccionCoefC } from './calculadora/SeccionCoefC';
+import { SeccionCoefC, type Contexto } from './calculadora/SeccionCoefC';
 import { SeccionManning } from './calculadora/SeccionManning';
 import { TablaNormaView } from './calculadora/TablaNormaView';
 import { TABLA_TR_VIAL, TABLA_TR_URBANO } from '../lib/hydro/tablasNorma';
@@ -29,8 +29,8 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
   const [pendiente, setPendiente] = useState('2'); // %
   const [tcMetodo, setTcMetodo] = useState<MetodoTc | 'recomendado'>('recomendado');
   const [recorrido, setRecorrido] = useState<Recorrido>('rural');
-  const [superficieIdx, setSuperficieIdx] = useState(2); // zona comercial/densa
-  const [cBase, setCBase] = useState(String(TIPOS_SUPERFICIE[2].c));
+  const [cContexto, setCContexto] = useState<Contexto>('urbana');
+  const [cBase, setCBase] = useState('0.83'); // punto medio de 'Distritos comerciales, centro' (INVÍAS Tabla 2.9)
 
   const A = parseFloat(area);
   const L = parseFloat(longitud);
@@ -58,19 +58,13 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
     return { intensidad, q, warnings };
   }, [A, tcUsado, cAjust, tr, equation, durations]);
 
-  const avisoKirpich = SUPERFICIES_IMPERMEABLES.has(TIPOS_SUPERFICIE[superficieIdx].label);
+  const avisoKirpich = cContexto === 'urbana';
 
   const onObra = (i: string) => {
     const idx = Number(i);
     setObraIdx(idx);
     if (idx >= 0) setTr(OBRAS_TR[idx].tr);
   };
-  const onSuperficie = (i: string) => {
-    const idx = Number(i);
-    setSuperficieIdx(idx);
-    setCBase(String(TIPOS_SUPERFICIE[idx].c));
-  };
-
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
       <div className="mb-4 flex items-center justify-between gap-4">
@@ -133,7 +127,7 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
 
         {/* 3 · Coeficiente C */}
         <SeccionColapsable titulo="3 · Coeficiente de escorrentía C" descripcion="Por superficie, ajustado por factor de frecuencia Cf(Tr)">
-          <SeccionCoefC superficieIdx={superficieIdx} setSuperficieIdx={onSuperficie} cBase={cBase} setCBase={setCBase} tr={tr} cAjust={cAjust} />
+          <SeccionCoefC contexto={cContexto} setContexto={setCContexto} cBase={cBase} setCBase={setCBase} tr={tr} cAjust={cAjust} />
         </SeccionColapsable>
 
         {/* 4 · Caudal de diseño */}

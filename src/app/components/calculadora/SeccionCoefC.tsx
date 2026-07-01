@@ -1,60 +1,130 @@
 import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { fmt } from '../../lib/format';
-import { TIPOS_SUPERFICIE, factorFrecuencia } from '../../lib/hydro/runoff';
+import { factorFrecuencia } from '../../lib/hydro/runoff';
 import { Field, NumberInput, Select } from './SeccionColapsable';
 import { TablaNormaView } from './TablaNormaView';
 import { TABLA_C_URBANA, TABLA_C_RURAL, TABLA_CF } from '../../lib/hydro/tablasNorma';
 import { VariablesLista } from '../VariablesLista';
 import { variablesDe } from '../../lib/metodologia/contenido';
 
+export type Contexto = 'urbana' | 'rural';
+
+// Coma decimal → número; y "0,70 – 0,95" → {lo, hi, mid}. Se derivan de las tablas
+// de la norma (única fuente: tablasNorma), así el selector = filas literales de 2.9/2.10.
+const parseNum = (s: string | number) => parseFloat(String(s).replace(',', '.'));
+const parseRango = (s: string | number) => {
+  const [a, b] = String(s).split(/[–—-]/).map((x) => parseNum(x));
+  return { lo: a, hi: b, mid: (a + b) / 2 };
+};
+
+const URBANA = TABLA_C_URBANA.filas.map((f) => ({ label: String(f[0]), ...parseRango(f[1]) }));
+const RURAL_VEG = TABLA_C_RURAL.filas.map((f) => ({
+  label: String(f[0]),
+  valores: [parseNum(f[1]), parseNum(f[2]), parseNum(f[3])],
+}));
+const RURAL_SUELOS = TABLA_C_RURAL.columnas.slice(1); // Franco arenoso / limo arcilloso / arcilloso
+
+const URB_DEFAULT = 5; // 'Distritos comerciales — áreas de centro de ciudad'
+const VEG_DEFAULT = 6; // 'Tierras cultivadas — plano'
+
 export function SeccionCoefC({
-  superficieIdx,
-  setSuperficieIdx,
+  contexto,
+  setContexto,
   cBase,
   setCBase,
   tr,
   cAjust,
 }: {
-  superficieIdx: number;
-  setSuperficieIdx: (i: string) => void;
+  contexto: Contexto;
+  setContexto: (c: Contexto) => void;
   cBase: string;
   setCBase: (v: string) => void;
   tr: number;
   cAjust: number;
 }) {
-  const sup = TIPOS_SUPERFICIE[superficieIdx];
+  const [urbIdx, setUrbIdx] = useState(URB_DEFAULT);
+  const [vegIdx, setVegIdx] = useState(VEG_DEFAULT);
+  const [sueloIdx, setSueloIdx] = useState(1);
+
   const cf = factorFrecuencia(tr);
-  const cb = parseFloat(cBase);
-  const [lo, hi] = sup.rango.split('–').map((s) => parseFloat(s.replace(',', '.')));
-  const fueraDeRango = Number.isFinite(cb) && Number.isFinite(lo) && Number.isFinite(hi) && (cb < lo || cb > hi);
+  const cb = parseNum(cBase);
+  const filaUrb = URBANA[urbIdx];
+  const fueraDeRango = contexto === 'urbana' && Number.isFinite(cb) && (cb < filaUrb.lo || cb > filaUrb.hi);
+
+  const onContexto = (v: string) => {
+    const c = v as Contexto;
+    setContexto(c);
+    setCBase(String(c === 'urbana' ? URBANA[urbIdx].mid : RURAL_VEG[vegIdx].valores[sueloIdx]));
+  };
+  const onUrb = (v: string) => {
+    const i = Number(v);
+    setUrbIdx(i);
+    setCBase(String(URBANA[i].mid));
+  };
+  const onVeg = (v: string) => {
+    const i = Number(v);
+    setVegIdx(i);
+    setCBase(String(RURAL_VEG[i].valores[sueloIdx]));
+  };
+  const onSuelo = (v: string) => {
+    const i = Number(v);
+    setSueloIdx(i);
+    setCBase(String(RURAL_VEG[vegIdx].valores[i]));
+  };
+
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Tipo de superficie">
-          <Select
-            value={superficieIdx}
-            onChange={setSuperficieIdx}
-            options={TIPOS_SUPERFICIE.map((t, i) => ({ value: i, label: `${t.label} (${t.rango})` }))}
-          />
-        </Field>
-        <Field
-          label={`Coef. C base (rango ${sup.rango})`}
-          help="Coeficiente de escorrentía: fracción de la lluvia que escurre. Elígelo dentro del rango típico de la superficie; a mayor pendiente o impermeabilidad, valor más alto."
-        >
-          <NumberInput value={cBase} onChange={setCBase} min="0" max="1" step="0.05" />
-        </Field>
-      </div>
+      <Field label="Contexto (tabla de la norma)">
+        <Select
+          value={contexto}
+          onChange={onContexto}
+          options={[
+            { value: 'urbana', label: 'Área urbana (INVÍAS Tabla 2.9)' },
+            { value: 'rural', label: 'Área rural (INVÍAS Tabla 2.10)' },
+          ]}
+        />
+      </Field>
+
+      {contexto === 'urbana' ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Tipo de área de drenaje (Tabla 2.9)">
+            <Select
+              value={urbIdx}
+              onChange={onUrb}
+              options={URBANA.map((o, i) => ({ value: i, label: `${o.label} (${fmt(o.lo, 2)}–${fmt(o.hi, 2)})` }))}
+            />
+          </Field>
+          <Field
+            label={`Coef. C dentro del rango ${fmt(filaUrb.lo, 2)}–${fmt(filaUrb.hi, 2)}`}
+            help="La norma da un rango por tipo de área; elige dentro de él según la impermeabilidad y la pendiente (a mayor, más alto)."
+          >
+            <NumberInput value={cBase} onChange={setCBase} min="0" max="1" step="0.01" />
+          </Field>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Vegetación y topografía (Tabla 2.10)">
+            <Select value={vegIdx} onChange={onVeg} options={RURAL_VEG.map((o, i) => ({ value: i, label: o.label }))} />
+          </Field>
+          <Field label="Textura del suelo">
+            <Select value={sueloIdx} onChange={onSuelo} options={RURAL_SUELOS.map((s, i) => ({ value: i, label: String(s) }))} />
+          </Field>
+        </div>
+      )}
 
       {fueraDeRango && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
           <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-current" />
-          <span>El C base ({fmt(cb, 2)}) está fuera del rango típico de «{sup.label}» ({sup.rango}); verifica que corresponda a la cobertura real.</span>
+          <span>
+            El C ({fmt(cb, 2)}) está fuera del rango de «{filaUrb.label}» ({fmt(filaUrb.lo, 2)}–{fmt(filaUrb.hi, 2)}); verifica
+            que corresponda a la cobertura real.
+          </span>
         </div>
       )}
 
       <div className="grid grid-cols-3 gap-3">
-        <Celda titulo="C base" valor={fmt(parseFloat(cBase), 2)} />
+        <Celda titulo="C base" valor={fmt(cb, 2)} />
         <Celda titulo={`Cf (Tr ${tr}a)`} valor={fmt(cf, 2)} />
         <Celda titulo="C de diseño" valor={fmt(cAjust, 2)} destacado />
       </div>
@@ -62,9 +132,9 @@ export function SeccionCoefC({
       <DetalleTablas />
 
       <p className="text-xs text-muted-foreground">
-        C de diseño = mín(1; C base · Cf). El C base sale de la tabla de coeficiente de escorrentía del Manual de
-        Drenaje INVÍAS (2009), Tablas 2.9 (urbano) y 2.10 (rural). El factor de frecuencia Cf eleva C para Tr altos
-        (Chow, Maidment &amp; Mays, 1988). Ajusta C base dentro de su rango según la pendiente (a mayor pendiente, más alto).
+        C de diseño = mín(1; C · Cf). El C se toma directamente de las tablas del Manual de Drenaje INVÍAS (2009):
+        Tabla 2.9 (áreas urbanas, pág. 2-39) o Tabla 2.10 (áreas rurales, por textura del suelo y topografía, pág. 2-40).
+        El factor de frecuencia Cf eleva C para períodos de retorno altos (Chow, Maidment &amp; Mays, 1988).
       </p>
       <VariablesLista variables={variablesDe('factor-cf')} />
     </div>

@@ -3,23 +3,10 @@
 // y se ajusta por el factor de frecuencia Cf(Tr); no se inventa una matriz
 // superficie×pendiente: la pendiente guía la elección dentro del rango (tooltip).
 
-// Coeficientes C típicos en Colombia (rango y valor de referencia) — RAS 0330 /
-// manuales de drenaje. Reutilizados de la calculadora original.
-export const TIPOS_SUPERFICIE: Array<{ label: string; c: number; rango: string }> = [
-  { label: 'Pavimento asfáltico / concreto', c: 0.85, rango: '0,70–0,95' },
-  { label: 'Techos / cubiertas', c: 0.85, rango: '0,75–0,95' },
-  { label: 'Zona comercial / densa', c: 0.7, rango: '0,60–0,85' },
-  { label: 'Residencial', c: 0.5, rango: '0,40–0,65' },
-  { label: 'Zonas verdes / parques', c: 0.2, rango: '0,10–0,30' },
-  { label: 'Suelo natural / cultivos', c: 0.2, rango: '0,10–0,35' },
-];
-
-// Superficies impermeables: disparan el aviso de que Kirpich subestima Tc (urbano).
-export const SUPERFICIES_IMPERMEABLES = new Set([
-  'Pavimento asfáltico / concreto',
-  'Techos / cubiertas',
-  'Zona comercial / densa',
-]);
+// El coeficiente C se toma directamente de las tablas del Manual de Drenaje INVÍAS
+// (2009): Tabla 2.9 (áreas urbanas) o Tabla 2.10 (áreas rurales). Esos datos viven
+// en `tablasNorma.ts` (única fuente) y el selector de la calculadora lee de ahí; no
+// se mantiene aquí una lista simplificada aparte.
 
 // Factor de frecuencia Cf (Ven Te Chow; adoptado por el Manual de Drenaje INVÍAS):
 // ajusta C al alza para periodos de retorno mayores. C·Cf se topa en 1,0.
