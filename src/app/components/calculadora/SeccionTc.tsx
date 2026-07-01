@@ -1,5 +1,7 @@
 import { Info } from 'lucide-react';
 import { Formula, Frac, Sub, Sup, V } from '../Formula';
+import { VariablesLista } from '../VariablesLista';
+import { variablesDe } from '../../lib/metodologia/contenido';
 import { fmt } from '../../lib/format';
 import type { MetodoTc, TiemposTc } from '../../lib/hydro/tc';
 import { Field, Select } from './SeccionColapsable';
@@ -99,6 +101,7 @@ export function SeccionTc({
         <Formula className="text-sm text-card-foreground">
           <V>T</V><Sub>c</Sub>&nbsp;(Témez)&nbsp;=&nbsp;0,3 · (<Frac num={<><V>L</V><Sub>km</Sub></>} den={<><V>S</V><Sup>0,25</Sup></>} />)<Sup>0,76</Sup>
         </Formula>
+        <VariablesLista variables={variablesDe('tiempo-concentracion')} className="mt-2" />
       </div>
     </div>
   );

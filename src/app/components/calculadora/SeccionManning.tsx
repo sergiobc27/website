@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Formula, Frac, Sup, V } from '../Formula';
+import { VariablesLista } from '../VariablesLista';
+import { variablesDe } from '../../lib/metodologia/contenido';
 import { fmt } from '../../lib/format';
 import {
   MATERIALES,
@@ -157,6 +159,7 @@ export function SeccionManning({ q, pendienteCuenca }: { q: number; pendienteCue
       <Formula className="text-sm text-card-foreground">
         <V>Q</V>&nbsp;=&nbsp;<Frac num={<>1</>} den={<V>n</V>} /> · <V>A</V> · <V>R</V><Sup>2/3</Sup> · <V>S</V><Sup>1/2</Sup>
       </Formula>
+      <VariablesLista variables={variablesDe('manning')} className="mt-1" />
       <p className="text-xs text-muted-foreground">
         Manning (1891) · R = A/P (radio hidráulico). Autolimpieza por esfuerzo cortante τ = γ·R·S ≥ 2,0 Pa
         (RAS 0330, Art. 149); velocidad máxima 5,0 m/s (Art. 150); llenado máximo y/D = 93% (Art. 151). Valores
