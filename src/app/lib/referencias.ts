@@ -9,8 +9,8 @@ export type Tema =
   | 'Métodos hidrológicos e hidráulica'
   | 'Estadística de extremos'
   | 'Hidroclimatología y observación'
-  | 'Geomática y metadatos'
   | 'Erosión, suelo y balance hídrico'
+  | 'Datos y formatos'
   | 'Frontera de alcance';
 
 // Orden de presentación de los estantes.
@@ -19,8 +19,8 @@ export const TEMAS: Tema[] = [
   'Métodos hidrológicos e hidráulica',
   'Estadística de extremos',
   'Hidroclimatología y observación',
-  'Geomática y metadatos',
   'Erosión, suelo y balance hídrico',
+  'Datos y formatos',
   'Frontera de alcance',
 ];
 
@@ -59,7 +59,7 @@ export const REFERENCIAS: Referencia[] = [
     id: 'magna-sirgas',
     apa: 'Instituto Geográfico Agustín Codazzi. (2005). Resolución 068 de 2005, por la cual se adopta como único datum oficial de Colombia el Marco Geocéntrico Nacional de Referencia: MAGNA-SIRGAS. IGAC.',
     pais: 'Colombia',
-    tema: 'Normativa y guías colombianas',
+    tema: 'Datos y formatos',
     anio: 2005,
     url: 'https://www.igac.gov.co/transparencia-y-acceso-a-la-informacion-publica/normograma/resolucion-068-de-2005',
     usadoEn: ['Mapa y datos'],
@@ -156,21 +156,6 @@ export const REFERENCIAS: Referencia[] = [
     url: 'https://irrigationtoolbox.com/NEH/Part630_Hydrology/H_210_630_10.pdf',
     usadoEn: ['Asistente'],
   },
-  {
-    id: 'snyder-1938',
-    apa: 'Snyder, F. F. (1938). Synthetic unit-graphs. Transactions, American Geophysical Union, 19(1), 447-454.',
-    pais: 'Internacional',
-    tema: 'Métodos hidrológicos e hidráulica',
-    anio: 1938,
-    url: 'https://doi.org/10.1029/TR019i001p00447',
-  },
-  {
-    id: 'fhwa-hds2-2002',
-    apa: 'McCuen, R. H., Johnson, P. A., & Ragan, R. M. (2002). Highway hydrology (Hydraulic Design Series No. 2, 2nd ed., FHWA-NHI-02-001). Federal Highway Administration, U.S. Department of Transportation.',
-    pais: 'Internacional',
-    tema: 'Métodos hidrológicos e hidráulica',
-    anio: 2002,
-  },
 
   // ── Estadística de extremos ────────────────────────────────────────────────
   {
@@ -179,14 +164,6 @@ export const REFERENCIAS: Referencia[] = [
     pais: 'Internacional',
     tema: 'Estadística de extremos',
     anio: 1958,
-    usadoEn: ['Período de retorno', 'Asistente'],
-  },
-  {
-    id: 'kendall-1975',
-    apa: 'Kendall, M. G. (1975). Rank correlation methods (4th ed.). Charles Griffin.',
-    pais: 'Internacional',
-    tema: 'Estadística de extremos',
-    anio: 1975,
     usadoEn: ['Período de retorno', 'Asistente'],
   },
   {
@@ -208,38 +185,12 @@ export const REFERENCIAS: Referencia[] = [
     usadoEn: ['Período de retorno'],
   },
   {
-    id: 'beirlant-2004',
-    apa: 'Beirlant, J., Goegebeur, Y., Segers, J., & Teugels, J. (2004). Statistics of extremes: Theory and applications. Wiley.',
-    pais: 'Internacional',
-    tema: 'Estadística de extremos',
-    anio: 2004,
-    url: 'https://doi.org/10.1002/0470012382',
-    usadoEn: ['Período de retorno'],
-  },
-  {
-    id: 'kite-1977',
-    apa: 'Kite, G. W. (1977). Frequency and risk analyses in hydrology. Water Resources Publications.',
-    pais: 'Internacional',
-    tema: 'Estadística de extremos',
-    anio: 1977,
-    usadoEn: ['Período de retorno'],
-  },
-  {
     id: 'stephens-1974',
     apa: 'Stephens, M. A. (1974). EDF statistics for goodness of fit and some comparisons. Journal of the American Statistical Association, 69(347), 730-737.',
     pais: 'Internacional',
     tema: 'Estadística de extremos',
     anio: 1974,
     url: 'https://doi.org/10.1080/01621459.1974.10480196',
-    usadoEn: ['Período de retorno'],
-  },
-  {
-    id: 'pettitt-1979',
-    apa: 'Pettitt, A. N. (1979). A non-parametric approach to the change-point problem. Journal of the Royal Statistical Society. Series C (Applied Statistics), 28(2), 126-135.',
-    pais: 'Internacional',
-    tema: 'Estadística de extremos',
-    anio: 1979,
-    url: 'https://doi.org/10.2307/2346729',
     usadoEn: ['Período de retorno'],
   },
 
@@ -274,7 +225,7 @@ export const REFERENCIAS: Referencia[] = [
     id: 'wmo-8-2018',
     apa: 'World Meteorological Organization. (2018). Guide to instruments and methods of observation (WMO-No. 8): Volume I – Measurement of meteorological variables (2018 ed.). World Meteorological Organization.',
     pais: 'Internacional',
-    tema: 'Hidroclimatología y observación',
+    tema: 'Datos y formatos',
     anio: 2018,
     usadoEn: ['Mapa y datos'],
   },
@@ -287,12 +238,12 @@ export const REFERENCIAS: Referencia[] = [
     usadoEn: ['Asistente'],
   },
 
-  // ── Geomática y metadatos ──────────────────────────────────────────────────
+  // ── Datos y formatos (datum, metadatos, formatos e instrumentos) ───────────
   {
     id: 'iso-19115-2014',
     apa: 'International Organization for Standardization. (2014). Geographic information — Metadata — Part 1: Fundamentals (ISO Standard No. 19115-1:2014).',
     pais: 'Internacional',
-    tema: 'Geomática y metadatos',
+    tema: 'Datos y formatos',
     anio: 2014,
     url: 'https://www.iso.org/standard/53798.html',
     usadoEn: ['Mapa y datos'],
@@ -301,7 +252,7 @@ export const REFERENCIAS: Referencia[] = [
     id: 'geojson-rfc7946',
     apa: 'Butler, H., Daly, M., Doyle, A., Gillies, S., Hagen, S., & Schaub, T. (2016). The GeoJSON format (RFC 7946). RFC Editor.',
     pais: 'Internacional',
-    tema: 'Geomática y metadatos',
+    tema: 'Datos y formatos',
     anio: 2016,
     url: 'https://doi.org/10.17487/RFC7946',
     usadoEn: ['Mapa y datos'],
@@ -310,7 +261,7 @@ export const REFERENCIAS: Referencia[] = [
     id: 'ogc-api-features',
     apa: 'Open Geospatial Consortium. (2019). OGC API - Features - Part 1: Core (Version 1.0, OGC 17-069r3).',
     pais: 'Internacional',
-    tema: 'Geomática y metadatos',
+    tema: 'Datos y formatos',
     anio: 2019,
     url: 'https://docs.ogc.org/is/17-069r3/17-069r3.html',
     usadoEn: ['Mapa y datos'],
@@ -406,9 +357,9 @@ export const REFERENCIAS: Referencia[] = [
 // fuente". Mantener en sync con la carpeta `fuentes-normativas/` y la subida a R2.
 export const REFS_CON_PDF = new Set<string>([
   'ras-0330', 'invias-drenaje-2009', 'magna-sirgas', 'vargas-diazgranados-1998', 'temez-1978',
-  'velez-botero-2011', 'chow-1959', 'chow-applied-1988', 'coles-2001', 'beirlant-2004',
+  'velez-botero-2011', 'chow-1959', 'chow-applied-1988', 'coles-2001',
   'poveda-2004', 'wmo-168-2008', 'mckee-1993', 'scs-tr55-1986', 'neh-630-scs-cn', 'rusle-1997',
-  'fao-56-1998', 'nsr10-titulo-h', 'kirpich-1940', 'fhwa-hds2-2002', 'fhwa-hds5-2012',
+  'fao-56-1998', 'nsr10-titulo-h', 'kirpich-1940', 'fhwa-hds5-2012',
   'hec-18-2012', 'green-ampt-1911', 'thornthwaite-mather-1957', 'ena-2022', 'erosion-ideam-2015',
   'ogc-api-features', 'geojson-rfc7946', 'manning-1891', 'stephens-1974',
 ]);
