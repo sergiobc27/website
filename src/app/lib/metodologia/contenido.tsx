@@ -8,6 +8,13 @@ import type { Fuente } from '../hydro/fuentes';
  * la plataforma. Lo leen el botón (i) de cada gráfica (`InfoGrafica`) y la página
  * de Metodología (`Metodologia`), para que nunca se desincronicen.
  */
+/** Significado de cada símbolo de una fórmula, para que cualquier persona sepa qué
+ * representa cada letra. Va SIEMPRE junto a la fórmula. */
+export interface Variable {
+  simbolo: ReactNode;
+  definicion: string;
+}
+
 export interface EntradaMetodo {
   id: string;
   titulo: string;
@@ -18,6 +25,8 @@ export interface EntradaMetodo {
   comoSeLee: string;
   paraQueSirve: string;
   formula?: ReactNode;
+  /** Definición de cada variable de la fórmula (obligatorio si hay fórmula con letras). */
+  variables?: Variable[];
   /** Citas con localizador exacto (vacío si es una visualización sin método propio). */
   fuentes: Fuente[];
 }
@@ -42,6 +51,13 @@ export const METODOLOGIA: Record<string, EntradaMetodo> = {
         <V>Q</V>&nbsp;=&nbsp;<Frac num={<><V>C</V> · <V>I</V> · <V>A</V></>} den={<>360</>} />
       </Formula>
     ),
+    variables: [
+      { simbolo: 'Q', definicion: 'caudal pico de diseño (m³/s)' },
+      { simbolo: 'C', definicion: 'coeficiente de escorrentía (0 a 1, sin unidad)' },
+      { simbolo: 'I', definicion: 'intensidad de la lluvia de diseño (mm/h)' },
+      { simbolo: 'A', definicion: 'área de la cuenca que aporta (ha)' },
+      { simbolo: '360', definicion: 'factor que ajusta las unidades (de mm/h y ha a m³/s)' },
+    ],
     fuentes: [
       cita('ras-0330', 'Art. 135 (caudal de aguas lluvias)'),
       cita('invias-drenaje-2009', '§ 2.5.5.2 (método racional)'),
@@ -62,6 +78,11 @@ export const METODOLOGIA: Record<string, EntradaMetodo> = {
         <V>T</V><Sub>c</Sub>&nbsp;(Kirpich)&nbsp;=&nbsp;0,0195 · <V>L</V><Sup>0,77</Sup> · <V>S</V><Sup>−0,385</Sup>
       </Formula>
     ),
+    variables: [
+      { simbolo: <><V>T</V><Sub>c</Sub></>, definicion: 'tiempo de concentración (min)' },
+      { simbolo: 'L', definicion: 'longitud del cauce principal (m)' },
+      { simbolo: 'S', definicion: 'pendiente media del cauce (m/m)' },
+    ],
     fuentes: [
       cita('kirpich-1940', 'p. 362'),
       cita('temez-1978', 'cálculo de Tc en cuencas pequeñas'),
@@ -99,6 +120,11 @@ export const METODOLOGIA: Record<string, EntradaMetodo> = {
         <V>C</V><Sub>diseño</Sub>&nbsp;=&nbsp;mín(1;&nbsp;<V>C</V> · <V>C</V><Sub>f</Sub>)
       </Formula>
     ),
+    variables: [
+      { simbolo: <><V>C</V><Sub>diseño</Sub></>, definicion: 'coeficiente de escorrentía de diseño' },
+      { simbolo: 'C', definicion: 'coeficiente base según la superficie' },
+      { simbolo: <><V>C</V><Sub>f</Sub></>, definicion: 'factor de frecuencia (sube C para períodos de retorno altos)' },
+    ],
     fuentes: [
       {
         ref: 'chow-applied-1988',
@@ -120,9 +146,16 @@ export const METODOLOGIA: Record<string, EntradaMetodo> = {
       'Elegir el diámetro o la sección del conducto. Criterios del RAS 0330: autolimpieza por esfuerzo cortante ≥ 2,0 Pa (Art. 149), velocidad máxima 5,0 m/s (Art. 150) y llenado máximo y/D = 93% (Art. 151).',
     formula: (
       <Formula>
-        <V>Q</V>&nbsp;=&nbsp;(1/<V>n</V>) · <V>A</V> · <V>R</V><Sup>2/3</Sup> · <V>S</V><Sup>1/2</Sup>
+        <V>Q</V>&nbsp;=&nbsp;<Frac num={<>1</>} den={<V>n</V>} />&nbsp;· <V>A</V> · <V>R</V><Sup>2/3</Sup> · <V>S</V><Sup>1/2</Sup>
       </Formula>
     ),
+    variables: [
+      { simbolo: 'Q', definicion: 'caudal que transporta el conducto (m³/s)' },
+      { simbolo: 'n', definicion: 'coeficiente de rugosidad de Manning (según el material)' },
+      { simbolo: 'A', definicion: 'área mojada de la sección (m²)' },
+      { simbolo: 'R', definicion: 'radio hidráulico = área mojada ÷ perímetro mojado (m)' },
+      { simbolo: 'S', definicion: 'pendiente del conducto (m/m)' },
+    ],
     fuentes: [
       cita('manning-1891', 'ecuación de flujo en canales'),
       cita('chow-1959', 'cap. 5 (resistencia y n de Manning)'),
@@ -144,6 +177,12 @@ export const METODOLOGIA: Record<string, EntradaMetodo> = {
         <V>I</V>&nbsp;=&nbsp;<Frac num={<><V>K</V> · <V>T</V><Sup><V>m</V></Sup></>} den={<><V>D</V><Sup><V>n</V></Sup></>} />
       </Formula>
     ),
+    variables: [
+      { simbolo: 'I', definicion: 'intensidad de la lluvia (mm/h)' },
+      { simbolo: 'T', definicion: 'período de retorno (años)' },
+      { simbolo: 'D', definicion: 'duración de la lluvia (min)' },
+      { simbolo: <><V>K</V>, <V>m</V>, <V>n</V></>, definicion: 'coeficientes de ajuste regional de la curva' },
+    ],
     fuentes: [
       cita('vargas-diazgranados-1998', 'curvas IDF regionalizadas para Colombia'),
       cita('ras-0330', 'Art. 135, num. 2 (intensidad / curvas IDF)'),
@@ -166,6 +205,13 @@ export const METODOLOGIA: Record<string, EntradaMetodo> = {
         <V>x</V><Sub>T</Sub>&nbsp;=&nbsp;<V>μ</V> − <V>β</V> · ln(−ln(1 − 1/<V>T</V>))
       </Formula>
     ),
+    variables: [
+      { simbolo: <><V>x</V><Sub>T</Sub></>, definicion: 'lluvia estimada para el período de retorno T (mm)' },
+      { simbolo: 'T', definicion: 'período de retorno (años)' },
+      { simbolo: 'μ', definicion: 'parámetro de ubicación de la distribución Gumbel' },
+      { simbolo: 'β', definicion: 'parámetro de escala de la distribución Gumbel' },
+      { simbolo: 'ln', definicion: 'logaritmo natural' },
+    ],
     fuentes: [
       cita('gumbel-1958', 'distribución de valores extremos'),
       cita('hosking-wallis-1997', 'ajuste por L-momentos'),
@@ -252,6 +298,10 @@ export const METODOLOGIA: Record<string, EntradaMetodo> = {
         anomalía&nbsp;=&nbsp;<Frac num={<><V>P</V> − <Bar><V>P</V></Bar></>} den={<><Bar><V>P</V></Bar></>} /> · 100%
       </Formula>
     ),
+    variables: [
+      { simbolo: 'P', definicion: 'lluvia del mes (mm)' },
+      { simbolo: <><Bar><V>P</V></Bar></>, definicion: 'promedio histórico de ese mismo mes (mm)' },
+    ],
     fuentes: [cita('poveda-2004', 'variabilidad climática en Colombia')],
   },
   'top-departamentos': {

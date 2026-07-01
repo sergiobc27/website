@@ -4,6 +4,8 @@ import { BookOpenText, AlertTriangle } from 'lucide-react';
 import { Reveal, RevealItem } from './landing/Reveal';
 import { CitaFuente } from './calculadora/CitaFuente';
 import { TablaNormaView } from './calculadora/TablaNormaView';
+import { VariablesLista } from './VariablesLista';
+import { IlustracionMetodo } from './IlustracionMetodo';
 import { METODOLOGIA, SECCIONES_METODOLOGIA, type EntradaMetodo } from '../lib/metodologia/contenido';
 import {
   TABLA_C_URBANA,
@@ -97,10 +99,16 @@ function Tarjeta({ entrada, destacado }: { entrada: EntradaMetodo; destacado: bo
         <h4 className="font-bold text-card-foreground">{entrada.titulo}</h4>
         <p className="mt-1 text-sm font-medium text-accent">{entrada.resumen}</p>
 
+        <IlustracionMetodo id={entrada.id} className="mt-3" />
+
         {entrada.formula && (
           <div className="mt-3 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-card-foreground">
             {entrada.formula}
           </div>
+        )}
+
+        {entrada.variables && entrada.variables.length > 0 && (
+          <VariablesLista variables={entrada.variables} className="mt-3" />
         )}
 
         <dl className="mt-3 space-y-2 text-sm">
