@@ -3,7 +3,7 @@ import { Formula, Frac, Sub, Sup, V } from '../Formula';
 import { VariablesLista } from '../VariablesLista';
 import { variablesDe } from '../../lib/metodologia/contenido';
 import { fmt } from '../../lib/format';
-import type { MetodoTc, TiemposTc } from '../../lib/hydro/tc';
+import type { MetodoTc, Recorrido, TiemposTc } from '../../lib/hydro/tc';
 import { Field, Select } from './SeccionColapsable';
 
 const METODOS: Array<{ key: MetodoTc; label: string; nota: string }> = [
@@ -12,17 +12,28 @@ const METODOS: Array<{ key: MetodoTc; label: string; nota: string }> = [
   { key: 'giandotti', label: 'Giandotti', nota: 'usa el área y la pendiente' },
 ];
 
+// Superficie del recorrido para el Kirpich modificado (factor de ajuste).
+const RECORRIDOS: Array<{ key: Recorrido; label: string }> = [
+  { key: 'rural', label: 'Natural / rural (×1,0)' },
+  { key: 'urbano', label: 'Urbano pavimentado, asfalto o concreto (×0,4)' },
+  { key: 'canal', label: 'Canal revestido en concreto (×0,2)' },
+];
+
 export function SeccionTc({
   tcs,
   metodo,
   setMetodo,
   tcUsado,
+  recorrido,
+  setRecorrido,
   avisoKirpich,
 }: {
   tcs: TiemposTc;
   metodo: MetodoTc | 'recomendado';
   setMetodo: (m: string) => void;
   tcUsado: number | null;
+  recorrido: Recorrido;
+  setRecorrido: (r: string) => void;
   avisoKirpich: boolean;
 }) {
   const valores = [tcs.kirpich, tcs.temez, tcs.giandotti].filter((v): v is number => v != null);
@@ -31,6 +42,13 @@ export function SeccionTc({
 
   return (
     <div className="space-y-3">
+      <Field label="Tipo de recorrido del flujo (ajusta el Tc de Kirpich)">
+        <Select
+          value={recorrido}
+          onChange={setRecorrido}
+          options={RECORRIDOS.map((r) => ({ value: r.key, label: r.label }))}
+        />
+      </Field>
       <div className="overflow-hidden rounded-lg border border-border">
         <table className="w-full text-sm">
           <thead className="bg-muted/40 text-xs text-muted-foreground">
@@ -43,10 +61,13 @@ export function SeccionTc({
             {METODOS.map(({ key, label, nota }) => {
               const v = tcs[key];
               const esRecomendado = tcs.metodoRecomendado === key;
+              const esKirpichMod = key === 'kirpich' && tcs.kirpichModificado;
+              const dispLabel = esKirpichMod ? 'Kirpich modificado' : label;
+              const dispNota = esKirpichMod ? `${nota} · ×${fmt(tcs.factorRecorrido, 1)}` : nota;
               return (
                 <tr key={key} className={`border-t border-border ${esRecomendado ? 'bg-accent/10' : ''}`}>
                   <td className="px-3 py-2 text-card-foreground">
-                    {label} <span className="text-xs text-muted-foreground">· {nota}</span>
+                    {dispLabel} <span className="text-xs text-muted-foreground">· {dispNota}</span>
                   </td>
                   <td className="px-3 py-2 text-right font-mono text-card-foreground">{fmt(v, 1)}</td>
                 </tr>
@@ -74,7 +95,7 @@ export function SeccionTc({
           onChange={setMetodo}
           options={[
             { value: 'recomendado', label: `Recomendado (${fmt(tcs.recomendado, 1)} min)` },
-            { value: 'kirpich', label: `Kirpich (${fmt(tcs.kirpich, 1)} min)` },
+            { value: 'kirpich', label: `Kirpich${tcs.kirpichModificado ? ' mod.' : ''} (${fmt(tcs.kirpich, 1)} min)` },
             { value: 'temez', label: `Témez (${fmt(tcs.temez, 1)} min)` },
             { value: 'giandotti', label: `Giandotti (${fmt(tcs.giandotti, 1)} min)` },
           ]}
@@ -90,10 +111,10 @@ export function SeccionTc({
           <span>La mediana cae por debajo de 10 min; se aplica el piso de diseño de 10 min (extremo del rango de 3 a 10 min del RAS 0330, Art. 135, num. 4) para evitar intensidades irreales.</span>
         </div>
       )}
-      {avisoKirpich && (
+      {avisoKirpich && !tcs.kirpichModificado && (
         <div className="flex items-start gap-2 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-accent">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>Kirpich subestima Tc en cuencas urbanas pavimentadas (Vélez &amp; Botero, 2011); considera Témez o Giandotti como referencia.</span>
+          <span>La superficie elegida es pavimentada: Kirpich (rural) subestima el Tc. Elige arriba un recorrido urbano para aplicar el Kirpich modificado (Vélez y Botero, 2011).</span>
         </div>
       )}
 

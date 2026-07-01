@@ -65,3 +65,27 @@ describe('tiemposConcentracion — entradas inválidas', () => {
     expect(r.recomendado).toBeNull();
   });
 });
+
+describe('tiemposConcentracion — Kirpich modificado (recorrido urbano/canal)', () => {
+  it('sin factor: rural por defecto (factor 1, no modificado)', () => {
+    const r = tiemposConcentracion(800, 0.02, 5);
+    expect(r.factorRecorrido).toBe(1);
+    expect(r.kirpichModificado).toBe(false);
+    expect(r.kirpich).toBeCloseTo(15.12, 1);
+  });
+
+  it('urbano (×0,4): Kirpich = base·0,4 y marca kirpichModificado', () => {
+    const r = tiemposConcentracion(800, 0.02, 5, 0.4);
+    expect(r.factorRecorrido).toBe(0.4);
+    expect(r.kirpichModificado).toBe(true);
+    expect(r.kirpich).toBeCloseTo(6.05, 1); // 15,12 · 0,4
+    // La mediana sigue siendo Témez (los métodos rurales no se ven afectados).
+    expect(r.recomendado).toBeCloseTo(31.95, 1);
+  });
+
+  it('canal de concreto (×0,2): Kirpich = base·0,2', () => {
+    const r = tiemposConcentracion(800, 0.02, 5, 0.2);
+    expect(r.kirpich).toBeCloseTo(3.02, 1); // 15,12 · 0,2
+    expect(r.kirpichModificado).toBe(true);
+  });
+});
