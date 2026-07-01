@@ -9,7 +9,7 @@ describe('fuentes — referenciaDe', () => {
   it('Chow Applied Hydrology (1988) está en la bibliografía', () => {
     const c = referenciaDe('chow-applied-1988');
     expect(c).toBeTruthy();
-    expect(c?.apa).toMatch(/Applied Hydrology/);
+    expect(c?.apa).toMatch(/applied hydrology/i);
   });
   it('devuelve undefined si no existe', () => {
     expect(referenciaDe('no-existe')).toBeUndefined();

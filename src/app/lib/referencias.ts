@@ -1,8 +1,9 @@
 // Biblioteca de referencias: fuentes normativas y académicas en las que se basa la
-// plataforma. Datos estáticos (versionados en git) — APA verificada del informe
-// PANEL-NORMAS, más las canónicas que el código ya usa. `tema` y `usadoEn` asignados
-// leyendo el código. Solo se incluyen referencias verificadas y, etiquetadas aparte,
-// las de "frontera de alcance" (lo que la herramienta NO calcula y remite).
+// plataforma. Datos estáticos (versionados en git). APA, DOI/enlace y coincidencia
+// del PDF verificados con búsqueda web y lectura del PDF real (auditoría 2026-07-01):
+// cada `url` resuelve al documento; los DOI se confirmaron contra Crossref/editorial.
+// Solo se incluyen referencias verificadas y, etiquetadas aparte, las de "frontera de
+// alcance" (lo que la herramienta NO calcula y remite).
 
 export type Tema =
   | 'Normativa y guías colombianas'
@@ -32,6 +33,7 @@ export interface Referencia {
   pais: 'Colombia' | 'Internacional';
   tema: Tema;
   anio: number;
+  /** Enlace estable/oficial (DOI, editorial o gobierno) donde ubicar el original. Verificado. */
   url?: string;
   usadoEn?: Modulo[];
 }
@@ -53,22 +55,14 @@ export const REFERENCIAS: Referencia[] = [
     pais: 'Colombia',
     tema: 'Normativa y guías colombianas',
     anio: 2009,
+    url: 'https://www.invias.gov.co/publicaciones/4154/documentos-tecnicos/',
     usadoEn: ['Calculadora', 'Asistente'],
-  },
-  {
-    id: 'magna-sirgas',
-    apa: 'Instituto Geográfico Agustín Codazzi. (2005). Resolución 068 de 2005, por la cual se adopta como único datum oficial de Colombia el Marco Geocéntrico Nacional de Referencia: MAGNA-SIRGAS. IGAC.',
-    pais: 'Colombia',
-    tema: 'Datos y formatos',
-    anio: 2005,
-    url: 'https://www.igac.gov.co/transparencia-y-acceso-a-la-informacion-publica/normograma/resolucion-068-de-2005',
-    usadoEn: ['Mapa y datos'],
   },
 
   // ── Métodos hidrológicos e hidráulica ──────────────────────────────────────
   {
     id: 'vargas-diazgranados-1998',
-    apa: 'Vargas, R., & Díaz-Granados, M. (1998). Curvas sintéticas regionalizadas de intensidad-duración-frecuencia para Colombia. Universidad de los Andes.',
+    apa: 'Vargas M., R., & Díaz-Granados O., M. (1998). Curvas sintéticas regionalizadas de intensidad-duración-frecuencia para Colombia. En Memorias del XIII Seminario Nacional de Hidráulica e Hidrología. Sociedad Colombiana de Ingenieros.',
     pais: 'Colombia',
     tema: 'Métodos hidrológicos e hidráulica',
     anio: 1998,
@@ -84,10 +78,11 @@ export const REFERENCIAS: Referencia[] = [
   },
   {
     id: 'temez-1978',
-    apa: 'Témez Peláez, J. R. (1978). Cálculo hidrometeorológico de caudales máximos en pequeñas cuencas naturales. Dirección General de Carreteras, Ministerio de Obras Públicas y Urbanismo (MOPU).',
+    apa: 'Témez Peláez, J. R. (1978). Cálculo hidrometeorológico de caudales máximos en pequeñas cuencas naturales. Ministerio de Obras Públicas y Urbanismo (MOPU), Secretaría General Técnica, Servicio de Publicaciones.',
     pais: 'Internacional',
     tema: 'Métodos hidrológicos e hidráulica',
     anio: 1978,
+    url: 'https://www.transportes.gob.es/recursos_mfom/0610400.pdf',
     usadoEn: ['Calculadora'],
   },
   {
@@ -107,19 +102,30 @@ export const REFERENCIAS: Referencia[] = [
     usadoEn: ['Calculadora'],
   },
   {
+    id: 'fischenich-2000',
+    apa: 'Fischenich, C. (2000). Robert Manning: A historical perspective (EMRRP Technical Notes Collection, ERDC TN-EMRRP-SR-10). U.S. Army Engineer Research and Development Center.',
+    pais: 'Internacional',
+    tema: 'Métodos hidrológicos e hidráulica',
+    anio: 2000,
+    url: 'https://apps.dtic.mil/sti/tr/pdf/ADA378362.pdf',
+    usadoEn: ['Calculadora'],
+  },
+  {
     id: 'chow-1959',
     apa: 'Chow, V. T. (1959). Open-channel hydraulics. McGraw-Hill.',
     pais: 'Internacional',
     tema: 'Métodos hidrológicos e hidráulica',
     anio: 1959,
+    url: 'https://archive.org/details/openchannelhydra0000chow',
     usadoEn: ['Calculadora'],
   },
   {
     id: 'chow-applied-1988',
-    apa: 'Chow, V. T., Maidment, D. R., & Mays, L. W. (1988). Applied Hydrology. McGraw-Hill.',
+    apa: 'Chow, V. T., Maidment, D. R., & Mays, L. W. (1988). Applied hydrology. McGraw-Hill.',
     pais: 'Internacional',
     tema: 'Métodos hidrológicos e hidráulica',
     anio: 1988,
+    url: 'https://openlibrary.org/isbn/9780070108103',
     usadoEn: ['Calculadora', 'Período de retorno'],
   },
   {
@@ -128,15 +134,16 @@ export const REFERENCIAS: Referencia[] = [
     pais: 'Colombia',
     tema: 'Métodos hidrológicos e hidráulica',
     anio: 2011,
+    url: 'https://revistas.unal.edu.co/index.php/dyna/article/view/25640',
     usadoEn: ['Calculadora'],
   },
   {
     id: 'bell-1969',
-    apa: 'Bell, F. C. (1969). Generalized rainfall-duration-frequency relationships. Journal of the Hydraulics Division, 95(1), 311-327.',
+    apa: 'Bell, F. C. (1969). Generalized rainfall-duration-frequency relationships. Journal of the Hydraulics Division, 95(1), 311-328.',
     pais: 'Internacional',
     tema: 'Métodos hidrológicos e hidráulica',
     anio: 1969,
-    url: 'https://doi.org/10.1061/JYCEAJ.0002007',
+    url: 'https://doi.org/10.1061/JYCEAJ.0001942',
     usadoEn: ['Curvas IDF'],
   },
   {
@@ -145,6 +152,7 @@ export const REFERENCIAS: Referencia[] = [
     pais: 'Internacional',
     tema: 'Métodos hidrológicos e hidráulica',
     anio: 1986,
+    url: 'https://www.govinfo.gov/app/details/CZIC-gb980-u73-1986',
     usadoEn: ['Asistente'],
   },
   {
@@ -153,7 +161,7 @@ export const REFERENCIAS: Referencia[] = [
     pais: 'Internacional',
     tema: 'Métodos hidrológicos e hidráulica',
     anio: 2004,
-    url: 'https://irrigationtoolbox.com/NEH/Part630_Hydrology/H_210_630_10.pdf',
+    url: 'https://directives.nrcs.usda.gov/sites/default/files2/1712930608/7300.pdf',
     usadoEn: ['Asistente'],
   },
 
@@ -164,6 +172,7 @@ export const REFERENCIAS: Referencia[] = [
     pais: 'Internacional',
     tema: 'Estadística de extremos',
     anio: 1958,
+    url: 'https://doi.org/10.7312/gumb92958',
     usadoEn: ['Período de retorno', 'Asistente'],
   },
   {
@@ -197,7 +206,7 @@ export const REFERENCIAS: Referencia[] = [
   // ── Hidroclimatología y observación ────────────────────────────────────────
   {
     id: 'poveda-2004',
-    apa: 'Poveda, G. (2004). La hidroclimatología de Colombia: una síntesis desde la escala inter-decadal hasta la escala diurna. Revista de la Academia Colombiana de Ciencias Exactas, Físicas y Naturales, 28(107), 201-222.',
+    apa: 'Poveda, G. (2004). La hidroclimatología de Colombia: una síntesis desde la escala inter-decadal hasta la escala diurna. Revista de la Academia Colombiana de Ciencias Exactas, Físicas y Naturales, 28(107), 201-221.',
     pais: 'Colombia',
     tema: 'Hidroclimatología y observación',
     anio: 2004,
@@ -206,28 +215,21 @@ export const REFERENCIAS: Referencia[] = [
   },
   {
     id: 'ena-2022',
-    apa: 'Instituto de Hidrología, Meteorología y Estudios Ambientales. (2023). Estudio Nacional del Agua 2022. IDEAM.',
+    apa: 'Instituto de Hidrología, Meteorología y Estudios Ambientales. (2022). Estudio Nacional del Agua 2022 (ISBN 978-958-5489-12-7). Panamericana.',
     pais: 'Colombia',
     tema: 'Hidroclimatología y observación',
-    anio: 2023,
-    url: 'https://www.ideam.gov.co/sala-de-prensa/informes/publicacion-jue-23032023-1200',
+    anio: 2022,
+    url: 'https://www.ideam.gov.co/nuestra-entidad/hidrologia/estudio-nacional-del-agua-2022',
     usadoEn: ['Asistente'],
   },
   {
     id: 'wmo-168-2008',
-    apa: 'World Meteorological Organization. (2008). Guide to hydrological practices: Volume I. Hydrology – From measurement to hydrological information (6th ed., WMO-No. 168). World Meteorological Organization.',
+    apa: 'World Meteorological Organization. (2008). Guide to hydrological practices: Volume I. Hydrology – From measurement to hydrological information (6th ed., WMO-No. 168). WMO.',
     pais: 'Internacional',
     tema: 'Hidroclimatología y observación',
     anio: 2008,
+    url: 'https://library.wmo.int/records/item/35804-guide-to-hydrological-practices-volume-i',
     usadoEn: ['Período de retorno', 'Asistente'],
-  },
-  {
-    id: 'wmo-8-2018',
-    apa: 'World Meteorological Organization. (2018). Guide to instruments and methods of observation (WMO-No. 8): Volume I – Measurement of meteorological variables (2018 ed.). World Meteorological Organization.',
-    pais: 'Internacional',
-    tema: 'Datos y formatos',
-    anio: 2018,
-    usadoEn: ['Mapa y datos'],
   },
   {
     id: 'mckee-1993',
@@ -235,36 +237,8 @@ export const REFERENCIAS: Referencia[] = [
     pais: 'Internacional',
     tema: 'Hidroclimatología y observación',
     anio: 1993,
+    url: 'https://www.droughtmanagement.info/literature/AMS_Relationship_Drought_Frequency_Duration_Time_Scales_1993.pdf',
     usadoEn: ['Asistente'],
-  },
-
-  // ── Datos y formatos (datum, metadatos, formatos e instrumentos) ───────────
-  {
-    id: 'iso-19115-2014',
-    apa: 'International Organization for Standardization. (2014). Geographic information — Metadata — Part 1: Fundamentals (ISO Standard No. 19115-1:2014).',
-    pais: 'Internacional',
-    tema: 'Datos y formatos',
-    anio: 2014,
-    url: 'https://www.iso.org/standard/53798.html',
-    usadoEn: ['Mapa y datos'],
-  },
-  {
-    id: 'geojson-rfc7946',
-    apa: 'Butler, H., Daly, M., Doyle, A., Gillies, S., Hagen, S., & Schaub, T. (2016). The GeoJSON format (RFC 7946). RFC Editor.',
-    pais: 'Internacional',
-    tema: 'Datos y formatos',
-    anio: 2016,
-    url: 'https://doi.org/10.17487/RFC7946',
-    usadoEn: ['Mapa y datos'],
-  },
-  {
-    id: 'ogc-api-features',
-    apa: 'Open Geospatial Consortium. (2019). OGC API - Features - Part 1: Core (Version 1.0, OGC 17-069r3).',
-    pais: 'Internacional',
-    tema: 'Datos y formatos',
-    anio: 2019,
-    url: 'https://docs.ogc.org/is/17-069r3/17-069r3.html',
-    usadoEn: ['Mapa y datos'],
   },
 
   // ── Erosión, suelo y balance hídrico ───────────────────────────────────────
@@ -283,6 +257,7 @@ export const REFERENCIAS: Referencia[] = [
     pais: 'Internacional',
     tema: 'Erosión, suelo y balance hídrico',
     anio: 1997,
+    url: 'https://www.ars.usda.gov/ARSUserFiles/60600505/RUSLE/AH_703%20-%20Predicting%20Soil%20Erosion%20by%20Water%20-%20A%20Guide%20to%20Conservation%20Planning%20With%20the%20RUSLE%20(RUSLE).pdf',
     usadoEn: ['Asistente'],
   },
   {
@@ -296,7 +271,7 @@ export const REFERENCIAS: Referencia[] = [
   },
   {
     id: 'thornthwaite-mather-1957',
-    apa: 'Thornthwaite, C. W., & Mather, J. R. (1957). Instructions and tables for computing potential evapotranspiration and the water balance. Publications in Climatology, 10(3), 185-311. Drexel Institute of Technology.',
+    apa: 'Thornthwaite, C. W., & Mather, J. R. (1957). Instructions and tables for computing potential evapotranspiration and the water balance. Publications in Climatology, 10(3), 185-311. Laboratory of Climatology, Drexel Institute of Technology.',
     pais: 'Internacional',
     tema: 'Erosión, suelo y balance hídrico',
     anio: 1957,
@@ -304,25 +279,73 @@ export const REFERENCIAS: Referencia[] = [
   },
   {
     id: 'fao-56-1998',
-    apa: 'Allen, R. G., Pereira, L. S., Raes, D., & Smith, M. (1998). Crop evapotranspiration: Guidelines for computing crop water requirements (FAO Irrigation and Drainage Paper No. 56). FAO.',
+    apa: 'Allen, R. G., Pereira, L. S., Raes, D., & Smith, M. (1998). Crop evapotranspiration: Guidelines for computing crop water requirements (FAO Irrigation and Drainage Paper No. 56). Food and Agriculture Organization of the United Nations.',
     pais: 'Internacional',
     tema: 'Erosión, suelo y balance hídrico',
     anio: 1998,
+    url: 'https://www.fao.org/4/x0490e/x0490e00.htm',
     usadoEn: ['Asistente'],
   },
   {
     id: 'erosion-ideam-2015',
-    apa: 'Instituto de Hidrología, Meteorología y Estudios Ambientales, Ministerio de Ambiente y Desarrollo Sostenible, & Universidad de Ciencias Aplicadas y Ambientales. (2015). Estudio nacional de la degradación de suelos por erosión en Colombia. IDEAM.',
+    apa: 'Instituto de Hidrología, Meteorología y Estudios Ambientales, & Universidad de Ciencias Aplicadas y Ambientales. (2015). Síntesis del estudio nacional de la degradación de suelos por erosión en Colombia. IDEAM.',
     pais: 'Colombia',
     tema: 'Erosión, suelo y balance hídrico',
     anio: 2015,
     usadoEn: ['Asistente'],
   },
 
+  // ── Datos y formatos (datum, metadatos, formatos e instrumentos) ───────────
+  {
+    id: 'magna-sirgas',
+    apa: 'Instituto Geográfico Agustín Codazzi. (2005). Resolución 068 de 2005 (28 de enero), por la cual se adopta como único datum oficial de Colombia el Marco Geocéntrico Nacional de Referencia: MAGNA-SIRGAS. Diario Oficial No. 45.812.',
+    pais: 'Colombia',
+    tema: 'Datos y formatos',
+    anio: 2005,
+    url: 'https://www.igac.gov.co/transparencia-y-acceso-a-la-informacion-publica/normograma/resolucion-068-de-2005',
+    usadoEn: ['Mapa y datos'],
+  },
+  {
+    id: 'wmo-8-2018',
+    apa: 'World Meteorological Organization. (2018). Guide to instruments and methods of observation (WMO-No. 8): Volume I – Measurement of meteorological variables (2018 ed.). World Meteorological Organization.',
+    pais: 'Internacional',
+    tema: 'Datos y formatos',
+    anio: 2018,
+    url: 'https://doi.org/10.59327/wmo/cimo/1',
+    usadoEn: ['Mapa y datos'],
+  },
+  {
+    id: 'iso-19115-2014',
+    apa: 'International Organization for Standardization. (2014). Geographic information — Metadata — Part 1: Fundamentals (ISO Standard No. 19115-1:2014).',
+    pais: 'Internacional',
+    tema: 'Datos y formatos',
+    anio: 2014,
+    url: 'https://www.iso.org/standard/53798.html',
+    usadoEn: ['Mapa y datos'],
+  },
+  {
+    id: 'geojson-rfc7946',
+    apa: 'Butler, H., Daly, M., Doyle, A., Gillies, S., Hagen, S., & Schaub, T. (2016). The GeoJSON format (RFC 7946). Internet Engineering Task Force (IETF).',
+    pais: 'Internacional',
+    tema: 'Datos y formatos',
+    anio: 2016,
+    url: 'https://doi.org/10.17487/RFC7946',
+    usadoEn: ['Mapa y datos'],
+  },
+  {
+    id: 'ogc-api-features',
+    apa: 'Open Geospatial Consortium. (2019). OGC API - Features - Part 1: Core (Version 1.0, OGC 17-069r3).',
+    pais: 'Internacional',
+    tema: 'Datos y formatos',
+    anio: 2019,
+    url: 'https://docs.ogc.org/is/17-069r3/17-069r3.html',
+    usadoEn: ['Mapa y datos'],
+  },
+
   // ── Frontera de alcance (la herramienta NO lo calcula; se remite) ──────────
   {
     id: 'nsr10-titulo-h',
-    apa: 'Asociación Colombiana de Ingeniería Sísmica. (2010). Reglamento Colombiano de Construcción Sismo Resistente NSR-10: Título H — Estudios geotécnicos. Adoptado mediante el Decreto 926 de 2010.',
+    apa: 'Asociación Colombiana de Ingeniería Sísmica. (2010). Reglamento Colombiano de Construcción Sismo Resistente NSR-10: Título H — Estudios geotécnicos (adoptado mediante el Decreto 926 del 19 de marzo de 2010).',
     pais: 'Colombia',
     tema: 'Frontera de alcance',
     anio: 2010,
@@ -334,20 +357,23 @@ export const REFERENCIAS: Referencia[] = [
     pais: 'Internacional',
     tema: 'Frontera de alcance',
     anio: 2020,
+    url: 'https://trid.trb.org/View/1704698',
   },
   {
     id: 'hec-18-2012',
-    apa: 'Arneson, L. A., Zevenbergen, L. W., Lagasse, P. F., & Clopper, P. E. (2012). Evaluating scour at bridges (5th ed., Hydraulic Engineering Circular No. 18, FHWA-HIF-12-003). Federal Highway Administration, U.S. Department of Transportation.',
+    apa: 'Arneson, L. A., Zevenbergen, L. W., Lagasse, P. F., & Clopper, P. E. (2012). Evaluating scour at bridges (5th ed., Hydraulic Engineering Circular No. 18, Report No. FHWA-HIF-12-003). Federal Highway Administration, U.S. Department of Transportation.',
     pais: 'Internacional',
     tema: 'Frontera de alcance',
     anio: 2012,
+    url: 'https://www.fhwa.dot.gov/engineering/hydraulics/pubs/hif12003.pdf',
   },
   {
     id: 'fhwa-hds5-2012',
-    apa: 'Schall, J. D., Thompson, P. L., Zerges, S. M., Kilgore, R. T., & Morris, J. L. (2012). Hydraulic design of highway culverts (3rd ed., Hydraulic Design Series No. 5, FHWA-HIF-12-026). Federal Highway Administration, U.S. Department of Transportation.',
+    apa: 'Schall, J. D., Thompson, P. L., Zerges, S. M., Kilgore, R. T., & Morris, J. L. (2012). Hydraulic design of highway culverts (3rd ed., Hydraulic Design Series No. 5, Report No. FHWA-HIF-12-026). Federal Highway Administration, U.S. Department of Transportation.',
     pais: 'Internacional',
     tema: 'Frontera de alcance',
     anio: 2012,
+    url: 'https://www.fhwa.dot.gov/engineering/hydraulics/pubs/12026/hif12026.pdf',
   },
 ];
 
@@ -357,22 +383,26 @@ export const REFERENCIAS: Referencia[] = [
 // fuente". Mantener en sync con la carpeta `fuentes-normativas/` y la subida a R2.
 export const REFS_CON_PDF = new Set<string>([
   'ras-0330', 'invias-drenaje-2009', 'magna-sirgas', 'vargas-diazgranados-1998', 'temez-1978',
-  'velez-botero-2011', 'chow-1959', 'chow-applied-1988', 'coles-2001',
-  'poveda-2004', 'wmo-168-2008', 'mckee-1993', 'scs-tr55-1986', 'neh-630-scs-cn', 'rusle-1997',
-  'fao-56-1998', 'nsr10-titulo-h', 'kirpich-1940', 'fhwa-hds5-2012',
-  'hec-18-2012', 'green-ampt-1911', 'thornthwaite-mather-1957', 'ena-2022', 'erosion-ideam-2015',
-  'ogc-api-features', 'geojson-rfc7946', 'manning-1891', 'stephens-1974',
+  'velez-botero-2011', 'chow-1959', 'chow-applied-1988', 'coles-2001', 'poveda-2004',
+  'wmo-168-2008', 'mckee-1993', 'scs-tr55-1986', 'neh-630-scs-cn', 'rusle-1997',
+  'fao-56-1998', 'nsr10-titulo-h', 'kirpich-1940', 'fhwa-hds5-2012', 'hec-18-2012',
+  'green-ampt-1911', 'thornthwaite-mather-1957', 'ena-2022', 'erosion-ideam-2015',
+  'ogc-api-features', 'geojson-rfc7946', 'fischenich-2000', 'stephens-1974',
 ]);
 
-// Aclaración cuando el PDF hospedado NO es exactamente la cita (sustituto legítimo
-// y de acceso libre, o variante de la misma fuente).
+// Aclaración cuando el PDF hospedado NO es exactamente la edición/versión citada
+// (variante legítima y de acceso libre de la misma obra). Verificado en la auditoría.
 export const PDF_NOTAS: Record<string, string> = {
-  'manning-1891':
-    'El PDF es Fischenich (2000), nota técnica del US Army Corps (dominio público) que documenta y cita el artículo original de Manning (1891). El original de 1891 está en HathiTrust (Full View).',
   'stephens-1974':
-    'El PDF es el reporte técnico de 1972 (Stanford-ONR No. 186), precursor de acceso libre y de contenido equivalente al artículo de JASA (1974) citado.',
+    'El PDF es el reporte técnico de 1972 (Stanford-ONR No. 186), precursor de acceso libre y de contenido equivalente al artículo de JASA (1974) citado. El artículo de revista está tras el DOI.',
   'ras-0330':
     'Se muestra la versión de texto buscable de la Resolución 0330 de 2017; el escaneo oficial también está disponible.',
+  'temez-1978':
+    'El PDF hospedado es la reimpresión revisada de 1987 (Dirección General de Carreteras); misma obra, autor y método que la 1.ª edición de 1978 citada.',
+  'chow-applied-1988':
+    'El PDF hospedado es la traducción autorizada al español (Hidrología aplicada, McGraw-Hill Interamericana, 1994); misma obra, autores y 1.ª edición que la cita en inglés.',
+  'erosion-ideam-2015':
+    'El PDF hospedado es la Síntesis del estudio; el atlas cartográfico completo se distribuye aparte.',
 };
 
 /** URL del PDF servido desde R2, o undefined si la referencia no tiene archivo. */
