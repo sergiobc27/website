@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { MotionConfig, motion } from 'motion/react';
-import { BookOpenText, AlertTriangle } from 'lucide-react';
+import { BookOpenText, Info } from 'lucide-react';
 import { Reveal, RevealItem } from './landing/Reveal';
 import { CitaFuente } from './calculadora/CitaFuente';
 import { TablaNormaView } from './calculadora/TablaNormaView';
@@ -55,12 +55,11 @@ export function Metodologia() {
             tabla o referencia exacta para que puedas comprobarlo en la fuente original.
           </p>
           <div className="mt-3 flex max-w-3xl items-start gap-2 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-xs text-muted-foreground">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
             <span>
-              Alcance: esta plataforma entrega el producto hidrológico (caudal e intensidad de diseño). El
-              dimensionamiento estructural de las obras se rige por NSR-10 / AASHTO / INVÍAS y queda fuera de la
-              herramienta. Resultados orientativos de pre-dimensionamiento: para diseño definitivo valida con la
-              normativa vigente y un especialista.
+              Fines académicos y de investigación. Las fuentes se citan y enlazan con este único fin; los derechos
+              pertenecen a sus autores y editoriales. Las obras protegidas se enlazan a su DOI o editorial y no se
+              alojan; los PDF disponibles provienen de fuentes oficiales o de acceso abierto.
             </span>
           </div>
         </div>

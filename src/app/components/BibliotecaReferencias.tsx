@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Library, Search, ExternalLink, Copy, Check, FileText } from 'lucide-react';
-import { REFERENCIAS, TEMAS, pdfUrl, type Referencia, type Tema } from '../lib/referencias';
+import { Library, Search, ExternalLink, Copy, Check, FileText, Info } from 'lucide-react';
+import { REFERENCIAS, TEMAS, pdfUrl, doiDe, hostFuente, type Referencia, type Tema } from '../lib/referencias';
 import { VisorPdf } from './VisorPdf';
 
 type PaisFiltro = 'todos' | 'Colombia' | 'Internacional';
@@ -58,6 +58,16 @@ export function BibliotecaReferencias() {
             {nColombia} colombianas y {nConPdf} con PDF para previsualizar. Filtra por tema o país, o busca por autor/título/año.
           </p>
         </div>
+      </div>
+
+      {/* Nota de uso académico y de derechos */}
+      <div className="mb-4 flex items-start gap-2 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-xs text-muted-foreground">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+        <span>
+          Fines académicos y de investigación. Las fuentes se citan y enlazan con este único fin; los derechos
+          pertenecen a sus autores y editoriales. Las obras protegidas se enlazan a su DOI o editorial y no se
+          alojan; los PDF disponibles provienen de fuentes oficiales o de acceso abierto.
+        </span>
       </div>
 
       {/* Buscador */}
@@ -134,9 +144,23 @@ function Ficha({
 }) {
   const esFrontera = r.tema === 'Frontera de alcance';
   const tienePdf = !!pdfUrl(r.id);
+  const doi = doiDe(r);
+  const host = doi ? null : hostFuente(r);
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border bg-background p-4">
       <p className="text-sm leading-snug text-card-foreground">{r.apa}</p>
+      {(doi || host) && (
+        <a
+          href={r.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex w-fit items-center gap-1 break-all font-mono text-[11px] text-accent hover:underline"
+          title={doi ? `DOI: ${doi}` : r.url}
+        >
+          {doi ? `DOI: ${doi}` : host}
+          <ExternalLink className="h-3 w-3 shrink-0" />
+        </a>
+      )}
       <div className="mt-auto flex flex-wrap items-center gap-1.5 text-[11px]">
         <span className="rounded-full border border-border px-2 py-0.5 text-muted-foreground">
           {r.pais === 'Colombia' ? '🇨🇴 Colombia' : '🌐 Internacional'}
@@ -174,16 +198,6 @@ function Ficha({
             {copiado ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
             {copiado ? 'Copiado' : 'Copiar'}
           </button>
-          {r.url && (
-            <a
-              href={r.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-accent transition-colors hover:underline"
-            >
-              Ver fuente <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-          )}
         </span>
       </div>
     </div>
