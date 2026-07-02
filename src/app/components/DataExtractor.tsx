@@ -207,6 +207,12 @@ function normalizeText(value: string) {
 export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: ExtractorRuntimeState) => void }) {
   const [storedConfig] = useState<StoredExtractorConfig>(loadStoredConfig);
   const [meta, setMeta] = useState<MetaResponse | null>(null);
+  // Referencia ESTABLE de las definiciones de filtro: `meta?.catalogFilters || []`
+  // creaba un arreglo nuevo en cada render mientras meta era null (sin API aun),
+  // y esa dependencia inestable realimentaba el efecto de useCatalogOptions
+  // (setCatalogOptions con objeto nuevo) hasta "Maximum update depth". useMemo la
+  // fija a la misma referencia salvo que meta cambie.
+  const catalogDefinitions = useMemo(() => meta?.catalogFilters ?? [], [meta]);
   const [step, setStep] = useState<StepId>(
     storedConfig.step && STEP_IDS.includes(storedConfig.step) ? storedConfig.step : 'variable'
   );
@@ -232,7 +238,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   } = useCatalogOptions({
     datasetId,
     selectedDepartments,
-    catalogDefinitions: meta?.catalogFilters || [],
+    catalogDefinitions,
   });
   const [stationCodesText, setStationCodesText] = useState('');
   const [stationHelperRows, setStationHelperRows] = useState<StationHelperRow[]>([]);

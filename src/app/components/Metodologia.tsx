@@ -6,6 +6,7 @@ import { CitaFuente } from './calculadora/CitaFuente';
 import { TablaNormaView } from './calculadora/TablaNormaView';
 import { VariablesLista } from './VariablesLista';
 import { IlustracionMetodo } from './IlustracionMetodo';
+import { BibliotecaReferencias } from './BibliotecaReferencias';
 import { METODOLOGIA, SECCIONES_METODOLOGIA, type EntradaMetodo } from '../lib/metodologia/contenido';
 import {
   TABLA_C_URBANA,
@@ -75,6 +76,8 @@ export function Metodologia() {
             </Reveal>
           </section>
         ))}
+
+        <BibliotecaReferencias />
       </div>
     </MotionConfig>
   );
