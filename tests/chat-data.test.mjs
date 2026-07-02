@@ -328,6 +328,40 @@ test("limpiarFugasDeJson elimina líneas que transcriben el bloque interno", asy
   assert.equal(limpiarFugasDeJson("Texto normal con 📚 Referencia: Gumbel (1958)."), "Texto normal con 📚 Referencia: Gumbel (1958).");
 });
 
+// Auditoría 2026-07-01: el filtro viejo era line-anchored ({"tipo": al inicio de
+// línea); un reformateo multilínea del modelo o un sub-objeto se fugaban.
+test("limpiarFugasDeJson elimina el bloque interno aunque venga reformateado en varias líneas", async () => {
+  const { limpiarFugasDeJson } = await import("../src/worker/chatData.js");
+  const sucio = 'Según los datos:\n{\n  "tipo": "idf_tr",\n  "estacion": { "codigo": "10" },\n  "laminaMaxDiariaMm": 98.2,\n  "aniosDeSerie": 20\n}\nEso indica lluvia fuerte.';
+  const limpio = limpiarFugasDeJson(sucio);
+  assert.equal(limpio.includes('"tipo"'), false);
+  assert.equal(limpio.includes("laminaMaxDiariaMm"), false);
+  assert.equal(limpio.includes("Según los datos:"), true);
+  assert.equal(limpio.includes("Eso indica lluvia fuerte."), true);
+});
+
+test("limpiarFugasDeJson corta un sub-objeto con claves internas incrustado en la prosa", async () => {
+  const { limpiarFugasDeJson } = await import("../src/worker/chatData.js");
+  const sucio = 'La estación reporta {"serie":[{"anio":2023,"valor":823.4}],"observaciones":48000} según el espejo.';
+  const limpio = limpiarFugasDeJson(sucio);
+  assert.equal(limpio.includes('"serie"'), false);
+  assert.equal(limpio.includes('"observaciones"'), false);
+});
+
+test("limpiarFugasDeJson corta un fragmento de clave interna sin llaves balanceadas", async () => {
+  const { limpiarFugasDeJson } = await import("../src/worker/chatData.js");
+  const sucio = 'Los datos crudos:\n"serie": [ { "anio": 2023, "valor": 823.4 } ],\nEn resumen, llovió bastante.';
+  const limpio = limpiarFugasDeJson(sucio);
+  assert.equal(limpio.includes('"serie"'), false);
+  assert.equal(limpio.includes("En resumen, llovió bastante."), true);
+});
+
+test("limpiarFugasDeJson respeta las llaves de LaTeX y la prosa con llaves benignas", async () => {
+  const { limpiarFugasDeJson } = await import("../src/worker/chatData.js");
+  const conLatex = 'La curva IDF es $$I = \\dfrac{K \\cdot T^{m}}{D^{n}}$$ y se usa así {ejemplo}.';
+  assert.equal(limpiarFugasDeJson(conLatex), conLatex);
+});
+
 test("elegirEstacion prefiere fiabilidad verde y más años", () => {
   const stations = [
     { codigo: "1", nombre: "AEROPUERTO", municipio: "SOLEDAD", fiabilidad: "rojo", aniosValidos: 30 },
@@ -350,7 +384,8 @@ function aiMock(respuestas) {
 function chatRequest(body) {
   return new Request("https://ideam.sergiobc.com/api/chat", {
     method: "POST",
-    headers: { "content-type": "application/json", "cf-connecting-ip": "1.2.3.4" },
+    // El Worker exige Origin presente y en la allowlist en los POST con costo.
+    headers: { "content-type": "application/json", "cf-connecting-ip": "1.2.3.4", origin: "https://ideam.sergiobc.com" },
     body: JSON.stringify(body),
   });
 }

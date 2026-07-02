@@ -549,11 +549,69 @@ export function extraerSugerencias(raw) {
 
 // Red de seguridad determinista: si el modelo transcribe el bloque JSON de
 // datos en su respuesta (visto en producción: lo citaba como "Referencia"),
-// se eliminan esas líneas — el usuario nunca debe ver el JSON interno.
+// se elimina: el usuario nunca debe ver el JSON interno. Endurecido (hallazgo
+// de auditoría): el filtro viejo solo cortaba líneas que EMPEZABAN por
+// {"tipo": o referencia:{, así que un reformateo del modelo (multilínea, o un
+// sub-objeto como "serie":[...]) se fugaba. Ahora además: (1) se descartan los
+// bloques {...} balanceados que contengan 2+ claves internas conocidas (las
+// llaves de LaTeX sobreviven porque no contienen esas claves), y (2) se cortan
+// las líneas residuales con cualquier clave interna en sintaxis JSON. Sigue
+// siendo defensa en profundidad: la barrera primaria es la prohibición del
+// prompt (promptDeDatos).
+const RE_CLAVE_INTERNA = /"(tipo|serie|observaciones|catalogFilters|laminaMaxDiariaMm|aniosDeSerie|fiabilidad)"\s*:/g;
+
+function contarClavesInternas(s) {
+  RE_CLAVE_INTERNA.lastIndex = 0;
+  let n = 0;
+  while (RE_CLAVE_INTERNA.exec(s)) n++;
+  return n;
+}
+
+// Elimina los bloques {...} (con anidación, incluso multilínea) que contengan
+// 2 o más claves internas. Un '{' sin cierre balanceado se trata como bloque
+// hasta el final del texto (transcripción cortada por max_tokens).
+function sinBloquesJsonInternos(text) {
+  let out = "";
+  let i = 0;
+  while (i < text.length) {
+    if (text[i] === "{") {
+      let depth = 0;
+      let j = i;
+      for (; j < text.length; j++) {
+        if (text[j] === "{") depth++;
+        else if (text[j] === "}") {
+          depth--;
+          if (depth === 0) break;
+        }
+      }
+      const bloque = depth === 0 ? text.slice(i, j + 1) : text.slice(i);
+      if (contarClavesInternas(bloque) >= 2) {
+        i = depth === 0 ? j + 1 : text.length;
+        continue;
+      }
+    }
+    out += text[i];
+    i++;
+  }
+  return out;
+}
+
 export function limpiarFugasDeJson(reply) {
-  return String(reply || "")
+  // 1) Filtro de líneas original (bloque en una línea o citado como Referencia).
+  const sinLineas = String(reply || "")
     .split("\n")
     .filter((l) => !/\{\s*"tipo"\s*:/.test(l) && !/referencia\s*:\s*\{/i.test(l))
+    .join("\n");
+  // 2) Bloques {...} con 2+ claves internas (reformateos multilínea del modelo).
+  // 3) Líneas residuales: fragmentos con clave interna sin llaves balanceadas y
+  //    etiquetas "📚 Referencia:" que quedaron huérfanas al quitar su bloque.
+  return sinBloquesJsonInternos(sinLineas)
+    .split("\n")
+    .filter((l) => {
+      RE_CLAVE_INTERNA.lastIndex = 0;
+      if (RE_CLAVE_INTERNA.test(l)) return false;
+      return !/^\s*📚?\s*Referencia\s*:\s*$/i.test(l);
+    })
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();

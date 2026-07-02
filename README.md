@@ -7,29 +7,33 @@ Repositorio publico del sitio `website`, incluyendo la aplicacion operativa de `
 - `sergiobc.com` y `www.sergiobc.com`: sitio personal base.
 - `ideam.sergiobc.com`: frontend React/Vite + Cloudflare Worker API para automatizar descargas IDEAM desde Socrata.
 
-## Arquitectura
+## Arquitectura del proyecto (dos repositorios)
+
+El proyecto completo vive repartido en dos repositorios que se comunican por HTTPS:
+
+- **Este repo (`sergiobc27/website`)**: frontend React/Vite/TypeScript y el Cloudflare Worker (`src/worker/`) que sirve los assets, actua como proxy autenticado de `/api/*` hacia la API propia, y maneja en el edge el asistente IA (Workers AI), el envio del PDF de curvas IDF por correo (Resend + Turnstile) y los PDFs de fuentes (R2). Un push a `main` despliega el Worker `ideam` en `ideam.sergiobc.com`.
+- **[`sergiobc27/ideam-data-automator`](https://github.com/sergiobc27/ideam-data-automator)**: paquete Python instalable (CLI y TUI para descargar datos del IDEAM), el ingestor del espejo de datos y la API FastAPI sobre PostgreSQL/TimescaleDB, corriendo en un servidor Oracle y expuesta unicamente via Cloudflare Tunnel como `ideam-api.sergiobc.com`.
+
+Flujo de una consulta de la web:
+
+1. Navegador -> Worker (edge): valida rutas publicas, inyecta el secreto del proxy y cachea catalogos.
+2. Worker -> API FastAPI (box Oracle, via Cloudflare Tunnel).
+3. API -> TimescaleDB: espejo local de las observaciones del IDEAM (fuente original: Socrata, `www.datos.gov.co`).
+
+El documento extendido de arquitectura (tres capas, diagramas Mermaid) es `ARQUITECTURA-DEL-PROYECTO.md`, en la carpeta de trabajo `Github/` que contiene ambos repos.
+
+Componentes de este repo:
 
 - Frontend: React, Vite, TypeScript progresivo.
-- API: Cloudflare Workers.
-- Jobs asincronos: Durable Objects.
-- Almacenamiento temporal: R2.
-- Fuente de datos: Socrata SODA API en `www.datos.gov.co`.
-
-Flujo principal:
-
-1. El usuario configura variable, departamento, filtros, fechas y formatos.
-2. La web consulta catalogos avanzados desde cache R2.
-3. El Worker valida que haya departamento obligatorio.
-4. El Worker crea un job asincrono.
-5. El job consulta Socrata por paginas, genera un ZIP y lo guarda en R2.
-6. El usuario descarga un ZIP organizado por `variable/departamento/municipio`.
+- Worker: proxy `/api/*`, asistente IA en el edge, correo IDF y fuentes en R2.
+- Almacenamiento: R2 (PDFs de referencias), KV (rate limiting).
 
 ## Estructura
 
 - `src/app/*`: interfaz React.
 - `src/app/lib/ideamApi.ts`: cliente API del frontend.
 - `src/shared/ideamContracts.ts`: contratos TypeScript compartidos para respuestas API.
-- `src/worker/index.js`: Worker, rutas API, Socrata, exportaciones y Durable Objects.
+- `src/worker/index.js`: Worker, proxy `/api/*` a la API propia, asistente IA, correo IDF y fuentes R2.
 - `tests/worker.test.mjs`: pruebas del Worker.
 - `tests/e2e/ideam-production.spec.ts`: smoke test productivo.
 - `.github/workflows/deploy-ideam.yml`: CI/CD.

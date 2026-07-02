@@ -2,10 +2,40 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
 import { ArrowRight, Bot, Check, Copy, MapPin, MessageCircle, Send, User, X } from 'lucide-react';
-import { apiJson } from '../lib/ideamApi';
+import { apiJson, ApiError } from '../lib/ideamApi';
 import { cercaDelFondo, formatChatError, parseAcciones, type Accion } from '../lib/chatUi';
 import { NAVIGATE_EVENT, type NavigateDetail } from '../lib/navigation';
 import { estacionMasCercana, type EstacionFeature, type EstacionGeo } from '../lib/geo';
+import { Turnstile } from './Turnstile';
+
+// Sesión firmada del chat (freno anti-abuso del Worker): se obtiene en
+// POST /api/chat/session tras pasar Turnstile (una vez por hora, misma site key
+// del correo) y el Worker devuelve un token renovado en cada respuesta. Se
+// guarda en sessionStorage para sobrevivir a re-montajes del panel.
+const CHAT_SESSION_KEY = 'ideam:chat-session';
+
+function leerSesionGuardada(): string | null {
+  try {
+    const raw = sessionStorage.getItem(CHAT_SESSION_KEY);
+    if (!raw) return null;
+    const { token, exp } = JSON.parse(raw) as { token?: string; exp?: number | null };
+    if (typeof token !== 'string' || !token) return null;
+    // Margen de 30 s para no mandar un token a punto de vencer.
+    if (typeof exp === 'number' && exp * 1000 < Date.now() + 30_000) return null;
+    return token;
+  } catch {
+    return null;
+  }
+}
+
+function guardarSesion(token: string | null, exp: number | null) {
+  try {
+    if (!token) sessionStorage.removeItem(CHAT_SESSION_KEY);
+    else sessionStorage.setItem(CHAT_SESSION_KEY, JSON.stringify({ token, exp }));
+  } catch {
+    /* almacenamiento no disponible: la sesión vive solo en memoria */
+  }
+}
 
 // Render de fórmulas LaTeX con KaTeX. KaTeX genera su propio markup seguro a
 // partir del LaTeX (no inserta HTML del usuario) y con throwOnError:false nunca
@@ -147,6 +177,37 @@ export function Asistente({ view, compact }: AsistenteProps) {
   const [geoEstado, setGeoEstado] = useState<'idle' | 'cargando' | 'activa' | 'error'>('idle');
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const featuresRef = useRef<EstacionFeature[] | null>(null);
+  // Freno anti-abuso del chat: sesión firmada + verificación Turnstile.
+  const sesionRef = useRef<string | null>(null);
+  const sesionNoRequeridaRef = useRef(false); // el Worker no exige sesión (dev sin secretos)
+  const pendienteRef = useRef<ChatMessage[] | null>(null); // consulta en espera del widget
+  const reintentoSesionRef = useRef(false); // evita un bucle 401 -> verificar -> 401
+  const [verificando, setVerificando] = useState(false);
+  if (sesionRef.current === null) sesionRef.current = leerSesionGuardada();
+
+  const fijarSesion = (token: string | null, exp: number | null) => {
+    sesionRef.current = token;
+    guardarSesion(token, exp);
+  };
+
+  // Canjea (opcionalmente) un token Turnstile por la sesión firmada del chat.
+  // session:null en la respuesta significa que el Worker no exige sesión.
+  const abrirSesion = async (turnstileToken?: string) => {
+    const data = await apiJson<{ session?: string | null; exp?: number }>(
+      '/api/chat/session',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(turnstileToken ? { turnstileToken } : {}),
+      },
+      'No se pudo abrir la sesión del chat.',
+    );
+    if (typeof data.session === 'string' && data.session) {
+      fijarSesion(data.session, typeof data.exp === 'number' ? data.exp : null);
+    } else {
+      sesionNoRequeridaRef.current = true;
+    }
+  };
 
   // "Dónde estoy": pide la ubicación al navegador, resuelve la estación más
   // cercana EN EL CLIENTE (con stations.geojson) y guarda solo el lugar. Las
@@ -218,12 +279,32 @@ export function Asistente({ view, compact }: AsistenteProps) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20000);
     try {
-      const data = await apiJson<{ reply?: string; suggestions?: unknown; acciones?: unknown }>(
+      // Freno anti-abuso: sin sesión firmada se intenta abrir una. Un 403 del
+      // Worker significa "hace falta Turnstile": la consulta queda en espera y
+      // se muestra el widget (una sola vez por hora, como en el correo).
+      if (!sesionRef.current && !sesionNoRequeridaRef.current) {
+        try {
+          await abrirSesion();
+        } catch (cause) {
+          if (cause instanceof ApiError && cause.status === 403) {
+            pendienteRef.current = turnos;
+            setVerificando(true);
+            return;
+          }
+          throw cause;
+        }
+      }
+      const data = await apiJson<{ reply?: string; suggestions?: unknown; acciones?: unknown; session?: unknown; exp?: unknown }>(
         '/api/chat',
         {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ messages: turnos.slice(-10), ...(view ? { view } : {}), ...(ubicacion ? { ubicacion } : {}) }),
+          body: JSON.stringify({
+            messages: turnos.slice(-10),
+            ...(view ? { view } : {}),
+            ...(ubicacion ? { ubicacion } : {}),
+            ...(sesionRef.current ? { session: sesionRef.current } : {}),
+          }),
           signal: controller.signal,
         },
         'El asistente no pudo responder.',
@@ -231,6 +312,12 @@ export function Asistente({ view, compact }: AsistenteProps) {
       if (typeof data.reply !== 'string' || !data.reply.trim()) {
         throw new Error('El asistente no pudo responder.');
       }
+      // El Worker devuelve la sesión renovada (lleva el conteo de mensajes):
+      // siempre se usa el último token recibido.
+      if (typeof data.session === 'string' && data.session) {
+        fijarSesion(data.session, typeof data.exp === 'number' ? data.exp : null);
+      }
+      reintentoSesionRef.current = false;
       const reply = data.reply;
       setMessages((current) => [...current, { role: 'assistant', content: reply }]);
       setSuggestions(
@@ -242,12 +329,39 @@ export function Asistente({ view, compact }: AsistenteProps) {
       // revalidan (whitelist + saneo) antes de pintarlos.
       setAcciones(parseAcciones(data.acciones));
     } catch (cause) {
+      // 401 = la sesión venció o agotó su tope: se repite la verificación UNA
+      // vez con la consulta en espera; si vuelve a fallar, error normal.
+      if (cause instanceof ApiError && cause.status === 401 && !reintentoSesionRef.current) {
+        reintentoSesionRef.current = true;
+        fijarSesion(null, null);
+        pendienteRef.current = turnos;
+        setVerificando(true);
+        return;
+      }
       // El 429/Retry-After y el caso "respuesta HTML" los traduce formatChatError.
       setError(formatChatError(cause));
     } finally {
       clearTimeout(timeout);
       setIsLoading(false);
     }
+  };
+
+  // Token del widget Turnstile: se canjea por la sesión y se retoma la consulta
+  // que quedó en espera. token null = el widget expiró o falló (se auto-reinicia).
+  const alTokenTurnstile = (token: string | null) => {
+    if (!token) return;
+    void (async () => {
+      try {
+        await abrirSesion(token);
+        setVerificando(false);
+        const pendiente = pendienteRef.current;
+        pendienteRef.current = null;
+        if (pendiente) void ejecutarConsulta(pendiente);
+      } catch (cause) {
+        // El widget queda visible para reintentar.
+        setError(formatChatError(cause));
+      }
+    })();
   };
 
   const send = (text: string) => {
@@ -418,6 +532,15 @@ export function Asistente({ view, compact }: AsistenteProps) {
               Reintentar
             </button>
           )}
+        </div>
+      )}
+
+      {verificando && (
+        <div className="mt-2 rounded-lg border border-border bg-card p-3">
+          <p className="mb-2 text-xs text-muted-foreground">
+            Verificación rápida anti-robots para abrir el chat (una vez por hora). Tu pregunta se envía apenas termine:
+          </p>
+          <Turnstile onToken={alTokenTurnstile} />
         </div>
       )}
 
