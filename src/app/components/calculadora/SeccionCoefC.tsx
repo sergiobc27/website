@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { fmt } from '../../lib/format';
 import { factorFrecuencia } from '../../lib/hydro/runoff';
@@ -141,6 +141,7 @@ function Celda({ titulo, valor, destacado }: { titulo: string; valor: string; de
 
 function DetalleCf() {
   const [abierto, setAbierto] = useState(false);
+  const panelId = useId();
   return (
     <div className="rounded-lg border border-border">
       <button
@@ -148,12 +149,16 @@ function DetalleCf() {
         onClick={() => setAbierto((v) => !v)}
         className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs font-semibold text-card-foreground"
         aria-expanded={abierto}
+        aria-controls={abierto ? panelId : undefined}
       >
         Ver la tabla del factor de frecuencia Cf
-        <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${abierto ? 'rotate-180' : ''}`} />
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${abierto ? 'rotate-180' : ''}`}
+          aria-hidden
+        />
       </button>
       {abierto && (
-        <div className="border-t border-border px-3 py-3">
+        <div id={panelId} className="border-t border-border px-3 py-3">
           <TablaNormaView tabla={TABLA_CF} />
         </div>
       )}

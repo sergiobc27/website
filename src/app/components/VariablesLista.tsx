@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ChevronDown } from 'lucide-react';
 import { Formula } from './Formula';
@@ -32,6 +32,7 @@ export function VariablesLista({ variables, className = '' }: { variables: Varia
 function Fila({ v }: { v: Variable }) {
   const [abierto, setAbierto] = useState(false);
   const reducido = usePrefersReducedMotion();
+  const panelId = useId();
   const tieneComo = !!v.comoSeObtiene;
 
   const cuerpo = (
@@ -62,6 +63,7 @@ function Fila({ v }: { v: Variable }) {
         type="button"
         onClick={() => setAbierto((a) => !a)}
         aria-expanded={abierto}
+        aria-controls={abierto ? panelId : undefined}
         className="flex w-full items-baseline gap-2 rounded text-left transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
       >
         {cuerpo}
@@ -70,6 +72,7 @@ function Fila({ v }: { v: Variable }) {
         {abierto && (
           <motion.div
             key="como"
+            id={panelId}
             initial={reducido ? false : { height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={reducido ? { opacity: 0 } : { height: 0, opacity: 0 }}

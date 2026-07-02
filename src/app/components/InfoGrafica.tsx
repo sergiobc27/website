@@ -1,9 +1,11 @@
+import { useId } from 'react';
 import { motion } from 'motion/react';
 import { Info, ArrowRight } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { CitaFuente } from './calculadora/CitaFuente';
 import { VariablesLista } from './VariablesLista';
 import { METODOLOGIA } from '../lib/metodologia/contenido';
+import { usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
 
 /**
  * Botón "(i)" que se coloca en el encabezado de una gráfica. Abre un popover
@@ -12,6 +14,8 @@ import { METODOLOGIA } from '../lib/metodologia/contenido';
  */
 export function InfoGrafica({ id }: { id: string }) {
   const entrada = METODOLOGIA[id];
+  const reducido = usePrefersReducedMotion();
+  const tituloId = useId();
   if (!entrada) return null;
 
   const irAMetodologia = () => {
@@ -34,15 +38,15 @@ export function InfoGrafica({ id }: { id: string }) {
           <Info className="h-4 w-4" />
         </motion.button>
       </PopoverTrigger>
-      <PopoverContent align="end" side="bottom" className="w-[20rem] max-w-[92vw] p-0">
+      <PopoverContent align="end" side="bottom" aria-labelledby={tituloId} className="w-[20rem] max-w-[92vw] p-0">
         <motion.div
-          initial={{ opacity: 0, y: 4 }}
+          initial={reducido ? false : { opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.18 }}
           className="space-y-3 p-4"
         >
           <div>
-            <h4 className="text-sm font-bold text-card-foreground">{entrada.titulo}</h4>
+            <h4 id={tituloId} className="text-sm font-bold text-card-foreground">{entrada.titulo}</h4>
             <p className="mt-1 text-xs font-medium text-accent">{entrada.resumen}</p>
           </div>
 

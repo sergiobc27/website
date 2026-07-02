@@ -1922,7 +1922,7 @@ function StepPanel({
                     type="button"
                     onClick={() => toggleStationCode(code)}
                     aria-label={`Quitar estación ${code}`}
-                    className="text-accent/70 transition-colors hover:text-card-foreground"
+                    className="-m-1 inline-flex items-center justify-center rounded-full p-1 text-accent/70 transition-colors hover:text-card-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
                   >
                     ×
                   </button>
@@ -1931,7 +1931,7 @@ function StepPanel({
               <button
                 type="button"
                 onClick={() => onStationCodesTextChange('')}
-                className="text-xs text-muted-foreground underline transition-colors hover:text-card-foreground"
+                className="-m-1 rounded p-1 text-xs text-muted-foreground underline transition-colors hover:text-card-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
               >
                 Limpiar
               </button>
@@ -1968,19 +1968,13 @@ function StepPanel({
                     {stationHelperRows.map((item) => {
                       const added = selectedStationCodes.includes(item.code);
                       return (
+                        // El clic en la fila es una conveniencia de puntero; la vía
+                        // accesible (teclado y lector de pantalla) es el botón de la
+                        // columna Acción, que conserva la semántica de la tabla.
                         <tr
                           key={`${item.code}-${item.name}`}
-                          role="button"
-                          tabIndex={0}
-                          aria-pressed={added}
                           onClick={() => toggleStationCode(item.code)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                              event.preventDefault();
-                              toggleStationCode(item.code);
-                            }
-                          }}
-                          className={`cursor-pointer border-b border-border transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                          className={`cursor-pointer border-b border-border transition-colors hover:bg-muted/40 ${
                             added ? 'bg-accent/10' : ''
                           }`}
                         >
@@ -1988,13 +1982,24 @@ function StepPanel({
                           <td className="p-2 text-card-foreground">{item.name}</td>
                           <td className="p-2 text-muted-foreground">{item.municipality}</td>
                           <td className="p-2 text-right">
-                            {added ? (
-                              <span className="inline-flex items-center gap-1 font-semibold text-success">
-                                <CheckCircle2 className="h-3.5 w-3.5" /> Añadida
-                              </span>
-                            ) : (
-                              <span className="text-accent">+ Agregar</span>
-                            )}
+                            <button
+                              type="button"
+                              aria-pressed={added}
+                              aria-label={`Agregar o quitar la estación ${item.code} (${item.name})`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                toggleStationCode(item.code);
+                              }}
+                              className="-m-1 inline-flex items-center justify-center rounded p-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+                            >
+                              {added ? (
+                                <span className="inline-flex items-center gap-1 font-semibold text-success">
+                                  <CheckCircle2 className="h-3.5 w-3.5" /> Añadida
+                                </span>
+                              ) : (
+                                <span className="text-accent">+ Agregar</span>
+                              )}
+                            </button>
                           </td>
                         </tr>
                       );
