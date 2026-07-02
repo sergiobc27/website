@@ -63,7 +63,7 @@ function Fila({ v }: { v: Variable }) {
         type="button"
         onClick={() => setAbierto((a) => !a)}
         aria-expanded={abierto}
-        aria-controls={panelId}
+        aria-controls={abierto ? panelId : undefined}
         className="flex w-full items-baseline gap-2 rounded text-left transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
       >
         {cuerpo}

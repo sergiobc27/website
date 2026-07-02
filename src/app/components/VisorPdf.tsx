@@ -40,6 +40,8 @@ export function VisorPdf({ refId, onClose }: { refId: string; onClose: () => voi
       if (e.key !== 'Tab') return;
       const dialogo = dialogRef.current;
       if (!dialogo) return;
+      // Selector acotado al contenido actual del visor (enlace, botones e iframe);
+      // si algun dia se anaden controles de formulario, sumar input/select/textarea/[contenteditable].
       const focusables = Array.from(
         dialogo.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), iframe, [tabindex]:not([tabindex="-1"])'),
       );

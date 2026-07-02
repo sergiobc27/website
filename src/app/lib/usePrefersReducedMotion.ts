@@ -7,7 +7,14 @@ import { useEffect, useState } from 'react';
  * 'smooth'), que aquella regla CSS no alcanza.
  */
 export function usePrefersReducedMotion(): boolean {
-  const [reducido, setReducido] = useState(false);
+  // Lectura sincrona en el primer render: los componentes que se animan al
+  // montarse (VisorPdf, popover de InfoGrafica) necesitan el valor correcto
+  // antes de que framer-motion capture el `initial`; un useEffect llega tarde.
+  const [reducido, setReducido] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  );
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
