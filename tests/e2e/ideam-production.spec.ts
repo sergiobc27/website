@@ -4,6 +4,17 @@ import JSZip from 'jszip';
 const DATASET_ID = 's54a-sgyg';
 const DEPARTMENT = 'ATLANTICO';
 
+// Ventana de un día para el smoke de descarga. Fija (IDEAM_SMOKE_DATE) o, por
+// defecto, "hace 30 días" respecto a hoy: suficientemente atrás para que el
+// dato ya esté publicado en Socrata, y se recalcula solo en cada corrida en vez
+// de envejecer como una fecha hardcodeada.
+function fechaSmokeDefault(): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - 30);
+  return d.toISOString().slice(0, 10);
+}
+const SMOKE_DATE = process.env.IDEAM_SMOKE_DATE || fechaSmokeDefault();
+
 test('production IDEAM flow returns catalog, creates a job, and downloads a complete zip', async ({ request }) => {
   const root = await request.get('/');
   await expect(root).toBeOK();
@@ -50,8 +61,8 @@ test('production IDEAM flow returns catalog, creates a job, and downloads a comp
       municipalities: ['Barranquilla'],
       stations: [sampleStation.codigoestacion],
     },
-    startDate: '2026-05-26',
-    endDate: '2026-05-26',
+    startDate: SMOKE_DATE,
+    endDate: SMOKE_DATE,
     formats: ['csv', 'json', 'parquet'],
   };
 
