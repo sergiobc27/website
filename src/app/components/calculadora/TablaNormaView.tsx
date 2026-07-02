@@ -48,12 +48,30 @@ export function TablaNormaView({
             {tabla.filas.map((fila, i) => {
               const filaActiva = activa?.fila === i;
               return (
-                <tr key={i} className={`border-t border-border/60 ${filaActiva ? 'bg-accent/5' : ''}`}>
+                <tr
+                  key={i}
+                  className={`border-t border-border/60 transition-colors duration-300 ${
+                    // Fila seleccionada: degradado que se intensifica hacia la derecha
+                    // (donde esta el valor elegido), para leer "toda la fila -> este valor".
+                    filaActiva ? 'bg-gradient-to-r from-accent/10 via-accent/15 to-accent/30' : ''
+                  }`}
+                >
                   {fila.map((celda, j) => {
-                    const base = j === 0 ? 'text-card-foreground' : 'text-right font-mono text-muted-foreground';
                     if (!esValor(j)) {
+                      const alineacion = j === 0 ? '' : 'text-right font-mono';
+                      // Una sola clase de color por celda (evita que text-card-foreground
+                      // y text-accent compitan). En la fila activa, la 1a celda lleva
+                      // barra de acento a la izquierda y su nombre en acento.
+                      const color = filaActiva
+                        ? j === 0
+                          ? 'font-semibold text-accent'
+                          : 'text-card-foreground'
+                        : j === 0
+                          ? 'text-card-foreground'
+                          : 'text-muted-foreground';
+                      const barra = filaActiva && j === 0 ? 'border-l-2 border-accent' : '';
                       return (
-                        <td key={j} className={`px-3 py-1.5 ${base}`}>
+                        <td key={j} className={`px-3 py-1.5 ${alineacion} ${color} ${barra}`}>
                           {celda}
                         </td>
                       );
