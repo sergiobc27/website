@@ -8,6 +8,12 @@ export const VIEWS = [
   'status', 'extractor', 'history', 'settings', 'docs',
 ] as const;
 
+// Unión de literales derivada de VIEWS: un typo como navigate('metodologa') ya no
+// compila. Se usa donde es práctico sin reescribir el árbol de componentes que
+// hoy recibe 'string' (Sidebar, Navbar, BarraInferior siguen aceptando string
+// para no acoplar sus props a este módulo).
+export type View = (typeof VIEWS)[number];
+
 // 'landing' vive en la raíz '/'; el panel ('dashboard') en '/app'; el resto en '/<vista>'.
 export function viewToPath(view: string): string {
   if (view === 'landing') return '/';
@@ -18,11 +24,11 @@ export function viewToPath(view: string): string {
 // Deriva la vista desde un pathname. Raíz pelada -> 'landing' (la portada). '/app'
 // es el panel. Segmento desconocido -> 'landing'. ('/landing' y '/dashboard' quedan
 // como alias inofensivos de sus rutas canónicas '/' y '/app').
-export function pathToView(pathname: string): string {
+export function pathToView(pathname: string): View {
   const seg = pathname.replace(/^\/+|\/+$/g, '').split('/')[0];
   if (!seg) return 'landing';
   if (seg === 'app') return 'dashboard';
-  return (VIEWS as readonly string[]).includes(seg) ? seg : 'landing';
+  return (VIEWS as readonly string[]).includes(seg) ? (seg as View) : 'landing';
 }
 
 // Evento global de navegación por deep-link (botones de acción del Asistente).

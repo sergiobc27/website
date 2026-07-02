@@ -42,7 +42,7 @@ import { DownloadHistory } from './components/DownloadHistory';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toaster } from './components/ui/sonner';
 import { initTheme } from './lib/theme';
-import { viewToPath, pathToView, NAVIGATE_EVENT, ACCION_VIEWS, type NavigateDetail } from './lib/navigation';
+import { viewToPath, pathToView, NAVIGATE_EVENT, ACCION_VIEWS, type NavigateDetail, type View } from './lib/navigation';
 import { buildSearch } from './lib/urlState';
 import { detectarPlataforma } from './lib/plataforma';
 import { AsistenteFlotante, OPEN_ASISTENTE_EVENT } from './components/AsistenteFlotante';
@@ -50,7 +50,7 @@ import { BarraInferior } from './components/BarraInferior';
 import { BuscadorUniversal } from './components/BuscadorUniversal';
 
 export default function App() {
-  const [currentView, setCurrentView] = useState(() =>
+  const [currentView, setCurrentView] = useState<View>(() =>
     migrateLegacyFichaHash() ? 'ficha' : pathToView(window.location.pathname),
   );
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -115,13 +115,18 @@ export default function App() {
       const search = buildSearch(detail.params || {});
       const yaEnVista = pathToView(window.location.pathname) === detail.view;
       window.history.pushState(null, '', viewToPath(detail.view) + (search ? `?${search}` : ''));
-      setCurrentView(detail.view);
+      // detail.view viene filtrado por ACCION_VIEWS (subconjunto de VIEWS), así que
+      // es una View válida aunque el tipo del evento siga siendo string.
+      setCurrentView(detail.view as View);
       if (yaEnVista) window.dispatchEvent(new PopStateEvent('popstate'));
     };
     window.addEventListener(NAVIGATE_EVENT, onNavigate);
     return () => window.removeEventListener(NAVIGATE_EVENT, onNavigate);
   }, []);
 
+  // Recibe string (no View): la llaman children tipados de forma genérica
+  // (Sidebar/Navbar/BarraInferior) y también 'asistente', que ya no es una vista
+  // real sino un atajo para abrir el panel flotante.
   const navigate = (view: string) => {
     if (view === 'asistente') {
       // El asistente ya no es una vista: el sidebar/breadcrumbs abren el panel.
@@ -131,11 +136,16 @@ export default function App() {
     // pushState a la ruta de la pestaña; fijar un pathname sin hash limpia de
     // paso el hash de ficha si veníamos de una ficha compartida.
     window.history.pushState(null, '', viewToPath(view));
-    setCurrentView(view);
+    // Los únicos llamadores reales pasan literales de VIEWS (ver Sidebar/Navbar/
+    // Dashboard/BarraInferior); 'asistente' ya se atajó arriba. Cast, no lógica nueva.
+    setCurrentView(view as View);
   };
 
   const getBreadcrumbs = (): Array<{ label: string; view?: string }> => {
-    const breadcrumbMap: Record<string, string[]> = {
+    // Record<View, string[]>: si se agrega una vista a VIEWS y se olvida aquí,
+    // TypeScript lo marca en vez de caer en silencio al fallback ['Inicio'].
+    const breadcrumbMap: Record<View, string[]> = {
+      landing: ['Inicio'],
       dashboard: ['Inicio', 'Panel general'],
       analytics: ['Inicio', 'Analítica'],
       map: ['Inicio', 'Mapa de Estaciones'],
@@ -224,9 +234,16 @@ export default function App() {
         <main className="flex-1 overflow-y-auto p-4 pt-20 pb-24 md:p-6 md:pt-20 lg:pb-6 scrollbar-thin scrollbar-track-transparent">
           {/* h1 único de la página = título de la vista activa (la marca del panel ya no es h1). */}
           <h1 className="sr-only">{getBreadcrumbs().slice(-1)[0]?.label || 'IDEAM'}</h1>
-          <div className={currentView === 'extractor' ? 'block' : 'hidden'}>
-            <DataExtractor onRuntimeChange={setRuntime} />
-          </div>
+          {/* Se mantiene SIEMPRE montado (a diferencia del resto de vistas, que se
+              desmontan al navegar): preserva su configuración y deja los timers de
+              un export en curso corriendo en segundo plano bajo cualquier vista.
+              Boundary propio (sin key) para que un error de render aquí no tumbe
+              el shell entero, ya que el boundary de abajo no lo cubre. */}
+          <ErrorBoundary>
+            <div className={currentView === 'extractor' ? 'block' : 'hidden'}>
+              <DataExtractor onRuntimeChange={setRuntime} />
+            </div>
+          </ErrorBoundary>
           {currentView !== 'extractor' && (
             // key={currentView}: al navegar se remonta el boundary y se limpia
             // un error previo, así un fallo en una vista no bloquea las demás.
