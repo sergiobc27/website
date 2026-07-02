@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { fmt } from '../lib/format';
 
 /**
  * Primitivas para renderizar fórmulas con aspecto formal (variables en cursiva
@@ -56,5 +57,21 @@ export function Frac({ num, den }: { num: ReactNode; den: ReactNode }) {
       <span className="px-1.5 pb-0.5">{num}</span>
       <span className="w-full border-t border-current px-1.5 pt-0.5">{den}</span>
     </span>
+  );
+}
+
+/** Ecuación IDF con los coeficientes numéricos vivos de una estación: I = K·Tᵐ/Dⁿ.
+ * Fuente única para no repetir a mano K/m/n en cada sitio que muestra la curva
+ * ajustada (a diferencia de la fórmula simbólica de METODOLOGIA['idf'], esta SÍ
+ * cambia por estación). className se aplica al contenedor de la fórmula. */
+export function FormulaIdf({ equation, className = '' }: { equation: { K: number; m: number; n: number }; className?: string }) {
+  return (
+    <Formula className={className}>
+      <V>I</V>&nbsp;=&nbsp;
+      <Frac
+        num={<>{fmt(equation.K, 3)} · <V>T</V><Sup>{fmt(equation.m, 3)}</Sup></>}
+        den={<><V>D</V><Sup>{fmt(equation.n, 3)}</Sup></>}
+      />
+    </Formula>
   );
 }

@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Calculator, Info } from 'lucide-react';
 import { InfoGrafica } from './InfoGrafica';
-import { Formula, Frac, Sub, Sup, V } from './Formula';
+import { Formula, Frac, V } from './Formula';
 import { fmt } from '../lib/format';
 import { tiemposConcentracion, FACTOR_RECORRIDO, PISO_TC_URBANO, PISO_TC_VIAL, type MetodoTc, type Recorrido } from '../lib/hydro/tc';
-import { cAjustado, qRacional, factorFrecuencia } from '../lib/hydro/runoff';
+import { cAjustado, qRacional, factorFrecuencia, intensidadIdf, type ResultadoRacional } from '../lib/hydro/runoff';
 import { CITAS } from '../lib/hydro/normas';
-import { variablesDe } from '../lib/metodologia/contenido';
+import { METODOLOGIA, variablesDe } from '../lib/metodologia/contenido';
 import { SeccionColapsable, Field, NumberInput, Select } from './calculadora/SeccionColapsable';
 import { SeccionTc } from './calculadora/SeccionTc';
 import { SeccionCoefC, type Contexto } from './calculadora/SeccionCoefC';
@@ -78,7 +78,7 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
 
   const result = useMemo(() => {
     if (!(A > 0) || tcUsado == null || !(tcUsado > 0)) return null;
-    const intensidad = (equation.K * Math.pow(tr, equation.m)) / Math.pow(tcUsado, equation.n);
+    const intensidad = intensidadIdf(equation, tr, tcUsado);
     const q = qRacional(cAjust, intensidad, A);
     const minDur = Math.min(...durations);
     const maxDur = Math.max(...durations);
@@ -98,6 +98,22 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
     if (tcUsado > maxDur) warnings.push(`Tc = ${fmt(tcUsado, 1)} min excede la duración máxima (${maxDur} min): intensidad extrapolada.`);
     return { intensidad, q, warnings };
   }, [A, tcUsado, cAjust, tr, equation, durations, trSel]);
+
+  // Entradas + intermedios + salida de este cálculo racional, agrupados en un
+  // único objeto (ResultadoRacional) en vez de pasarlos sueltos: reduce la
+  // superficie de cambio de CalculoPasoAPaso a un solo tipo cuando se agregue un
+  // parámetro nuevo (ya pasó con recorrido/Kirpich modificado).
+  const resultadoRacional = useMemo<ResultadoRacional | null>(() => {
+    if (!result || tcUsado == null) return null;
+    return {
+      L, S, A, tcs, tcUsado, tcMetodo,
+      cBase: parseFloat(cBase),
+      cf: factorFrecuencia(tr),
+      cAjust, tr, equation,
+      intensidad: result.intensidad,
+      q: result.q,
+    };
+  }, [result, L, S, A, tcs, tcUsado, tcMetodo, cBase, tr, cAjust, equation]);
 
   const avisoKirpich = cContexto === 'urbana';
   // Giandotti se calibró en cuencas italianas grandes; cuando su valor domina la
@@ -238,22 +254,8 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
 
         {/* 4b · Cálculo paso a paso */}
         <SeccionColapsable titulo="Cálculo paso a paso" descripcion="La aritmética con tus valores, con su referencia" inicialAbierta={false}>
-          {result && tcUsado != null ? (
-            <CalculoPasoAPaso
-              L={L}
-              S={S}
-              A={A}
-              tcs={tcs}
-              tcUsado={tcUsado}
-              tcMetodo={tcMetodo}
-              cBase={parseFloat(cBase)}
-              cf={factorFrecuencia(tr)}
-              cAjust={cAjust}
-              tr={tr}
-              equation={equation}
-              intensidad={result.intensidad}
-              q={result.q}
-            />
+          {resultadoRacional ? (
+            <CalculoPasoAPaso resultado={resultadoRacional} />
           ) : (
             <p className="text-sm text-muted-foreground">Completa los parámetros para ver el desarrollo.</p>
           )}
@@ -271,12 +273,14 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
         {/* 6 · Método y referencias */}
         <SeccionColapsable titulo="6 · Método y referencias" descripcion="Fórmulas y citas" inicialAbierta={false}>
           <div className="space-y-2 text-xs text-muted-foreground">
+            {/* Mismas fórmulas que METODOLOGIA['metodo-racional']/['idf'] (registro único
+                de contenido.tsx): se reutiliza el nodo para que no diverjan en silencio. */}
             <p className="flex flex-wrap items-center gap-x-2">
-              <Formula className="text-sm text-card-foreground"><V>Q</V>&nbsp;=&nbsp;<Frac num={<><V>C</V> · <V>I</V> · <V>A</V></>} den={<>360</>} /></Formula>
+              <span className="text-sm text-card-foreground">{METODOLOGIA['metodo-racional'].formula}</span>
               <span>·Método Racional (Q en m³/s, C adimensional, I en mm/h, A en hectáreas).</span>
             </p>
             <p className="flex flex-wrap items-center gap-x-2">
-              <Formula className="text-sm text-card-foreground"><V>I</V>&nbsp;=&nbsp;<Frac num={<><V>K</V> · <V>T</V><Sup><V>m</V></Sup></>} den={<><V>D</V><Sup><V>n</V></Sup></>} /></Formula>
+              <span className="text-sm text-card-foreground">{METODOLOGIA['idf'].formula}</span>
               <span>·curva IDF ajustada de esta estación (D = Tc).</span>
             </p>
             <p>· Validez del método racional: área &lt; 80 ha (RAS 0330/2017, Art. 135) y A ≤ 2,5 km² (Manual de Drenaje INVÍAS 2009, sección 2.5.5.1). C según la cobertura real del área aportante.</p>

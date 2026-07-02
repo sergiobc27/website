@@ -28,8 +28,9 @@ import {
 } from 'recharts';
 import { SkeletonLoader } from './SkeletonLoader';
 import { CalculadoraCaudal } from './CalculadoraCaudal';
-import { Formula, Frac, Sub, Sup, V } from './Formula';
+import { FormulaIdf, Sub, Sup, V } from './Formula';
 import { fmt } from '../lib/format';
+import { METODOLOGIA } from '../lib/metodologia/contenido';
 import { MONTH_NAMES, PRECIP_DATASET } from '../lib/constants';
 import { apiJson, apiUrl } from '../lib/ideamApi';
 import type {
@@ -861,13 +862,7 @@ export function Hidrologia() {
                 {idf.equation && (
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-sm">
                     <span className="text-muted-foreground">Ecuación ajustada:</span>
-                    <Formula className="text-base font-semibold text-card-foreground">
-                      <V>I</V>&nbsp;=&nbsp;
-                      <Frac
-                        num={<>{fmt(idf.equation.K, 3)} · <V>T</V><Sup>{fmt(idf.equation.m, 3)}</Sup></>}
-                        den={<><V>D</V><Sup>{fmt(idf.equation.n, 3)}</Sup></>}
-                      />
-                    </Formula>
+                    <FormulaIdf equation={idf.equation} className="text-base font-semibold text-card-foreground" />
                     <span className="text-xs text-muted-foreground">
                       (<V>I</V> en mm/h, <V>T</V> en años, <V>D</V> en min · <V>R</V><Sup>2</Sup><Sub>log</Sub> = {fmt(idf.equation.r2, 3)})
                     </span>
@@ -973,9 +968,10 @@ export function Hidrologia() {
                   {returnPeriods.gumbel && (
                     <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-sm">
                       <span className="text-muted-foreground">Cuantil de Gumbel (referencia, L-momentos):</span>
-                      <Formula className="text-base font-semibold text-card-foreground">
-                        <V>x</V><Sub>T</Sub>&nbsp;=&nbsp;<V>μ</V> − <V>β</V> · ln(−ln(1 − <Frac num={<>1</>} den={<V>T</V>} />))
-                      </Formula>
+                      {/* Misma fórmula que METODOLOGIA['periodos-retorno'].formula (registro único de
+                          contenido.tsx): se reutiliza el nodo en vez de retecclearla, para que un
+                          ajuste ahí no diverja en silencio de lo que se ve aquí. */}
+                      <span className="text-base font-semibold text-card-foreground">{METODOLOGIA['periodos-retorno'].formula}</span>
                       <span className="text-xs text-muted-foreground">
                         (<V>μ</V> = {fmt(returnPeriods.gumbel.mu, 2)}, <V>β</V> = {fmt(returnPeriods.gumbel.beta, 2)} mm/día · L-momentos; <V>T</V> en años)
                       </span>
