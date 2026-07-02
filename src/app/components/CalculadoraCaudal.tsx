@@ -6,6 +6,7 @@ import { fmt } from '../lib/format';
 import { tiemposConcentracion, FACTOR_RECORRIDO, PISO_TC_URBANO, PISO_TC_VIAL, type MetodoTc, type Recorrido } from '../lib/hydro/tc';
 import { cAjustado, qRacional, factorFrecuencia } from '../lib/hydro/runoff';
 import { CITAS } from '../lib/hydro/normas';
+import { variablesDe } from '../lib/metodologia/contenido';
 import { SeccionColapsable, Field, NumberInput, Select } from './calculadora/SeccionColapsable';
 import { SeccionTc } from './calculadora/SeccionTc';
 import { SeccionCoefC, type Contexto } from './calculadora/SeccionCoefC';
@@ -16,21 +17,43 @@ import { CalculoPasoAPaso } from './calculadora/CalculoPasoAPaso';
 
 const RETURN_PERIODS = [2, 5, 10, 25, 50, 100];
 
+// "Cómo se consigue" de A (metodo-racional), L y S (tiempo-concentracion) del
+// registro único de metodología, para mostrarlos como ayuda inline junto a cada
+// campo (misma fuente que el desplegable de la sección 2, sin duplicar texto).
+const comoSeObtiene = (id: string, simbolo: string) =>
+  variablesDe(id).find((v) => v.simbolo === simbolo)?.comoSeObtiene;
+const HELP_AREA = comoSeObtiene('metodo-racional', 'A');
+const HELP_LONGITUD = comoSeObtiene('tiempo-concentracion', 'L');
+const HELP_PENDIENTE = comoSeObtiene('tiempo-concentracion', 'S');
+
 interface Props {
   equation: { K: number; m: number; n: number };
   durations: number[]; // duraciones con datos (para advertir extrapolación)
 }
 
+// Valores de ejemplo con los que arranca la calculadora (no son "los tuyos"):
+// se muestran de entrada para que el resultado nunca aparezca vacío, pero un
+// no técnico podría tomarlos como propios si no se avisa explícitamente.
+const AREA_EJEMPLO = '5'; // hectáreas
+const LONGITUD_EJEMPLO = '800'; // m
+const PENDIENTE_EJEMPLO = '2'; // %
+const C_BASE_EJEMPLO = '0.83'; // punto medio de 'Distritos comerciales, centro' (INVÍAS Tabla 2.9)
+
 export function CalculadoraCaudal({ equation, durations }: Props) {
   const [tr, setTr] = useState(10);
   const [trSel, setTrSel] = useState<{ tabla: 'vial' | 'urbano'; fila: number } | null>(null);
-  const [area, setArea] = useState('5'); // hectáreas
-  const [longitud, setLongitud] = useState('800'); // m
-  const [pendiente, setPendiente] = useState('2'); // %
+  const [area, setArea] = useState(AREA_EJEMPLO);
+  const [longitud, setLongitud] = useState(LONGITUD_EJEMPLO);
+  const [pendiente, setPendiente] = useState(PENDIENTE_EJEMPLO);
   const [tcMetodo, setTcMetodo] = useState<MetodoTc | 'recomendado'>('recomendado');
   const [recorrido, setRecorrido] = useState<Recorrido>('rural');
   const [cContexto, setCContexto] = useState<Contexto>('urbana');
-  const [cBase, setCBase] = useState('0.83'); // punto medio de 'Distritos comerciales, centro' (INVÍAS Tabla 2.9)
+  const [cBase, setCBase] = useState(C_BASE_EJEMPLO);
+
+  // Mientras nadie haya tocado cuenca ni superficie, los resultados son del
+  // ejemplo sembrado, no "los del usuario": se avisa para que no se confundan.
+  const sonValoresEjemplo =
+    area === AREA_EJEMPLO && longitud === LONGITUD_EJEMPLO && pendiente === PENDIENTE_EJEMPLO && cBase === C_BASE_EJEMPLO;
 
   const A = parseFloat(area);
   const L = parseFloat(longitud);
@@ -87,7 +110,10 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
       <div className="mb-4 flex items-center justify-between gap-4">
         <div>
           <h3 className="font-bold text-card-foreground">Calculadora de caudal de diseño (método racional)</h3>
-          <p className="text-sm text-muted-foreground">Tc por varios métodos → intensidad de la IDF → C ponderado por frecuencia → caudal pico → verificación con Manning.</p>
+          <p className="text-sm text-muted-foreground">
+            Calcula cuánta agua de lluvia debe evacuar tu obra (cuneta, alcantarilla, canal) y comprueba si la tubería o el
+            canal alcanzan.
+          </p>
         </div>
         <div className="flex shrink-0 items-center gap-3">
           <InfoGrafica id="metodo-racional" />
@@ -95,9 +121,34 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
         </div>
       </div>
 
+      <div className="mb-4 space-y-2">
+        <div className="rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
+          <span className="font-semibold text-card-foreground">Qué necesitas: </span>
+          el área de la cuenca, la longitud y la pendiente del cauce, y el tipo de superficie (pavimento, techo, prado,
+          tierra…) del área que drena hacia tu obra.
+        </div>
+        <details className="rounded-lg border border-border">
+          <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-card-foreground">En términos técnicos</summary>
+          <p className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
+            Tc por varios métodos → intensidad de la IDF → C ponderado por frecuencia → caudal pico → verificación con Manning.
+          </p>
+        </details>
+      </div>
+
+      <p className="mb-2 text-xs text-muted-foreground">Sigue las secciones en orden 1 → 4; cada una parte del resultado de la anterior.</p>
+
       <div className="space-y-3">
         {/* 1 · Parámetros de cuenca */}
         <SeccionColapsable titulo="1 · Parámetros de cuenca" descripcion="Geometría y período de retorno de diseño">
+          {sonValoresEjemplo && (
+            <div className="mb-3 flex items-start gap-2 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-accent">
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                Estos son valores de <span className="font-semibold">ejemplo</span>: cámbialos por los de tu cuenca y tu
+                superficie para que el caudal sea el de tu obra, no el de este ejemplo.
+              </span>
+            </div>
+          )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <Field label="Período de retorno Tr (años)">
               <Select
@@ -106,13 +157,13 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
                 options={[...new Set([...RETURN_PERIODS, tr])].sort((a, b) => a - b).map((t) => ({ value: t, label: `${t} años` }))}
               />
             </Field>
-            <Field label="Área de la cuenca (hectáreas)">
+            <Field label="Área de la cuenca (hectáreas)" help={HELP_AREA}>
               <NumberInput value={area} onChange={setArea} step="0.1" />
             </Field>
-            <Field label="Longitud del cauce L (metros)">
+            <Field label="Longitud del cauce L (metros)" help={HELP_LONGITUD}>
               <NumberInput value={longitud} onChange={setLongitud} step="10" />
             </Field>
-            <Field label="Pendiente media del cauce (%)">
+            <Field label="Pendiente media del cauce (%)" help={HELP_PENDIENTE}>
               <NumberInput value={pendiente} onChange={setPendiente} step="0.1" />
             </Field>
           </div>
@@ -143,12 +194,12 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
         </SeccionColapsable>
 
         {/* 2 · Tiempo de concentración */}
-        <SeccionColapsable titulo="2 · Tiempo de concentración (Tc)" descripcion="Kirpich · Témez · Giandotti: rango y recomendado">
+        <SeccionColapsable titulo="2 · Tiempo de concentración (Tc)" descripcion="Kirpich · Témez · Giandotti: rango y recomendado" inicialAbierta={false}>
           <SeccionTc tcs={tcs} metodo={tcMetodo} setMetodo={(m) => setTcMetodo(m as MetodoTc | 'recomendado')} tcUsado={tcUsado} recorrido={recorrido} setRecorrido={(r) => setRecorrido(r as Recorrido)} avisoKirpich={avisoKirpich} avisoGiandotti={avisoGiandotti} />
         </SeccionColapsable>
 
         {/* 3 · Coeficiente C */}
-        <SeccionColapsable titulo="3 · Coeficiente de escorrentía C" descripcion="Por superficie, ajustado por factor de frecuencia Cf(Tr)">
+        <SeccionColapsable titulo="3 · Coeficiente de escorrentía C" descripcion="Por superficie, ajustado por factor de frecuencia Cf(Tr)" inicialAbierta={false}>
           <SeccionCoefC contexto={cContexto} setContexto={setCContexto} cBase={cBase} setCBase={setCBase} tr={tr} cAjust={cAjust} />
         </SeccionColapsable>
 
@@ -156,6 +207,12 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
         <SeccionColapsable titulo="4 · Caudal de diseño Q" descripcion="Método racional Q = C·I·A/360" resaltada>
           {result ? (
             <>
+              {sonValoresEjemplo && (
+                <div className="mb-3 flex items-start gap-2 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-accent">
+                  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>Este caudal es del ejemplo (sección 1), todavía no de tu obra: cambia el área, la cuenca y la superficie por las tuyas.</span>
+                </div>
+              )}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <Resultado titulo="Tc usado" valor={fmt(tcUsado, 1)} unidad="min" sub={tcMetodo === 'recomendado' ? 'recomendado' : tcMetodo} />
                 <Resultado titulo={`Intensidad (Tr ${tr}a, D = Tc)`} valor={fmt(result.intensidad, 1)} unidad="mm/h" sub="curva IDF en D = Tc (supuesto del método racional)" />

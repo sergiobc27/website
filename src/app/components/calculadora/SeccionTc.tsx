@@ -44,6 +44,11 @@ export function SeccionTc({
 
   return (
     <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        El tiempo de concentración (Tc) es cuánto tarda el agua en recorrer la cuenca hasta el punto de salida. Lo
+        calculamos con 3 métodos y usamos el valor central (la mediana) como recomendado. Si no eres experto, deja
+        Recomendado.
+      </p>
       <Field label="Tipo de recorrido del flujo (ajusta el Tc de Kirpich)">
         <Select
           value={recorrido}

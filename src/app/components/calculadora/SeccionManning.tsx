@@ -77,15 +77,24 @@ export function SeccionManning({ q, pendienteCuenca }: { q: number; pendienteCue
     const tau = esfuerzoCortante(sol.r, s);
     const chequeos = sol.excedeCapacidad
       ? [{ estado: 'rojo' as const, motivo: 'La sección no transporta el Q de diseño: aumenta el ancho de base o el talud.' }]
-      : [chequeoCortante(tau, tmin, 'canal'), chequeoVelocidadMax(sol.v, vmax)];
+      : [
+          { estado: 'verde' as const, motivo: `El canal sí alcanza para el Q de diseño (profundidad normal ${fmt(sol.y, 2)} m).` },
+          chequeoCortante(tau, tmin, 'canal'),
+          chequeoVelocidadMax(sol.v, vmax),
+        ];
     return { tipo: 'trapezoidal' as const, sol, tau, chequeos };
   }, [q, seccion, diametro, base, talud, nMann, sCond, tauMin, vMax]);
 
   return (
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground">
-        Verifica un conducto que transporte el caudal de diseño <span className="font-mono text-card-foreground">Q = {fmt(q, 3)} m³/s</span> por la ecuación de Manning.
+        Ahora comprobamos si una tubería o canal de cierto tamaño alcanza para transportar el caudal de diseño{' '}
+        <span className="font-mono text-card-foreground">Q = {fmt(q, 3)} m³/s</span> (ecuación de Manning).
       </p>
+
+      {res && res.chequeos[0] && (
+        <Chequeo estado={res.chequeos[0].estado} motivo={res.chequeos[0].motivo} />
+      )}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Field label="Sección">
@@ -107,7 +116,7 @@ export function SeccionManning({ q, pendienteCuenca }: { q: number; pendienteCue
             <Field label="Ancho de base b (m)">
               <NumberInput value={base} onChange={setBase} step="0.1" />
             </Field>
-            <Field label="Talud z (H:V; 0 = rect.)" help="Inclinación de las paredes del canal: z metros en horizontal por cada metro en vertical (H:V). z = 0 es un canal rectangular; z = 1 es 45°.">
+            <Field label="Talud z: inclinación de las paredes (0 = rect.)" help="Inclinación de las paredes del canal: z metros en horizontal por cada metro en vertical (H:V). z = 0 es un canal rectangular; z = 1 es 45°.">
               <NumberInput value={talud} onChange={setTalud} step="0.25" />
             </Field>
           </>
@@ -122,7 +131,7 @@ export function SeccionManning({ q, pendienteCuenca }: { q: number; pendienteCue
           <NumberInput value={sCond} onChange={(v) => { setSCond(v); setSCondTocado(true); }} step="0.1" />
         </Field>
         <Field
-          label="Esfuerzo cortante mín. τ (Pa)"
+          label="Esfuerzo cortante mín. τ: fuerza del agua que arrastra el sedimento (Pa)"
           help={seccion === 'circular'
             ? 'Criterio de autolimpieza del RAS 0330 (2017), Art. 149: la velocidad mínima en alcantarillado pluvial es la que genera un esfuerzo cortante de pared ≥ 2,0 Pa. τ = γ·R·S.'
             : 'El umbral de autolimpieza de 2,0 Pa (RAS 0330, Art. 149) está definido para tubería de alcantarillado; en el canal se aplica como criterio extendido del autor. Si tienes un τ admisible del material del canal, ponlo aquí. τ = γ·R·S.'}
@@ -154,7 +163,7 @@ export function SeccionManning({ q, pendienteCuenca }: { q: number; pendienteCue
             )}
           </div>
           <div className="space-y-2">
-            {res.chequeos.map((c, i) => (
+            {res.chequeos.slice(1).map((c, i) => (
               <Chequeo key={i} estado={c.estado} motivo={c.motivo} />
             ))}
           </div>

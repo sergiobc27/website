@@ -8,7 +8,7 @@ import { loadImageDataUrl } from '../lib/pdf/loadImage';
 import { useUrlSync } from '../lib/urlState';
 import logoCucUrl from '../../imports/Logo_CUC_PNG_letra_blanca_barra_roja_vtcal.png';
 import logoIdeamUrl from '../../imports/Ideam_(Colombia)_logo.png';
-import { AlertTriangle, BarChart4, CheckCircle2, CloudRain, Droplets, FileDown, Mail, Navigation, Plus, Search, Waves } from 'lucide-react';
+import { AlertTriangle, BarChart4, Calculator, CheckCircle2, CloudRain, FileDown, Mail, Navigation, Plus, Search, Waves } from 'lucide-react';
 import { InfoGrafica } from './InfoGrafica';
 import {
   Bar,
@@ -514,7 +514,8 @@ export function Hidrologia() {
       <div>
         <h2 className="text-card-foreground text-2xl font-bold">Hidrología de precipitación</h2>
         <p className="text-muted-foreground text-sm mt-1">
-          Períodos de retorno (Gumbel), monitor de sequía (SPI), hietograma e histograma por estación.
+          Calcula el caudal de diseño de tu obra (drenaje) con la curva IDF de una estación, y explora también períodos de
+          retorno (Gumbel), monitor de sequía (SPI), hietograma e histograma.
         </p>
       </div>
 
@@ -740,9 +741,14 @@ export function Hidrologia() {
 
       {!station ? (
         <div className="rounded-xl border border-border bg-card p-10 text-center text-muted-foreground">
-          <Droplets className="mx-auto mb-3 h-8 w-8 text-accent" />
-          <p className="font-semibold text-card-foreground">Elige una estación de la lista de arriba</p>
-          <p className="mt-1 text-sm">Solo aparecen las que tienen análisis disponible; los cálculos corren sobre su registro completo en el espejo.</p>
+          <Calculator className="mx-auto mb-3 h-8 w-8 text-accent" />
+          <p className="font-semibold text-card-foreground">Aquí está la calculadora de caudal de diseño (y las curvas IDF que la alimentan)</p>
+          <p className="mx-auto mt-1 max-w-md text-sm">
+            Para calcular necesitas la curva IDF de una estación cercana a tu obra. Elige tu{' '}
+            <span className="font-semibold text-card-foreground">departamento y municipio</span> arriba: si el municipio no
+            tiene estación propia, te sugerimos la más cercana. Solo aparecen las estaciones con análisis disponible; los
+            cálculos corren sobre su registro completo en el espejo.
+          </p>
         </div>
       ) : (
         <>
