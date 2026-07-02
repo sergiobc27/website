@@ -64,7 +64,7 @@ describe('lib/chatUi parseAcciones', () => {
 
   it('descarta vistas fuera de la whitelist', () => {
     const acc = parseAcciones([
-      { label: 'Ir a Ajustes', view: 'settings', params: {} },
+      { label: 'Ir al Estado del Espejo', view: 'status', params: {} },
       { label: 'Ver Analítica →', view: 'analytics', params: { dep: 'ATLÁNTICO' } },
     ]);
     expect(acc).toHaveLength(1);

@@ -5,7 +5,7 @@ const TABS = [
   { id: 'dashboard', icon: BarChart3, label: 'Panel' },
   { id: 'analytics', icon: TrendingUp, label: 'Analítica' },
   { id: 'map', icon: MapPin, label: 'Mapa' },
-  { id: 'hydro', icon: Droplets, label: 'Hidrología' },
+  { id: 'hydro', icon: Droplets, label: 'IDF' },
 ] as const;
 
 interface BarraInferiorProps {

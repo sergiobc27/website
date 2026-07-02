@@ -1,6 +1,5 @@
 import { Suspense, useEffect, useState } from 'react';
 import { lazyWithRetry } from './lib/lazyWithRetry';
-import { CheckCircle2, Cloud, Database, FileArchive } from 'lucide-react';
 import { Sidebar, SidebarContent } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
 import { Sheet, SheetContent, SheetTitle } from './components/ui/sheet';
@@ -150,13 +149,12 @@ export default function App() {
       map: ['Inicio', 'Mapa de Estaciones'],
       compare: ['Inicio', 'Comparador'],
       ficha: ['Inicio', 'Ficha Climática'],
-      hydro: ['Inicio', 'Hidrología'],
+      hydro: ['Inicio', 'Curvas IDF y caudal'],
       historia: ['Inicio', 'La historia del dato'],
       metodologia: ['Inicio', 'Metodología'],
       status: ['Inicio', 'Estado del Espejo'],
       extractor: ['Inicio', 'Extractor de Datos'],
       history: ['Inicio', 'Historial de Descargas'],
-      settings: ['Inicio', 'Ajustes de API'],
     };
     const labels = breadcrumbMap[currentView] || ['Inicio'];
     // El primer crumb ('Inicio') navega al dashboard; el último es la vista
@@ -187,8 +185,6 @@ export default function App() {
         return <EstadoEspejo />;
       case 'history':
         return <DownloadHistory />;
-      case 'settings':
-        return <SettingsView />;
       default:
         return <Dashboard onNavigate={navigate} />;
     }
@@ -255,73 +251,6 @@ export default function App() {
       <BuscadorUniversal onNavigate={navigate} />
       <BarraInferior currentView={currentView} onNavigate={navigate} onMore={() => setMobileNavOpen(true)} />
       <Toaster richColors position="bottom-right" />
-    </div>
-  );
-}
-
-function SettingsView() {
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-card-foreground text-2xl font-bold">Ajustes de API</h2>
-        <p className="text-muted-foreground text-sm mt-1">Configuración operativa visible para ejecutar consultas Socrata desde la web.</p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <InfoCard icon={Cloud} title="Origen" value="datos.gov.co" detail="Socrata SODA API" />
-        <InfoCard icon={Database} title="Catálogo de estaciones" value="hp9r-jxuu" detail="Filtros territoriales y tecnicos" />
-        <InfoCard icon={FileArchive} title="Salida" value="ZIP paginado" detail="CSV, JSON y Parquet opcional" />
-      </div>
-
-      <div className="bg-card border border-border rounded-xl p-6 shadow-glow">
-        <h3 className="text-card-foreground font-bold mb-4">Variables de entorno esperadas</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-          <ConfigRow name="SOCRATA_DOMAIN" value="https://www.datos.gov.co" />
-          <ConfigRow name="CATALOG_DATASET_ID" value="hp9r-jxuu" />
-          <ConfigRow name="PAGE_LIMIT" value="50000" />
-          <ConfigRow name="EXPORT_PAGE_SIZE" value="10000" />
-          <ConfigRow name="PREVIEW_LIMIT" value="200" />
-          <ConfigRow name="MAX_CATALOG_STATIONS" value="Opcional" />
-        </div>
-      </div>
-
-      <div className="bg-card border border-border rounded-xl p-6 shadow-glow">
-        <h3 className="text-card-foreground font-bold mb-4">Controles de seguridad</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <ChecklistItem text="No se exponen tokens de Socrata o Cloudflare al navegador." />
-          <ChecklistItem text="Las consultas se paginan para evitar descargas masivas en una sola respuesta." />
-          <ChecklistItem text="La validación territorial corre antes del ZIP cuando eliges departamentos." />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function InfoCard({ icon: Icon, title, value, detail }: { icon: React.ElementType; title: string; value: string; detail: string }) {
-  return (
-    <div className="bg-card border border-border rounded-xl p-5 shadow-glow">
-      <Icon className="w-6 h-6 text-accent mb-4" />
-      <p className="text-muted-foreground text-sm">{title}</p>
-      <p className="text-card-foreground font-mono font-bold mt-1">{value}</p>
-      <p className="text-muted-foreground text-xs mt-2">{detail}</p>
-    </div>
-  );
-}
-
-function ConfigRow({ name, value }: { name: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-border bg-background p-4">
-      <p className="text-card-foreground font-mono text-sm font-bold">{name}</p>
-      <p className="text-muted-foreground text-xs mt-1">{value}</p>
-    </div>
-  );
-}
-
-function ChecklistItem({ text }: { text: string }) {
-  return (
-    <div className="flex items-start gap-3 rounded-lg border border-border bg-background p-4">
-      <CheckCircle2 className="h-5 w-5 shrink-0 text-success" />
-      <p className="text-sm text-card-foreground">{text}</p>
     </div>
   );
 }
