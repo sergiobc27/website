@@ -21,13 +21,25 @@ describe('tablasNorma — valores literales verificados', () => {
     const fila = TABLA_C_RURAL.filas.find((f) => String(f[0]).toLowerCase().includes('cultivadas') && String(f[0]).toLowerCase().includes('montañoso'));
     expect(fila?.[3]).toBe('0,82');
   });
-  it('Cf (Chow 1988): Tr ≥ 100 → 1,25 y está marcado por confirmar', () => {
-    const fila = TABLA_CF.filas.find((f) => String(f[0]).includes('100'));
-    expect(fila?.[1]).toBe('1,25');
-    expect(TABLA_CF.fuente.verificado).toBe(false);
-  });
   it('Tr vial (INVÍAS Tabla 2.8) y urbano (RAS Tabla 16) se derivan de OBRAS_TR', () => {
     expect(TABLA_TR_VIAL.filas.some((f) => String(f[0]) === 'Cuneta' && f[1] === 5)).toBe(true);
     expect(TABLA_TR_URBANO.filas.some((f) => String(f[0]).includes('> 10 ha') && f[1] === 10)).toBe(true);
+  });
+});
+
+// Cf NO está en el grupo anterior a propósito: a diferencia de las tablas de C y
+// Tr (con localizador exacto verificado), el número de tabla de Cf en la edición
+// de Chow, Maidment & Mays (1988) queda por confirmar. Este bloque fija el valor
+// (uso extendido en la práctica) y, sobre todo, el estado honesto de la cita:
+// si algún día se confirma el localizador exacto, este test debe romper para
+// forzar a actualizar `verificado` a true junto con la nota.
+describe('tablasNorma — Cf: valor de uso extendido, cita pendiente de confirmar', () => {
+  it('Tr ≥ 100 → Cf = 1,25 (valor tabulado)', () => {
+    const fila = TABLA_CF.filas.find((f) => String(f[0]).includes('100'));
+    expect(fila?.[1]).toBe('1,25');
+  });
+  it('la fuente de Cf está marcada como NO verificada, con nota que explica por qué', () => {
+    expect(TABLA_CF.fuente.verificado).toBe(false);
+    expect(TABLA_CF.fuente.nota).toBeTruthy();
   });
 });

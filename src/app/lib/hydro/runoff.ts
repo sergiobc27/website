@@ -3,6 +3,28 @@
 // y se ajusta por el factor de frecuencia Cf(Tr); no se inventa una matriz
 // superficie×pendiente: la pendiente guía la elección dentro del rango (tooltip).
 
+import type { TiemposTc, MetodoTc } from './tc';
+
+// Agrupa las entradas, los intermedios y la salida de UN cálculo del método
+// racional. Antes CalculadoraCaudal pasaba estos mismos 13 valores como props
+// sueltas a CalculoPasoAPaso (firma, llamada y cuerpo había que tocar los tres al
+// agregar un campo); ahora se construye una vez y se pasa como un solo objeto.
+export interface ResultadoRacional {
+  L: number;
+  S: number;
+  A: number;
+  tcs: TiemposTc;
+  tcUsado: number;
+  tcMetodo: MetodoTc | 'recomendado';
+  cBase: number;
+  cf: number;
+  cAjust: number;
+  tr: number;
+  equation: { K: number; m: number; n: number };
+  intensidad: number;
+  q: number;
+}
+
 // El coeficiente C se toma directamente de las tablas del Manual de Drenaje INVÍAS
 // (2009): Tabla 2.9 (áreas urbanas) o Tabla 2.10 (áreas rurales). Esos datos viven
 // en `tablasNorma.ts` (única fuente) y el selector de la calculadora lee de ahí; no
@@ -25,6 +47,14 @@ export function cAjustado(cBase: number, tr: number): number {
 // Método racional: Q[m³/s] = C·I·A/360  (C adimensional, I en mm/h, A en hectáreas).
 export function qRacional(c: number, i_mmh: number, a_ha: number): number {
   return (c * i_mmh * a_ha) / 360;
+}
+
+// Evaluación de la curva IDF ajustada: I[mm/h] = K·Tᵐ/Dⁿ (T en años, D en minutos
+// = duración de diseño; para el método racional, D = Tc). Centraliza el cómputo
+// que antes se repetía inline en la calculadora, para que quede testeado en la
+// capa pura junto al resto de la aritmética hidrológica.
+export function intensidadIdf(eq: { K: number; m: number; n: number }, T: number, D_min: number): number {
+  return (eq.K * Math.pow(T, eq.m)) / Math.pow(D_min, eq.n);
 }
 
 // Períodos de retorno de diseño, LITERALES de la norma citada. El Tr es

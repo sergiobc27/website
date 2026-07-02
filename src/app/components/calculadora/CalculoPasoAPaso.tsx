@@ -1,18 +1,13 @@
 import { Formula, Frac, Sub, Sup, V } from '../Formula';
 import { fmt } from '../../lib/format';
-import type { TiemposTc, MetodoTc } from '../../lib/hydro/tc';
+import type { ResultadoRacional } from '../../lib/hydro/runoff';
 
 /** Muestra la aritmética sustituida paso a paso con los valores actuales del
  * usuario, cada paso con su referencia. No recalcula nada: recibe lo ya
- * computado por la calculadora. */
-export function CalculoPasoAPaso({
-  L, S, A, tcs, tcUsado, tcMetodo, cBase, cf, cAjust, tr, equation, intensidad, q,
-}: {
-  L: number; S: number; A: number;
-  tcs: TiemposTc; tcUsado: number; tcMetodo: MetodoTc | 'recomendado';
-  cBase: number; cf: number; cAjust: number; tr: number;
-  equation: { K: number; m: number; n: number }; intensidad: number; q: number;
-}) {
+ * computado por la calculadora, agrupado en un único ResultadoRacional (antes
+ * eran 13 props sueltas). */
+export function CalculoPasoAPaso({ resultado }: { resultado: ResultadoRacional }) {
+  const { L, S, A, tcs, tcUsado, tcMetodo, cBase, cf, cAjust, tr, equation, intensidad, q } = resultado;
   const Skm = S / 100; // pendiente en m/m (la UI la captura en %)
   return (
     <>

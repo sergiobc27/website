@@ -1,6 +1,9 @@
 // Red-team LOCAL del guardrail determinista (looksLikeManipulation).
 // No llama al LLM ni gasta neurons: solo mide cobertura de patrones.
-// Uso: node tests/redteam-local.mjs
+// Corre con el resto de `npm test` (node --test); también se puede aislar con
+// `node --test tests/redteam-local.mjs`.
+import test from 'node:test';
+import assert from 'node:assert/strict';
 import { looksLikeManipulation } from '../src/worker/index.js';
 
 // --- DEBEN bloquearse: manipulación / jailbreak / extracción de prompt -------
@@ -94,22 +97,14 @@ const LEGITIMOS = [
   '¿Puedo ver la climatología mensual de mi municipio?',
 ];
 
-function run(label, items, expected) {
-  let fails = 0;
-  for (const s of items) {
-    const got = looksLikeManipulation(s);
-    if (got !== expected) {
-      fails++;
-      console.log(`  [${expected ? 'ESCAPÓ' : 'FALSO+'}] ${s}`);
-    }
+test('redteam: el guardrail bloquea el banco extendido de ataques/jailbreaks', () => {
+  for (const s of ATAQUES) {
+    assert.equal(looksLikeManipulation(s), true, `debería bloquear: "${s}"`);
   }
-  console.log(`${label}: ${items.length - fails}/${items.length} OK${fails ? ` — ${fails} FALLO(S)` : ''}`);
-  return fails;
-}
+});
 
-console.log('=== Red-team local del guardrail ===');
-const f1 = run('Ataques bloqueados', ATAQUES, true);
-const f2 = run('Legítimos permitidos', LEGITIMOS, false);
-console.log('-----------------------------------');
-console.log(f1 + f2 === 0 ? '✔ Sin fugas ni falsos positivos' : `✖ ${f1 + f2} caso(s) a revisar`);
-process.exit(f1 + f2 === 0 ? 0 : 1);
+test('redteam: el guardrail NO bloquea el banco extendido de preguntas legítimas', () => {
+  for (const s of LEGITIMOS) {
+    assert.equal(looksLikeManipulation(s), false, `no debería bloquear: "${s}"`);
+  }
+});

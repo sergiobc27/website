@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { factorFrecuencia, cAjustado, qRacional, OBRAS_TR } from './runoff';
+import { factorFrecuencia, cAjustado, qRacional, intensidadIdf, OBRAS_TR } from './runoff';
 
 describe('factorFrecuencia (Ven Te Chow / INVÍAS)', () => {
   it('Tr ≤ 10 → 1,00', () => {
@@ -26,6 +26,27 @@ describe('cAjustado = min(1, C·Cf)', () => {
 describe('qRacional = C·I·A/360', () => {
   it('caso conocido C=0,7 I=100 mm/h A=5 ha → ≈ 0,972 m³/s', () => {
     expect(qRacional(0.7, 100, 5)).toBeCloseTo(0.9722, 3);
+  });
+});
+
+describe('intensidadIdf = K·Tᵐ/Dⁿ (evaluación de la curva IDF)', () => {
+  const eq = { K: 4000, m: 0.18, n: 0.85 };
+
+  it('caso a mano: K=4000, T=10, D=30 min → I ≈ 336,13 mm/h', () => {
+    // I = K·T^m/D^n = 4000·10^0,18 / 30^0,85 ≈ 4000·1,51356 / 18,0132 ≈ 336,13.
+    expect(intensidadIdf(eq, 10, 30)).toBeCloseTo(336.13, 1);
+  });
+
+  it('a mayor duración D, menor intensidad (monotonía de la curva IDF)', () => {
+    const corta = intensidadIdf(eq, 10, 10);
+    const larga = intensidadIdf(eq, 10, 60);
+    expect(larga).toBeLessThan(corta);
+  });
+
+  it('a mayor período de retorno T, mayor intensidad', () => {
+    const tr10 = intensidadIdf(eq, 10, 30);
+    const tr100 = intensidadIdf(eq, 100, 30);
+    expect(tr100).toBeGreaterThan(tr10);
   });
 });
 

@@ -19,6 +19,13 @@ describe('metodologia/contenido — integridad del registro', () => {
     }
   });
 
+  it('cada clave de METODOLOGIA aparece en alguna sección (dirección inversa: nada queda huérfano)', () => {
+    const idsEnSecciones = new Set(SECCIONES_METODOLOGIA.flatMap((sec) => sec.ids));
+    for (const id of Object.keys(METODOLOGIA)) {
+      expect(idsEnSecciones.has(id), `${id} no aparece en ninguna sección de la página de Metodología`).toBe(true);
+    }
+  });
+
   it('cada entrada tiene las cuatro capas de explicación', () => {
     for (const e of Object.values(METODOLOGIA)) {
       expect(e.resumen.length, e.id).toBeGreaterThan(0);
