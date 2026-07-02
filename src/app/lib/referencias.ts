@@ -74,7 +74,7 @@ export const REFERENCIAS: Referencia[] = [
     pais: 'Internacional',
     tema: 'Métodos hidrológicos e hidráulica',
     anio: 1940,
-    usadoEn: ['Calculadora'],
+    usadoEn: ['Calculadora', 'Asistente'],
   },
   {
     id: 'temez-1978',
@@ -83,7 +83,7 @@ export const REFERENCIAS: Referencia[] = [
     tema: 'Métodos hidrológicos e hidráulica',
     anio: 1978,
     url: 'https://www.transportes.gob.es/recursos_mfom/0610400.pdf',
-    usadoEn: ['Calculadora'],
+    usadoEn: ['Calculadora', 'Asistente'],
   },
   {
     id: 'giandotti-1934',
@@ -126,7 +126,7 @@ export const REFERENCIAS: Referencia[] = [
     tema: 'Métodos hidrológicos e hidráulica',
     anio: 1988,
     url: 'https://openlibrary.org/isbn/9780070108103',
-    usadoEn: ['Calculadora', 'Período de retorno'],
+    usadoEn: ['Calculadora', 'Período de retorno', 'Asistente'],
   },
   {
     id: 'velez-botero-2011',

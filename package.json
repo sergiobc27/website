@@ -6,8 +6,8 @@
   "description": "React frontend and Cloudflare Worker API for ideam.sergiobc.com",
   "scripts": {
     "build": "vite build",
-    "check": "node --check src/worker/index.js",
-    "check:worker": "node --check src/worker/index.js",
+    "check": "node scripts/check-worker-syntax.mjs",
+    "check:worker": "node scripts/check-worker-syntax.mjs",
     "typecheck": "tsc --noEmit",
     "dev:web": "vite",
     "dev:worker": "wrangler dev",

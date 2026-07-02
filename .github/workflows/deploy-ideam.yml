@@ -38,6 +38,8 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      # npm run check recorre TODOS los .js de src/worker (no solo index.js),
+      # via scripts/check-worker-syntax.mjs (hallazgo de auditoria).
       - name: Syntax check
         run: npm run check
 
@@ -50,8 +52,17 @@ jobs:
       - name: Run unit tests (vitest)
         run: npm run test:unit
 
+      # Bloqueante solo con severidad high o superior en dependencias de
+      # produccion: una vulnerabilidad low/moderate no debe congelar el deploy
+      # de un sitio en vivo (hallazgo de auditoria); su remediacion la lleva
+      # Dependabot.
       - name: Audit production dependencies
-        run: npm audit --omit=dev
+        run: npm audit --omit=dev --audit-level=high
+
+      # Solo VISIBILIDAD (no bloquea): incluye dev-deps (wrangler/miniflare/
+      # undici, la cadena de build) para que las high de dev no queden ciegas.
+      - name: Audit all dependencies (informativo, no bloqueante)
+        run: npm audit --audit-level=high || true
 
       - name: Build frontend
         env:

@@ -1,3 +1,23 @@
+# Cabeceras de seguridad del documento (Workers Static Assets las honra desde
+# dist/_headers; este archivo se copia tal cual en el build de Vite).
+#
+# CSP en dos niveles (hallazgo de auditoria):
+# 1. Content-Security-Policy (ENFORCING) solo con directivas que no pueden
+#    romper la app (no afectan scripts/estilos/mapas/KaTeX ya en produccion):
+#    frame-ancestors, base-uri, object-src y form-action.
+# 2. Content-Security-Policy-Report-Only mantiene la politica completa en
+#    observacion y ahora SI reporta: report-uri/report-to apuntan al Worker
+#    (POST /api/csp-report -> console.log en Workers Observability).
+#
+# Plan de promocion a enforcing (hacerlo en este orden):
+# a) Desplegar y dejar 1-2 semanas de uso real observando los reportes en
+#    Workers Observability (buscar "csp-report").
+# b) Si no hay violaciones legitimas, renombrar la cabecera Report-Only a
+#    Content-Security-Policy (y dejar una Report-Only mas estricta para seguir
+#    iterando, p. ej. sin 'unsafe-inline' en script-src usando hashes de Vite).
+# c) Si hay violaciones, anadir el origen que falte a la directiva correcta y
+#    repetir desde (a). No promover a ciegas: MapLibre (blob:), KaTeX (fonts) y
+#    Turnstile (frame/script de challenges.cloudflare.com) son los sensibles.
 /*
   X-Frame-Options: SAMEORIGIN
   X-Content-Type-Options: nosniff
@@ -5,4 +25,6 @@
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   X-Permitted-Cross-Domain-Policies: none
   Permissions-Policy: geolocation=(self), microphone=(), camera=(), usb=(), magnetometer=(), gyroscope=(), payment=()
-  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com; connect-src 'self' https://ideam-api.sergiobc.com https://*.cartocdn.com https://cloudflareinsights.com https://static.cloudflareinsights.com https://challenges.cloudflare.com; worker-src 'self' blob:; frame-src 'self' https://challenges.cloudflare.com; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'self'
+  Reporting-Endpoints: csp-endpoint="/api/csp-report"
+  Content-Security-Policy: frame-ancestors 'self'; base-uri 'self'; object-src 'none'; form-action 'self'
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com; connect-src 'self' https://ideam-api.sergiobc.com https://*.cartocdn.com https://cloudflareinsights.com https://static.cloudflareinsights.com https://challenges.cloudflare.com; worker-src 'self' blob:; frame-src 'self' https://challenges.cloudflare.com; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'self'; report-uri /api/csp-report; report-to csp-endpoint
