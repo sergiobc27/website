@@ -372,8 +372,10 @@ export const METODOLOGIA: Record<string, EntradaMetodo> = {
   },
 };
 
-/** Secciones ordenadas para la página de Metodología. */
-export const SECCIONES_METODOLOGIA: Array<{ titulo: string; ids: string[] }> = [
+/** Secciones ordenadas para la página de Metodología. Los ids están tipados
+ * contra las claves reales de METODOLOGIA: un id mal escrito u obsoleto ya no
+ * compila (antes solo lo atrapaba un test en tiempo de ejecución). */
+export const SECCIONES_METODOLOGIA: Array<{ titulo: string; ids: Array<keyof typeof METODOLOGIA> }> = [
   {
     titulo: 'Cálculo de caudal de diseño',
     ids: ['metodo-racional', 'tiempo-concentracion', 'idf', 'coeficiente-c', 'factor-cf', 'manning'],
