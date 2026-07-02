@@ -5,16 +5,11 @@ import { factorFrecuencia } from '../../lib/hydro/runoff';
 import { Field, NumberInput } from './SeccionColapsable';
 import { TablaNormaView } from './TablaNormaView';
 import { TABLA_C_URBANA, TABLA_C_RURAL, TABLA_CF } from '../../lib/hydro/tablasNorma';
+import { parseNum, parseRango, fueraDeRango as fueraDeRangoDe, pickUrbana as pickUrbanaDe, pickRural as pickRuralDe } from '../../lib/hydro/coefC';
 import { VariablesLista } from '../VariablesLista';
 import { variablesDe } from '../../lib/metodologia/contenido';
 
 export type Contexto = 'urbana' | 'rural';
-
-const parseNum = (s: string | number) => parseFloat(String(s).replace(',', '.'));
-const parseRango = (s: string | number) => {
-  const [a, b] = String(s).split(/[–—-]/).map((x) => parseNum(x));
-  return { lo: a, hi: b, mid: (a + b) / 2 };
-};
 
 const URB_DEFAULT = { fila: 5, col: 1 }; // 'Distritos comerciales — áreas de centro de ciudad'
 const RUR_DEFAULT = { fila: 6, col: 2 }; // 'Tierras cultivadas — plano' × 'Franco limo arcilloso'
@@ -42,7 +37,7 @@ export function SeccionCoefC({
 
   // Rango de la fila urbana seleccionada, para el ajuste fino dentro del rango.
   const rangoUrb = contexto === 'urbana' ? parseRango(String(TABLA_C_URBANA.filas[sel.fila][1])) : null;
-  const fueraDeRango = !!rangoUrb && Number.isFinite(cb) && (cb < rangoUrb.lo || cb > rangoUrb.hi);
+  const fueraDeRango = fueraDeRangoDe(rangoUrb, cb);
 
   const cambiarContexto = (c: Contexto) => {
     setContexto(c);
@@ -56,12 +51,14 @@ export function SeccionCoefC({
   };
 
   const pickUrbana = (fila: number, _col: number, valor: string | number) => {
-    setSel({ fila, col: 1 });
-    setCBase(String(parseRango(valor).mid));
+    const { sel: nuevaSel, cBase: nuevoC } = pickUrbanaDe(fila, valor);
+    setSel(nuevaSel);
+    setCBase(String(nuevoC));
   };
   const pickRural = (fila: number, col: number, valor: string | number) => {
-    setSel({ fila, col });
-    setCBase(String(parseNum(valor)));
+    const { sel: nuevaSel, cBase: nuevoC } = pickRuralDe(fila, col, valor);
+    setSel(nuevaSel);
+    setCBase(String(nuevoC));
   };
 
   return (
