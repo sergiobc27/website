@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  manningQ,
   capacidadCircular,
   profundidadNormalCircular,
   profundidadNormalTrapecio,
@@ -8,6 +9,7 @@ import {
   TAU_MIN_AUTOLIMPIEZA,
   chequeoLlenado,
   chequeoVelocidadMax,
+  chequeoSuficiencia,
 } from './manning';
 
 // Caso analítico circular: D=0,5 m, n=0,013, S=0,01.
@@ -97,4 +99,41 @@ describe('chequeoVelocidadMax (erosión, RAS 0330 Art. 150)', () => {
   it('verde por debajo de la máxima', () => { expect(chequeoVelocidadMax(3, 5).estado).toBe('verde'); });
   it('amarillo al acercarse a la máxima (>90%)', () => { expect(chequeoVelocidadMax(4.8, 5).estado).toBe('amarillo'); });
   it('rojo sobre la máxima del material', () => { expect(chequeoVelocidadMax(6, 5).estado).toBe('rojo'); });
+});
+
+// Manning: Q = (1/n)·A·R^(2/3)·√S. Caso a mano: n=0,013, A=0,19635 m² (círculo
+// D=0,5 m a tubo lleno), R=0,125 m, S=0,01 → Q ≈ 0,3776 m³/s (mismo valor
+// analítico que ya fija capacidadCircular, pero probando manningQ directamente).
+describe('manningQ (primitiva de Manning)', () => {
+  it('Q = (1/n)·A·R^(2/3)·√S a mano ≈ 0,3776 m³/s', () => {
+    const area = (Math.PI * 0.5 * 0.5) / 4;
+    const perim = Math.PI * 0.5;
+    expect(manningQ(0.013, area, perim, 0.01)).toBeCloseTo(0.3776, 3);
+  });
+  it('guard: devuelve 0 con n, perímetro o pendiente no positivos', () => {
+    expect(manningQ(0, 1, 1, 0.01)).toBe(0);
+    expect(manningQ(0.013, 1, 0, 0.01)).toBe(0);
+    expect(manningQ(0.013, 1, 1, 0)).toBe(0);
+  });
+});
+
+describe('chequeoSuficiencia (¿el conducto transporta el Q de diseño?)', () => {
+  it('rojo si el Q de diseño supera la capacidad', () => {
+    const r = chequeoSuficiencia(1.1, 1.0);
+    expect(r.estado).toBe('rojo');
+  });
+  it('amarillo justo sobre el umbral del 90% de la capacidad', () => {
+    const r = chequeoSuficiencia(0.95, 1.0); // 95% > 90%
+    expect(r.estado).toBe('amarillo');
+  });
+  it('verde con margen (50% de la capacidad) y reporta el porcentaje correcto', () => {
+    const r = chequeoSuficiencia(0.5, 1.0);
+    expect(r.estado).toBe('verde');
+    expect(r.motivo).toContain('50%');
+  });
+  it('con capacidad 0 no revienta: reporta 0% en vez de dividir por cero', () => {
+    const r = chequeoSuficiencia(0, 0);
+    expect(r.estado).toBe('verde');
+    expect(r.motivo).toContain('0%');
+  });
 });
