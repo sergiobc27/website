@@ -33,11 +33,13 @@ import { emaSiguiente, etaAmable, etaEstableSeg } from '../lib/progresoDescarga'
 import { canDownloadAgain, type HistoryEntry, readHistory, saveHistory } from '../lib/downloadHistory';
 import { NAVIGATE_EVENT, pathToView, type NavigateDetail } from '../lib/navigation';
 import { buildSearch, parseSearch } from '../lib/urlState';
+import { useCatalogOptions, type CatalogOptionStatus } from '../hooks/useCatalogOptions';
+import { useExportJob } from '../hooks/useExportJob';
+import { useCoverage } from '../hooks/useCoverage';
 
 // Mapa (MapLibre) diferido: solo se descarga al abrir el selector en mapa.
 const MapaSelectorDepartamentos = lazy(() => import('./MapaSelectorDepartamentos'));
 import type {
-  CatalogBundleRow,
   CatalogFilterDefinition,
   CoverageReport,
   DateRangeResponse,
@@ -55,7 +57,6 @@ import type {
 } from '../../shared/ideamContracts';
 
 const CONFIG_KEY = 'ideam-extractor-config';
-const ACTIVE_JOB_KEY = 'ideam-extractor-active-job';
 const MAX_OPERATION_LOGS = 80;
 const EXPORT_AVAILABILITY_MS = 60 * 60 * 1000;
 const EXPORT_PLAN_FAST_TIMEOUT_MS = 2500;
@@ -89,17 +90,7 @@ function loadStoredConfig(): StoredExtractorConfig {
 }
 type LogLevel = 'INFO' | 'SUCCESS' | 'ERROR';
 type TimeMode = 'full' | 'custom';
-type CatalogOptionStatus = 'idle' | 'loading' | 'ready' | 'warming' | 'error';
 type ProgressStatusKind = 'idle' | 'running' | 'done' | 'error';
-
-interface TransferProgress {
-  totalPages: number;
-  completedPages: number;
-  totalRows: number;
-  downloadedRows: number;
-  totalParts: number;
-  completedParts: number;
-}
 
 export interface ExtractorRuntimeState {
   isBusy: boolean;
@@ -210,41 +201,6 @@ function normalizeText(value: string) {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
-function buildOptionsFromCatalogBundle(
-  rows: CatalogBundleRow[],
-  definitions: CatalogFilterDefinition[],
-  selectedFilters: Record<string, string[]>
-) {
-  const byKey: Record<string, OptionItem[]> = {};
-
-  definitions.forEach((definition) => {
-    const totals = new Map<string, { label: string; total: number }>();
-    rows.forEach((row) => {
-      const matches = definitions.every((candidate) => {
-        if (candidate.key === definition.key) return true;
-        const selected = selectedFilters[candidate.key] || [];
-        if (!selected.length) return true;
-        return selected.includes(String(row[candidate.column] || ''));
-      });
-      if (!matches) return;
-
-      const value = String(row[definition.column] || '').trim();
-      if (!value) return;
-      const labelValue = definition.labelColumn ? String(row[definition.labelColumn] || '').trim() : '';
-      const label = labelValue ? `${value} - ${labelValue}` : value;
-      const current = totals.get(value) || { label, total: 0 };
-      current.total += Number(row.total || 0);
-      totals.set(value, current);
-    });
-
-    byKey[definition.key] = Array.from(totals.entries())
-      .map(([value, item]) => ({ value, label: item.label, total: item.total }))
-      .sort((left, right) => String(left.label || left.value).localeCompare(String(right.label || right.value), 'es'));
-  });
-
-  return byKey;
-}
-
 // (El armado de CSV/resúmenes en el navegador, de la era síncrona, se eliminó:
 // el backend genera los archivos desde el cutover al espejo propio.)
 
@@ -265,16 +221,22 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>(
     Array.isArray(storedConfig.selectedDepartments) ? storedConfig.selectedDepartments : []
   );
-  const [catalogFilters, setCatalogFilters] = useState<Record<string, string[]>>({});
-  const [catalogOptions, setCatalogOptions] = useState<Record<string, OptionItem[]>>({});
-  const [catalogOptionStatus, setCatalogOptionStatus] = useState<Record<string, CatalogOptionStatus>>({});
-  const [catalogOptionErrors, setCatalogOptionErrors] = useState<Record<string, string>>({});
-  const [catalogBundleRows, setCatalogBundleRows] = useState<CatalogBundleRow[]>([]);
+  const {
+    catalogFilters,
+    catalogOptions,
+    catalogOptionStatus,
+    catalogOptionErrors,
+    loadCatalogOptions,
+    toggleCatalogValue,
+    resetCatalog,
+  } = useCatalogOptions({
+    datasetId,
+    selectedDepartments,
+    catalogDefinitions: meta?.catalogFilters || [],
+  });
   const [stationCodesText, setStationCodesText] = useState('');
   const [stationHelperRows, setStationHelperRows] = useState<StationHelperRow[]>([]);
   const [stationHelperLoading, setStationHelperLoading] = useState(false);
-  const [coverageReports, setCoverageReports] = useState<CoverageReport[]>([]);
-  const [coverageLoading, setCoverageLoading] = useState(false);
   const [dateRange, setDateRange] = useState<DateRangeResponse | null>(null);
   const [timeMode, setTimeMode] = useState<TimeMode>(storedConfig.timeMode === 'custom' ? 'custom' : 'full');
   const [startDate, setStartDate] = useState('');
@@ -284,9 +246,6 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   );
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [downloadMetrics, setDownloadMetrics] = useState<DownloadMetrics | null>(null);
-  const [currentJob, setCurrentJob] = useState<ExportJobStatusResponse | null>(null);
-  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
-  const [transferProgress, setTransferProgress] = useState<TransferProgress | null>(null);
   const [logs, setLogs] = useState<Array<{ type: LogLevel; message: string }>>([]);
   const [isBusy, setIsBusy] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -300,8 +259,6 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   // Estimación en vivo (debounced) del volumen antes de descargar.
   const [liveEstimate, setLiveEstimate] = useState<ExportPlanResponse | null>(null);
   const [estimating, setEstimating] = useState(false);
-  const handledJobIdsRef = useRef<Set<string>>(new Set());
-  const pollFailuresRef = useRef(0);
   // Restore de deep-link del Asistente: estación/años que deben aplicarse una
   // vez que el cambio de variable/departamento se asentó y su rango temporal
   // cargó (los efectos de reset limpian estación y reescriben fechas antes).
@@ -365,6 +322,8 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       return [...current.slice(-(MAX_OPERATION_LOGS - 1)), { type, message }];
     });
   }, []);
+
+  const { coverageReports, coverageLoading, validateCoverageForDownload } = useCoverage({ appendLog, setActiveTask });
 
   // Aplica estación (un código en el textarea) y años del deep-link. Los años
   // (formato "aaaa-aaaa") activan modo personalizado y se clampan al rango
@@ -449,9 +408,6 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   }, [appendLog, triggerBrowserDownload]);
 
   const finalizeCompletedJob = useCallback(async (job: ExportJobStatusResponse) => {
-    if (handledJobIdsRef.current.has(job.jobId)) return;
-    handledJobIdsRef.current.add(job.jobId);
-
     Array.from(new Set(job.warnings)).forEach((warning) => appendLog('INFO', warning));
 
     if (job.metrics) {
@@ -480,6 +436,25 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         : 'La consulta no encontró filas con esos filtros. Se generó un ZIP con archivos vacíos para dejar evidencia de la ejecución.'
     );
   }, [appendLog, catalogFilters, datasetId, selectedDataset?.name, selectedDepartments]);
+
+  const {
+    currentJob,
+    currentJobId,
+    transferProgress,
+    setCurrentJob,
+    setCurrentJobId,
+    setTransferProgress,
+    resetForNewAttempt: resetExportJobForNewAttempt,
+    startJob,
+    cancelJob,
+  } = useExportJob({
+    appendLog,
+    finalizeCompletedJob,
+    setIsBusy,
+    setProgress,
+    setActiveTask,
+    setOperationStartedAt,
+  });
 
   useEffect(() => {
     const boot = async () => {
@@ -510,32 +485,6 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       // Ignore storage quota/availability errors; persistence is best-effort.
     }
   }, [acceptedTerms, step, datasetId, selectedDepartments, selectedFormats, timeMode]);
-
-  // El job activo sobrevive recargas: un export de 10+ min no debe perderse
-  // porque el usuario recargó la página (el ZIP vive 1h en el servidor).
-  useEffect(() => {
-    try {
-      if (currentJobId) window.localStorage.setItem(ACTIVE_JOB_KEY, currentJobId);
-      else window.localStorage.removeItem(ACTIVE_JOB_KEY);
-    } catch {
-      // best-effort
-    }
-  }, [currentJobId]);
-
-  useEffect(() => {
-    try {
-      const savedJobId = window.localStorage.getItem(ACTIVE_JOB_KEY);
-      if (savedJobId) {
-        appendLog('INFO', `Reconectando con la exportación en curso (${savedJobId.slice(0, 8)}...).`);
-        setIsBusy(true);
-        setOperationStartedAt(performance.now());
-        setCurrentJobId(savedJobId);
-      }
-    } catch {
-      // best-effort
-    }
-    // Solo al montar: re-engancha el polling si había un job activo.
-  }, []);
 
   useEffect(() => {
     // cancelled evita que la respuesta lenta del dataset ANTERIOR pise las
@@ -575,15 +524,12 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   }, [dateRange, timeMode]);
 
   useEffect(() => {
-    setCatalogFilters({});
-    setCatalogOptions({});
-    setCatalogOptionStatus({});
-    setCatalogOptionErrors({});
-    setCatalogBundleRows([]);
+    resetCatalog();
     setStationCodesText('');
     setStationHelperRows([]);
     setPreview(null);
     setDownloadMetrics(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datasetId, selectedDepartments.join('|')]);
 
   // Deep-links del Asistente: por evento (navegación in-app, vía
@@ -616,107 +562,6 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     if (acceptedTerms) setStep('execute');
   }, [dateRange, datasetId, acceptedTerms, aplicarEstYears]);
 
-  const loadCatalogOptions = useCallback(async (definition: CatalogFilterDefinition, force = false, cacheOnly = false) => {
-    if (!datasetId || !selectedDepartments.length) {
-      setCatalogOptionErrors((current) => ({
-        ...current,
-        [definition.key]: 'Selecciona variable y departamento para cargar este filtro.',
-      }));
-      setCatalogOptionStatus((current) => ({ ...current, [definition.key]: 'error' }));
-      return;
-    }
-
-    const currentStatus = catalogOptionStatus[definition.key] || 'idle';
-    if (!force && (currentStatus === 'loading' || currentStatus === 'ready' || currentStatus === 'warming')) return;
-
-    setCatalogOptionErrors((current) => {
-      const next = { ...current };
-      delete next[definition.key];
-      return next;
-    });
-    setCatalogOptionStatus((current) => ({ ...current, [definition.key]: 'loading' }));
-
-    try {
-      const data = await apiJson<{ options?: OptionItem[]; cachePending?: boolean }>('/api/catalog-options', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          datasetId,
-          departments: selectedDepartments,
-          catalogFilters,
-          attributeKey: definition.key,
-          cacheOnly,
-        }),
-      }, `No fue posible cargar ${definition.label}.`);
-
-      setCatalogOptions((current) => ({ ...current, [definition.key]: data.options || [] }));
-      setCatalogOptionStatus((current) => ({ ...current, [definition.key]: data.cachePending ? 'warming' : 'ready' }));
-    } catch {
-      setCatalogOptions((current) => ({ ...current, [definition.key]: [] }));
-      setCatalogOptionStatus((current) => ({ ...current, [definition.key]: 'error' }));
-      setCatalogOptionErrors((current) => ({
-        ...current,
-        [definition.key]: `No fue posible cargar ${definition.label}. Intenta de nuevo.`,
-      }));
-    }
-  }, [catalogFilters, catalogOptionStatus, datasetId, selectedDepartments]);
-
-  useEffect(() => {
-    // Sin guard de consentimiento (Fase 2): los catálogos se precargan durante
-    // la configuración; solo la vista previa y la descarga exigen el aviso legal.
-    if (!datasetId || !selectedDepartments.length || !meta?.catalogFilters?.length) return;
-    let cancelled = false;
-    let retryPending = true;
-    const definitions = meta.catalogFilters;
-
-    setCatalogOptionErrors({});
-    setCatalogOptionStatus(Object.fromEntries(definitions.map((definition) => [definition.key, 'loading' as CatalogOptionStatus])));
-
-    const loadCatalogBundle = async () => {
-      try {
-        const data = await apiJson<{ rows?: CatalogBundleRow[]; cachePending?: boolean }>('/api/catalog-bundle', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            datasetId,
-            departments: selectedDepartments,
-          }),
-        }, 'No fue posible cargar el catálogo de filtros.');
-
-        if (cancelled) return;
-        retryPending = Boolean(data.cachePending);
-        setCatalogBundleRows(data.rows || []);
-        setCatalogOptionStatus(Object.fromEntries(definitions.map((definition) => [
-          definition.key,
-          data.cachePending ? 'warming' as CatalogOptionStatus : 'ready' as CatalogOptionStatus,
-        ])));
-      } catch {
-        if (cancelled) return;
-        retryPending = false;
-        setCatalogBundleRows([]);
-        setCatalogOptionStatus(Object.fromEntries(definitions.map((definition) => [definition.key, 'error' as CatalogOptionStatus])));
-      }
-    };
-
-    void loadCatalogBundle();
-    const retryTimer = window.setInterval(() => {
-      if (!cancelled && retryPending) void loadCatalogBundle();
-    }, 30000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(retryTimer);
-    };
-  }, [datasetId, meta?.catalogFilters, selectedDepartments.join('|')]);
-
-  useEffect(() => {
-    const definitions = meta?.catalogFilters || [];
-    if (!definitions.length || !catalogBundleRows.length) {
-      setCatalogOptions({});
-      return;
-    }
-    setCatalogOptions(buildOptionsFromCatalogBundle(catalogBundleRows, definitions, catalogFilters));
-  }, [catalogBundleRows, catalogFilters, meta?.catalogFilters]);
-
   useEffect(() => {
     if (!isBusy || operationStartedAt === null) return undefined;
 
@@ -727,130 +572,6 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     return () => window.clearInterval(timer);
   }, [isBusy, operationStartedAt]);
 
-
-  useEffect(() => {
-    if (!currentJobId) return undefined;
-
-    let cancelled = false;
-    let timer: number | undefined;
-    const pollStartedAt = Date.now();
-
-    // Backoff: 2s el primer minuto, 5s hasta los 5 min, 10s después. Evita
-    // martillar la API (y el rate limit de lecturas) en exports largos.
-    const nextDelay = () => {
-      const elapsed = Date.now() - pollStartedAt;
-      if (elapsed < 60_000) return 2_000;
-      if (elapsed < 300_000) return 5_000;
-      return 10_000;
-    };
-
-    const schedule = () => {
-      if (cancelled) return;
-      timer = window.setTimeout(() => void pollJob(), nextDelay());
-    };
-
-    const pollJob = async () => {
-      // Timeout duro de cliente: el job puede seguir en el servidor, pero la
-      // UI no debe quedarse consultando para siempre.
-      if (Date.now() - pollStartedAt > 30 * 60_000) {
-        setIsBusy(false);
-        setCurrentJobId(null);
-        setActiveTask('La exportación continúa en el servidor');
-        appendLog(
-          'INFO',
-          'Se dejó de consultar el job tras 30 minutos. Si terminó, el ZIP aparecerá disponible al reintentar desde el historial.'
-        );
-        return;
-      }
-      try {
-        const data = await apiJson<ExportJobStatusResponse>(
-          `/api/jobs/${currentJobId}`,
-          undefined,
-          'No fue posible consultar el estado del job.'
-        );
-        if (cancelled) return;
-
-        pollFailuresRef.current = 0;
-        setCurrentJob(data);
-        setTransferProgress({
-          totalPages: Math.max(data.totalPages, 1),
-          completedPages: data.completedPages,
-          totalRows: data.rowCount,
-          downloadedRows: data.processedRows,
-          totalParts: 1,
-          completedParts: data.parts.length,
-        });
-
-        if (data.status === 'queued' || data.status === 'planning') {
-          setIsBusy(true);
-          setProgress(data.progressPercent);
-          setActiveTask(data.currentStage);
-          schedule();
-        } else if (data.status === 'retrying') {
-          setIsBusy(true);
-          setProgress(data.progressPercent);
-          setActiveTask(`${data.currentStage} (${data.retryCount}/${data.retryLimit})`);
-          schedule();
-        } else if (data.status === 'processing') {
-          setIsBusy(true);
-          setProgress(data.progressPercent);
-          setActiveTask(`${data.currentStage}: página ${data.currentPage}/${Math.max(data.totalPages, 1)}`);
-          schedule();
-        } else if (data.status === 'completed') {
-          setProgress(100);
-          setActiveTask('ZIP listo para descargar');
-          setIsBusy(false);
-          await finalizeCompletedJob(data);
-          // Limpia el job activo (y su persistencia): si no, una recarga
-          // posterior re-finalizaría el job y duplicaría el historial.
-          setCurrentJobId(null);
-        } else if (data.status === 'failed') {
-          setProgress(100);
-          setActiveTask('Error en descarga');
-          setIsBusy(false);
-          setCurrentJobId(null);
-          appendLog('ERROR', data.error || 'El job de exportación falló.');
-        } else {
-          schedule();
-        }
-      } catch (error) {
-        if (cancelled) return;
-        // 404/410 = el job ya no existe (expiró o se barrió tras un reinicio):
-        // es DEFINITIVO, no transitorio — cortar de inmediato con mensaje claro
-        // en vez de 5 reintentos + error de red genérico (auditoría #4). Los
-        // reintentos quedan solo para 502/503/504 puntuales del proxy.
-        if (error instanceof ApiError && (error.status === 404 || error.status === 410)) {
-          setIsBusy(false);
-          setCurrentJobId(null);
-          setActiveTask('La exportación ya no esta disponible');
-          appendLog('ERROR', 'La exportación expiró o se interrumpió en el servidor. Genera una nueva.');
-          return;
-        }
-        // Un 502/524 puntual del proxy NO significa que el job murió: seguir
-        // ocupado y reintentar; solo rendirse tras varios fallos seguidos.
-        pollFailuresRef.current += 1;
-        if (pollFailuresRef.current >= 5) {
-          setIsBusy(false);
-          setCurrentJobId(null);
-          setActiveTask('No fue posible consultar el job');
-          appendLog('ERROR', error instanceof Error ? error.message : 'Error consultando el job.');
-        } else {
-          appendLog(
-            'INFO',
-            `Fallo transitorio consultando el job (${pollFailuresRef.current}/5); reintentando...`
-          );
-          schedule();
-        }
-      }
-    };
-
-    void pollJob();
-
-    return () => {
-      cancelled = true;
-      if (timer !== undefined) window.clearTimeout(timer);
-    };
-  }, [currentJobId, finalizeCompletedJob]);
 
   const projectedRows = useMemo(() => {
     const baseRows = currentJob?.processedRows ?? transferProgress?.downloadedRows ?? downloadMetrics?.rowCount ?? preview?.rowCount ?? 0;
@@ -928,14 +649,6 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
     }
   };
 
-  const toggleCatalogValue = (filterKey: string, value: string) => {
-    setCatalogFilters((current) => {
-      const values = current[filterKey] || [];
-      const nextValues = values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
-      return { ...current, [filterKey]: nextValues };
-    });
-  };
-
   const toggleOutputFormat = (format: OutputFormat) => {
     setSelectedFormats((current) =>
       current.includes(format)
@@ -944,42 +657,6 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
           : current.filter((item) => item !== format)
         : [...current, format]
     );
-  };
-
-  const validateCoverageForDownload = async () => {
-    setCoverageLoading(true);
-    setActiveTask('Validando cobertura territorial...');
-    appendLog('INFO', 'Validando cobertura territorial antes de descargar...');
-    try {
-      const data = await apiJson<{ reports?: CoverageReport[] }>('/api/coverage', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(executionPayload),
-      }, 'No fue posible validar la cobertura territorial.');
-
-      const reports = data.reports || [];
-      setCoverageReports(reports);
-
-      const discoveredDepartments = reports.flatMap((report) => report.matched.map((item) => item.departamento));
-      const enhancedDepartments = Array.from(new Set([...selectedDepartments, ...discoveredDepartments].filter(Boolean)));
-      const unmatchedRows = reports.reduce((sum, report) => sum + report.unmatched_rows, 0);
-
-      if (unmatchedRows > 0) {
-        appendLog(
-          'INFO',
-          `Cobertura con variantes nuevas: ${unmatchedRows.toLocaleString('es-CO')} variante(s) potenciales se reportan para revision, pero solo se descargan departamentos validados.`
-        );
-      } else {
-        appendLog('SUCCESS', 'Cobertura territorial validada sin variantes pendientes.');
-      }
-
-      return {
-        ...executionPayload,
-        departments: enhancedDepartments,
-      };
-    } finally {
-      setCoverageLoading(false);
-    }
   };
 
   const loadStationHelper = async () => {
@@ -1056,10 +733,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
       etaShownRef.current = null;
       lastProcRef.current = null;
       setDownloadMetrics(null);
-      setTransferProgress(null);
-      setCurrentJob(null);
-      setCurrentJobId(null);
-      pollFailuresRef.current = 0;
+      resetExportJobForNewAttempt();
       setProgress(2);
       setActiveTask('Estimando volumen de descarga...');
 
@@ -1103,17 +777,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
         }),
       }, 'No fue posible crear el job de exportación.');
 
-      handledJobIdsRef.current.delete(data.jobId);
-      setCurrentJobId(data.jobId);
-      setCurrentJob(data);
-      setTransferProgress({
-        totalPages: Math.max(data.totalPages, 1),
-        completedPages: data.completedPages,
-        totalRows: data.rowCount,
-        downloadedRows: data.processedRows,
-        totalParts: 1,
-        completedParts: data.parts.length,
-      });
+      startJob(data);
       setProgress(5);
       setActiveTask('Job creado, esperando procesamiento...');
       appendLog('SUCCESS', `Job ${data.jobId.slice(0, 8)} creado. El backend continuará la exportación por lotes.`);
@@ -1340,9 +1004,7 @@ export function DataExtractor({ onRuntimeChange }: { onRuntimeChange?: (state: E
   // disponible 1 h en el centro de descargas. setCurrentJobId(null) además limpia
   // ACTIVE_JOB_KEY (efecto), así que una recarga no vuelve a engancharse.
   const cancelarEspera = () => {
-    setCurrentJobId(null);
-    setCurrentJob(null);
-    setTransferProgress(null);
+    cancelJob();
     setIsBusy(false);
     setProgress(0);
     setActiveTask('Esperando configuración');
