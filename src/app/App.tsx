@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useState } from 'react';
 import { lazyWithRetry } from './lib/lazyWithRetry';
-import { BookOpen, CheckCircle2, Cloud, Database, FileArchive, KeyRound, ShieldCheck, Terminal } from 'lucide-react';
+import { CheckCircle2, Cloud, Database, FileArchive } from 'lucide-react';
 import { Sidebar, SidebarContent } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
 import { Sheet, SheetContent, SheetTitle } from './components/ui/sheet';
@@ -14,7 +14,6 @@ const Analytics = lazyWithRetry(() => import('./components/Analytics').then((m) 
 const EstadoEspejo = lazyWithRetry(() => import('./components/EstadoEspejo').then((m) => ({ default: m.EstadoEspejo })));
 const ComparadorEstaciones = lazyWithRetry(() => import('./components/ComparadorEstaciones').then((m) => ({ default: m.ComparadorEstaciones })));
 const Hidrologia = lazyWithRetry(() => import('./components/Hidrologia').then((m) => ({ default: m.Hidrologia })));
-const BibliotecaReferencias = lazyWithRetry(() => import('./components/BibliotecaReferencias').then((m) => ({ default: m.BibliotecaReferencias })));
 const HistoriaIdf = lazyWithRetry(() => import('./components/HistoriaIdf').then((m) => ({ default: m.HistoriaIdf })));
 const Metodologia = lazyWithRetry(() => import('./components/Metodologia').then((m) => ({ default: m.Metodologia })));
 const Landing = lazyWithRetry(() => import('./components/landing/Landing').then((m) => ({ default: m.Landing })));
@@ -158,7 +157,6 @@ export default function App() {
       extractor: ['Inicio', 'Extractor de Datos'],
       history: ['Inicio', 'Historial de Descargas'],
       settings: ['Inicio', 'Ajustes de API'],
-      docs: ['Inicio', 'Documentación'],
     };
     const labels = breadcrumbMap[currentView] || ['Inicio'];
     // El primer crumb ('Inicio') navega al dashboard; el último es la vista
@@ -191,8 +189,6 @@ export default function App() {
         return <DownloadHistory />;
       case 'settings':
         return <SettingsView />;
-      case 'docs':
-        return <DocumentationView onOpenExtractor={() => navigate('extractor')} />;
       default:
         return <Dashboard onNavigate={navigate} />;
     }
@@ -301,71 +297,6 @@ function SettingsView() {
   );
 }
 
-function DocumentationView({ onOpenExtractor }: { onOpenExtractor: () => void }) {
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-card-foreground text-2xl font-bold">Documentación</h2>
-          <p className="text-muted-foreground text-sm mt-1">Guía rápida del flujo web y de las validaciones que protegen la descarga.</p>
-        </div>
-        <button
-          onClick={onOpenExtractor}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-primary to-accent px-4 py-2 text-sm font-semibold text-primary-foreground sm:w-auto"
-        >
-          <Terminal className="h-4 w-4" />
-          Abrir extractor
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <DocCard
-          icon={ShieldCheck}
-          title="Flujo recomendado"
-          items={[
-            'Aceptar el aviso legal.',
-            'Seleccionar variable IDEAM.',
-            'Elegir un departamento (uno por descarga).',
-            'Aplicar filtros de catálogo y estaciones específicas (opcional).',
-            'Definir temporalidad y descargar ZIP.',
-          ]}
-        />
-        <DocCard
-          icon={CheckCircle2}
-          title="Validaciones automáticas"
-          items={[
-            'Rango temporal válido.',
-            'Departamentos requeridos si el modo es puntual.',
-            'Cobertura territorial antes de exportar ZIP.',
-            'Partición automática para archivos grandes.',
-            'Métricas de filas, estaciones, municipios, zonas, peso y tiempo.',
-          ]}
-        />
-        <DocCard
-          icon={BookOpen}
-          title="Formatos disponibles"
-          items={[
-            'CSV para Excel y análisis general.',
-            'JSON para integraciones web o APIs.',
-            'Parquet para analítica eficiente cuando el navegador lo soporte.',
-          ]}
-        />
-        <DocCard
-          icon={KeyRound}
-          title="Notas para despliegue"
-          items={[
-            'Cloudflare Worker sirve los endpoints /api.',
-            'GitHub Actions publica los cambios del repositorio.',
-            'Las credenciales deben vivir en secrets, nunca en el código fuente.',
-          ]}
-        />
-      </div>
-
-      <BibliotecaReferencias />
-    </div>
-  );
-}
-
 function InfoCard({ icon: Icon, title, value, detail }: { icon: React.ElementType; title: string; value: string; detail: string }) {
   return (
     <div className="bg-card border border-border rounded-xl p-5 shadow-glow">
@@ -395,21 +326,3 @@ function ChecklistItem({ text }: { text: string }) {
   );
 }
 
-function DocCard({ icon: Icon, title, items }: { icon: React.ElementType; title: string; items: string[] }) {
-  return (
-    <div className="bg-card border border-border rounded-xl p-6 shadow-glow">
-      <div className="flex items-center gap-3 mb-4">
-        <Icon className="h-5 w-5 text-accent" />
-        <h3 className="text-card-foreground font-bold">{title}</h3>
-      </div>
-      <div className="space-y-3">
-        {items.map((item) => (
-          <div key={item} className="flex items-start gap-3 text-sm text-muted-foreground">
-            <span className="mt-2 h-1.5 w-1.5 rounded-full bg-accent shrink-0" />
-            <span>{item}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}

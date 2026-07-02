@@ -5,7 +5,7 @@
 // (AsistenteFlotante); la URL vieja /asistente la migra un shim en App.
 export const VIEWS = [
   'landing', 'dashboard', 'analytics', 'map', 'compare', 'ficha', 'hydro', 'historia', 'metodologia',
-  'status', 'extractor', 'history', 'settings', 'docs',
+  'status', 'extractor', 'history', 'settings',
 ] as const;
 
 // Unión de literales derivada de VIEWS: un typo como navigate('metodologa') ya no

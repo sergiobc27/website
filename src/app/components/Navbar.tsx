@@ -1,4 +1,4 @@
-import { Sun, Moon, Monitor, HelpCircle, User, ChevronRight, History, Search, Trash2, Menu, Github, Package } from 'lucide-react';
+import { Sun, Moon, Monitor, User, ChevronRight, History, Search, Trash2, Menu, Github, Package } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ExtractorRuntimeState } from './DataExtractor';
 import {
@@ -195,16 +195,6 @@ export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMenu }: NavbarP
         >
           <Package className="anim-wiggle h-5 w-5" />
         </a>
-
-        <button
-          type="button"
-          onClick={() => onNavigate('docs')}
-          className="group rounded-lg p-2 text-muted-foreground transition-[transform,background-color,color] duration-150 ease-out hover:scale-105 hover:bg-muted hover:text-accent active:scale-95"
-          title="Ayuda"
-          aria-label="Ayuda y documentación"
-        >
-          <HelpCircle className="anim-wiggle h-5 w-5" />
-        </button>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
