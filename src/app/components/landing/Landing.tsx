@@ -42,7 +42,7 @@ export function Landing({ onNavigate }: LandingProps) {
         <h1 className="sr-only">Automatización de datos hídricos del IDEAM, trabajo de grado de Sergio Beltran Coley</h1>
         <HeroGota onNavigate={onNavigate} />
         <SeccionProblemaSolucion />
-        <SeccionQueHace />
+        <SeccionQueHace onNavigate={onNavigate} />
         {/* QueHace (bg-background) → Cifras (banda cálida). El agua cálida sube
             hacia la sección neutra. Colores = bgs reales de ambas secciones. */}
         <OndaDivisor

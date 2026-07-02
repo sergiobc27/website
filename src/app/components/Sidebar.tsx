@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Activity, BookMarked, BookOpenText, Building2, Database, Download, Droplets, Settings, FileText, BarChart3, ChevronLeft, ChevronRight, GitCompareArrows, MapPin, TrendingUp } from 'lucide-react';
+import { Activity, BookMarked, BookOpenText, Building2, Calculator, Database, Download, Settings, FileText, BarChart3, ChevronLeft, ChevronRight, GitCompareArrows, MapPin, TrendingUp } from 'lucide-react';
 import logoVertical from "../../imports/Logo_CUC_PNG_letra_blanca_barra_roja_vtcal.png";
 import logoCollapsed from "../../imports/u.png";
 import logoIdeam from "../../imports/Ideam_(Colombia)_logo.png";
@@ -24,7 +24,7 @@ export const MENU_SECTIONS = [
       { id: 'map', icon: MapPin, label: 'Mapa de Estaciones' },
       { id: 'compare', icon: GitCompareArrows, label: 'Comparador' },
       { id: 'ficha', icon: Building2, label: 'Ficha Climática' },
-      { id: 'hydro', icon: Droplets, label: 'Hidrología' },
+      { id: 'hydro', icon: Calculator, label: 'Calculadora de caudal (Hidrología)' },
       { id: 'historia', icon: BookOpenText, label: 'La historia del dato' },
       { id: 'metodologia', icon: BookMarked, label: 'Metodología' },
     ],

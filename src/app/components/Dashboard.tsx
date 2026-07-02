@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BookOpenText, MapPin, MessageCircle } from 'lucide-react';
+import { BookOpenText, Calculator, MapPin, MessageCircle } from 'lucide-react';
 import { Celda } from './dashboard/Celda';
 import { CeldaAcceso } from './dashboard/CeldaAcceso';
 import { CeldaPulso } from './dashboard/CeldaPulso';
@@ -73,6 +73,14 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         <CeldaDescargas indice={3} className="min-h-[170px]" onClick={() => onNavigate('history')} />
         <CeldaAcceso
           indice={4}
+          icon={Calculator}
+          titulo="Calcula el caudal de tu obra"
+          subtitulo="Dimensiona drenaje: Tc, intensidad IDF, C y Manning"
+          ariaLabel="Abrir la calculadora de caudal de diseño para dimensionar drenaje"
+          onClick={() => onNavigate('hydro')}
+        />
+        <CeldaAcceso
+          indice={5}
           icon={BookOpenText}
           titulo="La historia del dato"
           subtitulo="Cómo la lluvia se vuelve curvas IDF"
@@ -80,7 +88,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           onClick={() => onNavigate('historia')}
         />
         <CeldaAcceso
-          indice={5}
+          indice={6}
           icon={MessageCircle}
           titulo="Asistente Hídrico"
           subtitulo="Resuelve dudas de IDF, SPI y descargas"
@@ -88,7 +96,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           onClick={() => window.dispatchEvent(new CustomEvent(OPEN_ASISTENTE_EVENT))}
         />
         <CeldaCalendario
-          indice={6}
+          indice={7}
           className="min-h-[300px] lg:col-span-4"
           serie={serie}
           cargando={serieCargando}
@@ -96,7 +104,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           onClick={() => onNavigate('analytics')}
         />
         <Celda
-          indice={7}
+          indice={8}
           titulo="Mapa de estaciones"
           ariaLabel="Abrir el mapa: explora las más de 17.000 estaciones del catálogo IDEAM"
           onClick={() => onNavigate('map')}
