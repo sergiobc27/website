@@ -80,6 +80,19 @@ describe('chequeoCortante (autolimpieza por cortante, RAS Art. 149)', () => {
   });
 });
 
+describe('chequeoCortante en canal abierto (la cita no invoca el Art. 149 a secas)', () => {
+  it('rotula el umbral como criterio del autor extendido a canales', () => {
+    const c = chequeoCortante(12.26, TAU_MIN_AUTOLIMPIEZA, 'canal');
+    expect(c.estado).toBe('verde');
+    expect(c.motivo).toContain('criterio del autor');
+  });
+  it('en tubería (default) mantiene la cita directa al RAS 0330, Art. 149', () => {
+    const c = chequeoCortante(12.26, TAU_MIN_AUTOLIMPIEZA);
+    expect(c.motivo).toContain('RAS 0330, Art. 149');
+    expect(c.motivo).not.toContain('criterio del autor');
+  });
+});
+
 describe('chequeoVelocidadMax (erosión, RAS 0330 Art. 150)', () => {
   it('verde por debajo de la máxima', () => { expect(chequeoVelocidadMax(3, 5).estado).toBe('verde'); });
   it('amarillo al acercarse a la máxima (>90%)', () => { expect(chequeoVelocidadMax(4.8, 5).estado).toBe('amarillo'); });

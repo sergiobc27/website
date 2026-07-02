@@ -17,13 +17,13 @@ export function CalculoPasoAPaso({
   return (
     <>
     <ol className="space-y-3 text-xs text-muted-foreground">
-      <Paso n={1} titulo="Tiempo de concentración (Tc)" fuente="Kirpich (1940); Témez (1978); Giandotti (1934). El Manual INVÍAS (2009, pág. 2-8) recomienda Kirpich y un mínimo de 15 min; el RAS 0330 (Art. 135, num. 4) admite mínimos de 3 a 10 min.">
+      <Paso n={1} titulo="Tiempo de concentración (Tc)" fuente="Kirpich (1940); Témez (1978); Giandotti (1934); factores del Kirpich modificado: Chow, Maidment y Mays (1988), Tabla 15.1.2. La mediana de los métodos es un criterio del autor. Piso de diseño según la obra: el Manual INVÍAS (2009, pág. 2-8) exige un mínimo de 15 min en drenaje vial; el RAS 0330 (Art. 135, num. 4) admite mínimos de 3 a 10 min en drenaje urbano.">
         <Linea>
           <Formula className="text-card-foreground">
-            <V>T</V><Sub>c</Sub> (Kirpich) = 0,0195 · {fmt(L, 0)}<Sup>0,77</Sup> · {fmt(Skm, 4)}<Sup>−0,385</Sup> = {fmt(tcs.kirpich, 1)} min
+            <V>T</V><Sub>c</Sub> (Kirpich{tcs.kirpichModificado ? ' modificado' : ''}) = {tcs.kirpichModificado ? <>{fmt(tcs.factorRecorrido, 1)} · </> : null}0,0195 · {fmt(L, 0)}<Sup>0,77</Sup> · {fmt(Skm, 4)}<Sup>−0,385</Sup> = {fmt(tcs.kirpich, 1)} min
           </Formula>
         </Linea>
-        <Linea>Témez = {fmt(tcs.temez, 1)} min · Giandotti = {fmt(tcs.giandotti, 1)} min · <strong className="text-card-foreground">Tc usado = {fmt(tcUsado, 1)} min</strong> ({tcMetodo === 'recomendado' ? 'recomendado (mediana)' : tcMetodo}{tcs.pisoAplicado ? ', piso de 10 min' : ''})</Linea>
+        <Linea>Témez = {fmt(tcs.temez, 1)} min · Giandotti = {fmt(tcs.giandotti, 1)} min · <strong className="text-card-foreground">Tc usado = {fmt(tcUsado, 1)} min</strong> ({tcMetodo === 'recomendado' ? 'recomendado (mediana)' : tcMetodo}{tcs.pisoAplicado ? `, elevado al piso de ${fmt(tcs.piso, 0)} min (${tcs.piso === 15 ? 'obra vial, Manual INVÍAS 2009' : 'RAS 0330, Art. 135, num. 4'})` : ''})</Linea>
       </Paso>
 
       <Paso n={2} titulo="Coeficiente de escorrentía C ajustado" fuente="C base: INVÍAS (2009), Tablas 2.9/2.10. Factor Cf: Chow, Maidment & Mays (1988).">

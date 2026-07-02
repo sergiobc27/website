@@ -72,18 +72,18 @@ export const METODOLOGIA: Record<string, EntradaMetodo> = {
     titulo: 'Tiempo de concentración (Tc)',
     resumen: 'El tiempo que tarda el agua en viajar desde el punto más lejano de la cuenca hasta la salida.',
     queEs:
-      'El tiempo de concentración fija la duración de la lluvia de diseño en el método racional. Se estima con fórmulas empíricas (Kirpich, Témez, Giandotti) a partir de la longitud, la pendiente y el área del cauce; la calculadora toma la mediana de los métodos válidos para no depender de uno solo. El Kirpich original se dedujo de cuencas rurales; en recorridos urbanos pavimentados se usa el Kirpich modificado, que multiplica su Tc por un factor de ajuste (0,4 en asfalto o concreto; 0,2 en canales revestidos en concreto).',
+      'El tiempo de concentración fija la duración de la lluvia de diseño en el método racional. Se estima con fórmulas empíricas (Kirpich, Témez, Giandotti) a partir de la longitud, la pendiente y el área del cauce; la calculadora toma la mediana de los métodos válidos (un criterio de ingeniería del autor, no un mandato de norma) para no depender de uno solo. El Kirpich original se dedujo de cuencas rurales y subestima el Tc en cuencas urbanizadas (Vélez y Botero, 2011); en recorridos urbanos pavimentados se usa el Kirpich modificado, que multiplica su Tc por un factor de ajuste (0,4 en asfalto o concreto; 0,2 en canales revestidos en concreto), con los factores que reproducen Chow, Maidment y Mays (1988, Tabla 15.1.2).',
     comoSeLee:
-      'La tabla muestra el Tc de cada método y el valor recomendado (mediana). Si la mediana baja de 10 min se aplica un piso de diseño de 10 min.',
+      'La tabla muestra el Tc de cada método y el valor recomendado (mediana). Si la mediana baja del piso de diseño, se eleva al piso: 15 min cuando la obra se eligió de la tabla vial (INVÍAS) y 10 min en los demás casos.',
     paraQueSirve:
-      'Leer la intensidad de la curva IDF en la duración correcta (D = Tc). El Manual INVÍAS recomienda Kirpich y un mínimo de 15 min; el RAS admite mínimos de 3 a 10 min.',
+      'Leer la intensidad de la curva IDF en la duración correcta (D = Tc). El Manual INVÍAS recomienda Kirpich y un mínimo de 15 min; el RAS admite mínimos de 3 a 10 min. La calculadora aplica ese piso según el contexto: 15 min si la obra elegida es vial (INVÍAS) y 10 min si es urbana o no se eligió obra (RAS).',
     formula: (
       <Formula>
         <V>T</V><Sub>c</Sub>&nbsp;(Kirpich)&nbsp;=&nbsp;0,0195 · <V>L</V><Sup>0,77</Sup> · <V>S</V><Sup>−0,385</Sup>
       </Formula>
     ),
     variables: [
-      { simbolo: <><V>T</V><Sub>c</Sub></>, definicion: 'tiempo de concentración (min)', comoSeObtiene: 'No se mide: la calcula la app con Kirpich, Témez y Giandotti a partir de L y S, y toma la mediana (con un piso de diseño de 10 min). En recorrido urbano pavimentado se aplica el Kirpich modificado (Tc de Kirpich × 0,4; × 0,2 en canal de concreto).' },
+      { simbolo: <><V>T</V><Sub>c</Sub></>, definicion: 'tiempo de concentración (min)', comoSeObtiene: 'No se mide: la calcula la app con Kirpich, Témez y Giandotti a partir de L y S, y toma la mediana (con un piso de diseño de 10 min, o de 15 min si la obra elegida es vial). En recorrido urbano pavimentado se aplica el Kirpich modificado (Tc de Kirpich × 0,4; × 0,2 en canal de concreto; factores de Chow, Maidment y Mays, 1988).' },
       { simbolo: 'L', definicion: 'longitud del cauce principal (m)', comoSeObtiene: 'Se mide sobre el cauce principal, desde el punto más alejado de la cuenca hasta la salida, en un plano o SIG; en metros.' },
       { simbolo: 'S', definicion: 'pendiente media del cauce (m/m)', comoSeObtiene: 'Diferencia de cotas entre el punto más alto y la salida, dividida por la longitud del cauce. Se saca de curvas de nivel (planchas IGAC) o de un modelo de elevación (DEM); en m/m.' },
     ],
@@ -92,7 +92,9 @@ export const METODOLOGIA: Record<string, EntradaMetodo> = {
       cita('temez-1978', 'cálculo de Tc en cuencas pequeñas'),
       cita('giandotti-1934', 'fórmula con área y pendiente'),
       cita('velez-botero-2011', 'Kirpich subestima Tc en cuencas urbanas'),
+      cita('chow-applied-1988', 'Tabla 15.1.2 (factores 0,4 y 0,2 del Kirpich modificado; pág. 513 de la ed. en español)'),
       cita('ras-0330', 'Art. 135, num. 4 (Tc mínimo 3–10 min)'),
+      cita('invias-drenaje-2009', 'Tc mínimo de 15 min en drenaje vial (pág. 2-8)'),
     ],
   },
   'coeficiente-c': {
@@ -134,7 +136,7 @@ export const METODOLOGIA: Record<string, EntradaMetodo> = {
         ref: 'chow-applied-1988',
         localizador: 'factor de frecuencia del método racional',
         verificado: false,
-        nota: 'Valor de Chow, Maidment & Mays (1988); el número exacto de tabla queda por confirmar en la edición impresa.',
+        nota: 'Multiplicadores de uso extendido en la práctica del método racional, atribuidos a Chow, Maidment & Mays (1988). En la edición consultada, la Tabla 15.1.1 trae C directamente por período de retorno (no el multiplicador Cf); el localizador exacto queda por confirmar.',
       },
     ],
   },
@@ -147,7 +149,7 @@ export const METODOLOGIA: Record<string, EntradaMetodo> = {
     comoSeLee:
       'Las tarjetas muestran capacidad, llenado y/D, velocidad y esfuerzo cortante τ; los semáforos verde/amarillo/rojo indican si cada chequeo cumple la norma.',
     paraQueSirve:
-      'Elegir el diámetro o la sección del conducto. Criterios del RAS 0330: autolimpieza por esfuerzo cortante ≥ 2,0 Pa (Art. 149), velocidad máxima 5,0 m/s (Art. 150) y llenado máximo y/D = 93% (Art. 151).',
+      'Elegir el diámetro o la sección del conducto. Criterios del RAS 0330, escritos para alcantarillado (tubería): autolimpieza por esfuerzo cortante ≥ 2,0 Pa (Art. 149), velocidad máxima 5,0 m/s (Art. 150) y llenado máximo y/D = 93% (Art. 151). En canales abiertos, el umbral de cortante se aplica como criterio extendido del autor y el chequeo lo indica.',
     formula: (
       <Formula>
         <V>Q</V>&nbsp;=&nbsp;<Frac num={<>1</>} den={<V>n</V>} />&nbsp;· <V>A</V> · <V>R</V><Sup>2/3</Sup> · <V>S</V><Sup>1/2</Sup>
