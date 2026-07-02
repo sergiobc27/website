@@ -27,6 +27,7 @@ export function SeccionTc({
   recorrido,
   setRecorrido,
   avisoKirpich,
+  avisoGiandotti,
 }: {
   tcs: TiemposTc;
   metodo: MetodoTc | 'recomendado';
@@ -35,6 +36,7 @@ export function SeccionTc({
   recorrido: Recorrido;
   setRecorrido: (r: string) => void;
   avisoKirpich: boolean;
+  avisoGiandotti: boolean;
 }) {
   const valores = [tcs.kirpich, tcs.temez, tcs.giandotti].filter((v): v is number => v != null);
   const min = valores.length ? Math.min(...valores) : null;
@@ -81,13 +83,18 @@ export function SeccionTc({
             </tr>
             <tr className="border-t border-border bg-accent/10">
               <td className="px-3 py-2 text-sm font-semibold text-accent">
-                Recomendado (mediana{tcs.pisoAplicado ? ', piso 10 min' : ''})
+                Recomendado (mediana de los métodos, criterio del autor{tcs.pisoAplicado ? `, piso ${fmt(tcs.piso, 0)} min` : ''})
               </td>
               <td className="px-3 py-2 text-right font-mono font-bold text-accent">{fmt(tcs.recomendado, 1)}</td>
             </tr>
           </tbody>
         </table>
       </div>
+      <p className="text-xs text-muted-foreground">
+        La mediana de los métodos válidos es un criterio de ingeniería del autor, no un mandato de norma: evita
+        depender de un solo método y amortigua el que se dispare. El Manual INVÍAS recomienda Kirpich; puedes
+        elegirlo (o cualquier otro método) en el selector de abajo.
+      </p>
 
       <Field label="Tc usado en el cálculo de Q">
         <Select
@@ -108,13 +115,23 @@ export function SeccionTc({
       {tcs.pisoAplicado && (
         <div className="flex items-start gap-2 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-accent">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>La mediana cae por debajo de 10 min; se aplica el piso de diseño de 10 min (extremo del rango de 3 a 10 min del RAS 0330, Art. 135, num. 4) para evitar intensidades irreales.</span>
+          <span>
+            {tcs.piso === 15
+              ? 'La mediana cae por debajo de 15 min; como la obra elegida es vial, se aplica el piso de diseño de 15 min (mínimo del Manual de Drenaje INVÍAS 2009) para evitar intensidades irreales.'
+              : 'La mediana cae por debajo de 10 min; se aplica el piso de diseño de 10 min (extremo del rango de 3 a 10 min del RAS 0330, Art. 135, num. 4) para evitar intensidades irreales.'}
+          </span>
         </div>
       )}
       {avisoKirpich && !tcs.kirpichModificado && (
         <div className="flex items-start gap-2 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-accent">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>La superficie elegida es pavimentada: Kirpich (rural) subestima el Tc. Elige arriba un recorrido urbano para aplicar el Kirpich modificado (Vélez y Botero, 2011).</span>
+          <span>La superficie elegida es pavimentada: Kirpich (rural) subestima el Tc en cuencas urbanizadas (Vélez y Botero, 2011). Elige arriba un recorrido urbano para aplicar el Kirpich modificado, con los factores de ajuste de Chow, Maidment y Mays (1988, Tabla 15.1.2).</span>
+        </div>
+      )}
+      {avisoGiandotti && (
+        <div className="flex items-start gap-2 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-accent">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>Giandotti domina la mediana y la cuenca es muy pequeña: esa fórmula se calibró en cuencas grandes y tiende a sobreestimar el Tc en áreas pequeñas. Compara con Kirpich (el método que recomienda el Manual INVÍAS) antes de aceptar el valor recomendado.</span>
         </div>
       )}
 

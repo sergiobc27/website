@@ -77,7 +77,7 @@ export function SeccionManning({ q, pendienteCuenca }: { q: number; pendienteCue
     const tau = esfuerzoCortante(sol.r, s);
     const chequeos = sol.excedeCapacidad
       ? [{ estado: 'rojo' as const, motivo: 'La sección no transporta el Q de diseño: aumenta el ancho de base o el talud.' }]
-      : [chequeoCortante(tau, tmin), chequeoVelocidadMax(sol.v, vmax)];
+      : [chequeoCortante(tau, tmin, 'canal'), chequeoVelocidadMax(sol.v, vmax)];
     return { tipo: 'trapezoidal' as const, sol, tau, chequeos };
   }, [q, seccion, diametro, base, talud, nMann, sCond, tauMin, vMax]);
 
@@ -121,7 +121,12 @@ export function SeccionManning({ q, pendienteCuenca }: { q: number; pendienteCue
         <Field label="Pendiente del conducto (%)" help="Pendiente longitudinal del conducto. Por defecto sigue la pendiente de la cuenca; al editarla queda fija e independiente.">
           <NumberInput value={sCond} onChange={(v) => { setSCond(v); setSCondTocado(true); }} step="0.1" />
         </Field>
-        <Field label="Esfuerzo cortante mín. τ (Pa)" help="Criterio de autolimpieza del RAS 0330 (2017), Art. 149: la velocidad mínima en alcantarillado pluvial es la que genera un esfuerzo cortante de pared ≥ 2,0 Pa. τ = γ·R·S.">
+        <Field
+          label="Esfuerzo cortante mín. τ (Pa)"
+          help={seccion === 'circular'
+            ? 'Criterio de autolimpieza del RAS 0330 (2017), Art. 149: la velocidad mínima en alcantarillado pluvial es la que genera un esfuerzo cortante de pared ≥ 2,0 Pa. τ = γ·R·S.'
+            : 'El umbral de autolimpieza de 2,0 Pa (RAS 0330, Art. 149) está definido para tubería de alcantarillado; en el canal se aplica como criterio extendido del autor. Si tienes un τ admisible del material del canal, ponlo aquí. τ = γ·R·S.'}
+        >
           <NumberInput value={tauMin} onChange={setTauMin} step="0.5" />
         </Field>
         <Field label="Vel. máx. material (m/s)" help="Velocidad máxima para no erosionar el material. RAS 0330 (2017), Art. 150: 5,0 m/s (hasta 10 m/s con revestimiento especial).">
@@ -162,7 +167,10 @@ export function SeccionManning({ q, pendienteCuenca }: { q: number; pendienteCue
       <VariablesLista variables={variablesDe('manning')} className="mt-1" />
       <p className="text-xs text-muted-foreground">
         Manning (1891) · R = A/P (radio hidráulico). Autolimpieza por esfuerzo cortante τ = γ·R·S ≥ 2,0 Pa
-        (RAS 0330, Art. 149); velocidad máxima 5,0 m/s (Art. 150); llenado máximo y/D = 93% (Art. 151). Valores
+        {seccion === 'circular'
+          ? ' (RAS 0330, Art. 149)'
+          : ' (umbral de tubería del RAS 0330, Art. 149, extendido a canales como criterio del autor)'}
+        ; velocidad máxima 5,0 m/s (Art. 150); llenado máximo y/D = 93% (Art. 151, tubería). Valores
         de n, τ mínimo y velocidad máxima editables; confírmalos con la norma vigente.
       </p>
     </div>

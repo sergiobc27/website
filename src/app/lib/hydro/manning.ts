@@ -130,11 +130,24 @@ export function esfuerzoCortante(r: number, s: number): number {
 // es la que genera un esfuerzo cortante de pared ≥ 2,0 Pa (criterio de autolimpieza).
 export const TAU_MIN_AUTOLIMPIEZA = 2.0; // Pa
 
+// Contexto del conducto verificado: el Art. 149 del RAS está escrito para tubería
+// de alcantarillado; en canales abiertos el umbral se aplica como criterio
+// extendido del autor y el motivo del chequeo lo dice explícitamente.
+export type ContextoConducto = 'tuberia' | 'canal';
+
 // Chequeo de autolimpieza por esfuerzo cortante (sustituye al de velocidad mínima fija).
-export function chequeoCortante(tau: number, tauMin: number): { estado: Estado; motivo: string } {
-  if (tau < tauMin) return { estado: 'rojo', motivo: `τ = ${tau.toFixed(2)} Pa < ${tauMin} Pa: no autolimpiante (RAS 0330, Art. 149).` };
-  if (tau < tauMin * 1.15) return { estado: 'amarillo', motivo: `τ = ${tau.toFixed(2)} Pa: apenas sobre el mínimo de autolimpieza (${tauMin} Pa, RAS Art. 149).` };
-  return { estado: 'verde', motivo: `τ = ${tau.toFixed(2)} Pa ≥ ${tauMin} Pa: autolimpiante (RAS 0330, Art. 149).` };
+export function chequeoCortante(
+  tau: number,
+  tauMin: number,
+  contexto: ContextoConducto = 'tuberia',
+): { estado: Estado; motivo: string } {
+  const cita =
+    contexto === 'canal'
+      ? 'umbral de tubería del RAS 0330, Art. 149, extendido a canales como criterio del autor'
+      : 'RAS 0330, Art. 149';
+  if (tau < tauMin) return { estado: 'rojo', motivo: `τ = ${tau.toFixed(2)} Pa < ${tauMin} Pa: no autolimpiante (${cita}).` };
+  if (tau < tauMin * 1.15) return { estado: 'amarillo', motivo: `τ = ${tau.toFixed(2)} Pa: apenas sobre el mínimo de autolimpieza de ${tauMin} Pa (${cita}).` };
+  return { estado: 'verde', motivo: `τ = ${tau.toFixed(2)} Pa ≥ ${tauMin} Pa: autolimpiante (${cita}).` };
 }
 
 // Chequeo de erosión: solo el techo de velocidad (la autolimpieza va por cortante).

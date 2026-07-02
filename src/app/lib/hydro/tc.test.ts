@@ -37,6 +37,23 @@ describe('tiemposConcentracion — piso de diseño 10 min (RAS 0330)', () => {
   it('recomendado se eleva a 10 min y marca pisoAplicado', () => {
     expect(r.recomendado).toBe(10);
     expect(r.pisoAplicado).toBe(true);
+    expect(r.piso).toBe(10); // piso urbano/RAS por defecto
+  });
+});
+
+describe('tiemposConcentracion — piso de diseño vial de 15 min (Manual INVÍAS)', () => {
+  it('con piso=15 la misma cuenca diminuta se eleva a 15 min', () => {
+    const r = tiemposConcentracion(50, 0.05, 0.5, 1, 15);
+    expect(r.recomendado).toBe(15);
+    expect(r.piso).toBe(15);
+    expect(r.pisoAplicado).toBe(true);
+  });
+
+  it('si la mediana supera el piso vial, no se toca (solo se reporta el piso)', () => {
+    const r = tiemposConcentracion(800, 0.02, 5, 1, 15);
+    expect(r.recomendado).toBeCloseTo(31.95, 1);
+    expect(r.piso).toBe(15);
+    expect(r.pisoAplicado).toBe(false);
   });
 });
 

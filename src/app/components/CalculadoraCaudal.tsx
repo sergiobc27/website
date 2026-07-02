@@ -3,7 +3,7 @@ import { Calculator, Info } from 'lucide-react';
 import { InfoGrafica } from './InfoGrafica';
 import { Formula, Frac, Sub, Sup, V } from './Formula';
 import { fmt } from '../lib/format';
-import { tiemposConcentracion, FACTOR_RECORRIDO, type MetodoTc, type Recorrido } from '../lib/hydro/tc';
+import { tiemposConcentracion, FACTOR_RECORRIDO, PISO_TC_URBANO, PISO_TC_VIAL, type MetodoTc, type Recorrido } from '../lib/hydro/tc';
 import { cAjustado, qRacional, factorFrecuencia } from '../lib/hydro/runoff';
 import { CITAS } from '../lib/hydro/normas';
 import { SeccionColapsable, Field, NumberInput, Select } from './calculadora/SeccionColapsable';
@@ -36,7 +36,15 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
   const L = parseFloat(longitud);
   const S = parseFloat(pendiente);
 
-  const tcs = useMemo(() => tiemposConcentracion(L, S / 100, A, FACTOR_RECORRIDO[recorrido]), [L, S, A, recorrido]);
+  // Piso de diseño del Tc según el contexto de la obra elegida en las tablas de Tr:
+  // 15 min si es vial (Manual INVÍAS 2009, pág. 2-8); 10 min si es urbana o no se
+  // eligió obra (extremo del rango 3-10 min del RAS 0330, Art. 135, num. 4).
+  const pisoTc = trSel?.tabla === 'vial' ? PISO_TC_VIAL : PISO_TC_URBANO;
+
+  const tcs = useMemo(
+    () => tiemposConcentracion(L, S / 100, A, FACTOR_RECORRIDO[recorrido], pisoTc),
+    [L, S, A, recorrido, pisoTc],
+  );
 
   const tcUsado = useMemo(() => {
     if (tcMetodo === 'recomendado') return tcs.recomendado;
@@ -52,13 +60,27 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
     const minDur = Math.min(...durations);
     const maxDur = Math.max(...durations);
     const warnings: string[] = [];
-    if (A > 80) warnings.push('Área > 80 ha: el método racional deja de ser válido (RAS 0330); usa modelación hidrológica (hidrograma / HEC-HMS).');
+    // Límite de validez del método racional según el contexto de la obra elegida:
+    // 80 ha en drenaje urbano (RAS 0330) y 250 ha (2,5 km²) en drenaje vial
+    // (INVÍAS 2009, sección 2.5.5.1). Sin obra elegida se avisa desde 80 ha
+    // mencionando ambos límites. El resultado no se bloquea: solo se advierte.
+    if (trSel?.tabla === 'vial') {
+      if (A > 250) warnings.push('Área > 250 ha (2,5 km²): el método racional deja de ser válido en drenaje vial (Manual de Drenaje INVÍAS 2009, sección 2.5.5.1); usa modelación hidrológica (hidrograma / HEC-HMS).');
+    } else if (trSel?.tabla === 'urbano') {
+      if (A > 80) warnings.push('Área > 80 ha: el método racional deja de ser válido en drenaje urbano (RAS 0330, Art. 135); usa modelación hidrológica (hidrograma / HEC-HMS).');
+    } else if (A > 80) {
+      warnings.push('Área > 80 ha: supera el límite del método racional en drenaje urbano (80 ha, RAS 0330); en drenaje vial el límite es 250 ha, es decir 2,5 km² (INVÍAS 2009). Por encima de esos límites usa modelación hidrológica (hidrograma / HEC-HMS).');
+    }
     if (tcUsado < minDur) warnings.push(`Tc = ${fmt(tcUsado, 1)} min es menor que la duración mínima medida (${minDur} min): la intensidad se extrapola fuera del rango calibrado.`);
     if (tcUsado > maxDur) warnings.push(`Tc = ${fmt(tcUsado, 1)} min excede la duración máxima (${maxDur} min): intensidad extrapolada.`);
     return { intensidad, q, warnings };
-  }, [A, tcUsado, cAjust, tr, equation, durations]);
+  }, [A, tcUsado, cAjust, tr, equation, durations, trSel]);
 
   const avisoKirpich = cContexto === 'urbana';
+  // Giandotti se calibró en cuencas italianas grandes; cuando su valor domina la
+  // mediana en una cuenca muy pequeña (< 100 ha) puede sobreestimar el Tc y
+  // arrastrar el recomendado al alza, así que se avisa (sin cambiar el default).
+  const avisoGiandotti = tcs.metodoRecomendado === 'giandotti' && A > 0 && A < 100;
 
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
@@ -122,7 +144,7 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
 
         {/* 2 · Tiempo de concentración */}
         <SeccionColapsable titulo="2 · Tiempo de concentración (Tc)" descripcion="Kirpich · Témez · Giandotti: rango y recomendado">
-          <SeccionTc tcs={tcs} metodo={tcMetodo} setMetodo={(m) => setTcMetodo(m as MetodoTc | 'recomendado')} tcUsado={tcUsado} recorrido={recorrido} setRecorrido={(r) => setRecorrido(r as Recorrido)} avisoKirpich={avisoKirpich} />
+          <SeccionTc tcs={tcs} metodo={tcMetodo} setMetodo={(m) => setTcMetodo(m as MetodoTc | 'recomendado')} tcUsado={tcUsado} recorrido={recorrido} setRecorrido={(r) => setRecorrido(r as Recorrido)} avisoKirpich={avisoKirpich} avisoGiandotti={avisoGiandotti} />
         </SeccionColapsable>
 
         {/* 3 · Coeficiente C */}

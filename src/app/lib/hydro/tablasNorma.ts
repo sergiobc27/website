@@ -60,16 +60,18 @@ export const TABLA_C_RURAL: TablaNorma = {
   nota: 'Plano: pendiente 0–5%. Ondulado: 5–10%. Montañoso: 10–30%. Para pendientes > 30%, a falta de datos, usar los valores de 10–30%.',
 };
 
-// ── Factor de frecuencia Cf del método racional (Chow, Maidment & Mays, 1988) ──
-// NO aparece en el Manual INVÍAS; se cita a Chow y el localizador de tabla queda
-// por confirmar contra la edición impresa (libro con derechos de autor).
+// ── Factor de frecuencia Cf del método racional (atribuido a Chow, 1988) ──
+// NO aparece en el Manual INVÍAS. Se revisó la edición en español de Chow et al.
+// (1988): su Tabla 15.1.1 (pág. 511) trae C directamente por período de retorno,
+// no el multiplicador Cf, así que el localizador exacto sigue sin confirmarse
+// (verificado:false) y la nota visible lo dice tal cual.
 export const TABLA_CF: TablaNorma = {
   titulo: 'Factor de frecuencia Cf (ajuste de C por período de retorno)',
   fuente: {
     ref: 'chow-applied-1988',
     localizador: 'factor de frecuencia del método racional',
     verificado: false,
-    nota: 'Valores de Chow, Maidment & Mays (1988); el número exacto de tabla queda por confirmar en la edición impresa.',
+    nota: 'Multiplicadores de uso extendido en la práctica del método racional, atribuidos a Chow, Maidment & Mays (1988). En la edición consultada, la Tabla 15.1.1 trae C directamente por período de retorno (no el multiplicador Cf); el localizador exacto queda por confirmar.',
   },
   columnas: ['Período de retorno Tr (años)', 'Cf'],
   filas: [

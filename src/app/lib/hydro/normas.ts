@@ -24,7 +24,7 @@ export const CITAS: Record<string, Cita> = {
     apa: 'Manning, R. (1891). On the flow of water in open channels and pipes. Transactions of the Institution of Civil Engineers of Ireland, 20, 161-207.',
   },
   chow: {
-    clave: 'Chow (1988) — factor de frecuencia',
+    clave: 'Chow (1988): factor de frecuencia y factores del Kirpich modificado',
     apa: 'Chow, V. T., Maidment, D. R., & Mays, L. W. (1988). Applied Hydrology. McGraw-Hill.',
   },
   ras0330: {

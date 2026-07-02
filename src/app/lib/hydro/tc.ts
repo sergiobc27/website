@@ -3,14 +3,21 @@
 // A = área de la cuenca [ha]. Salida en minutos. Cada método devuelve null si
 // sus entradas no son válidas (evita NaN en la UI).
 
-const MIN_DISENO = 10; // Piso de diseño: extremo del rango 3–10 min del RAS 0330 (Art. 135, num. 4).
+// Pisos de diseño del Tc, según el contexto de la obra elegida:
+// - Urbano (o sin obra elegida): 10 min, extremo del rango 3-10 min que admite el
+//   RAS 0330 (Art. 135, num. 4).
+// - Vial: 15 min, mínimo del Manual de Drenaje INVÍAS (2009, pág. 2-8).
+export const PISO_TC_URBANO = 10;
+export const PISO_TC_VIAL = 15;
 
 export type MetodoTc = 'kirpich' | 'temez' | 'giandotti';
 
 // Superficie del recorrido del flujo, para el Kirpich modificado (urbano). El Tc de
-// Kirpich se derivó de cuencas RURALES; para recorridos pavimentados se multiplica
-// por un factor de ajuste (Kirpich, 1940, reproducido en manuales de drenaje):
-// natural/rural = 1,0; asfalto/concreto = 0,4; canal revestido en concreto = 0,2.
+// Kirpich (1940) se derivó de cuencas RURALES de Tennessee y no trae factores de
+// superficie; los factores de ajuste para recorridos pavimentados son los que
+// reproducen Chow, Maidment y Mays (1988), "Applied Hydrology", Tabla 15.1.2
+// (pág. 513 de la ed. en español): multiplicar el Tc por 0,4 en flujo sobre
+// concreto o asfalto y por 0,2 en canales de concreto (natural/rural = 1,0).
 export type Recorrido = 'rural' | 'urbano' | 'canal';
 export const FACTOR_RECORRIDO: Record<Recorrido, number> = { rural: 1, urbano: 0.4, canal: 0.2 };
 
@@ -18,11 +25,13 @@ export interface TiemposTc {
   kirpich: number | null;
   temez: number | null;
   giandotti: number | null;
-  /** Mediana de los métodos válidos, elevada al piso de diseño de 10 min. */
+  /** Mediana de los métodos válidos, elevada al piso de diseño vigente. */
   recomendado: number | null;
   /** Método más cercano a la mediana (para n par, al promedio de los centrales). */
   metodoRecomendado: MetodoTc | null;
-  /** true si el piso de 10 min elevó el valor recomendado. */
+  /** Piso de diseño vigente [min] (10 urbano/RAS por defecto; 15 vial/INVÍAS). */
+  piso: number;
+  /** true si el piso de diseño elevó el valor recomendado. */
   pisoAplicado: boolean;
   /** Factor de recorrido aplicado a Kirpich (1,0 rural; 0,4 urbano; 0,2 canal). */
   factorRecorrido: number;
@@ -53,7 +62,13 @@ export function giandotti(L: number, S: number, A_ha: number): number | null {
   return ((4 * Math.sqrt(Akm2) + 1.5 * Lkm) / (25.3 * Math.sqrt(S * Lkm))) * 60;
 }
 
-export function tiemposConcentracion(L: number, S: number, A_ha: number, factor = 1): TiemposTc {
+export function tiemposConcentracion(
+  L: number,
+  S: number,
+  A_ha: number,
+  factor = 1,
+  piso: number = PISO_TC_URBANO,
+): TiemposTc {
   const k = kirpich(L, S, factor);
   const t = temez(L, S);
   const g = giandotti(L, S, A_ha);
@@ -80,8 +95,8 @@ export function tiemposConcentracion(L: number, S: number, A_ha: number, factor 
     metodoRecomendado = ordenado.reduce((best, cur) =>
       Math.abs(cur.v - medV) < Math.abs(best.v - medV) ? cur : best,
     ).m;
-    if (medV < MIN_DISENO) {
-      recomendado = MIN_DISENO;
+    if (medV < piso) {
+      recomendado = piso;
       pisoAplicado = true;
     } else {
       recomendado = medV;
@@ -94,6 +109,7 @@ export function tiemposConcentracion(L: number, S: number, A_ha: number, factor 
     giandotti: g,
     recomendado,
     metodoRecomendado,
+    piso,
     pisoAplicado,
     factorRecorrido: factor,
     kirpichModificado: factor !== 1,

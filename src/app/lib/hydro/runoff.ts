@@ -8,8 +8,9 @@
 // en `tablasNorma.ts` (única fuente) y el selector de la calculadora lee de ahí; no
 // se mantiene aquí una lista simplificada aparte.
 
-// Factor de frecuencia Cf (Ven Te Chow; adoptado por el Manual de Drenaje INVÍAS):
-// ajusta C al alza para periodos de retorno mayores. C·Cf se topa en 1,0.
+// Factor de frecuencia Cf (atribuido a Chow, Maidment y Mays, 1988; NO aparece en
+// el Manual de Drenaje INVÍAS, ver tablasNorma.ts): ajusta C al alza para periodos
+// de retorno mayores. C·Cf se topa en 1,0.
 export function factorFrecuencia(tr: number): number {
   if (tr <= 10) return 1.0;
   if (tr <= 25) return 1.1;
