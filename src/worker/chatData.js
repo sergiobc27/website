@@ -637,13 +637,11 @@ export const VISTA_LABELS = {
   map: "Mapa de Estaciones",
   compare: "Comparador",
   ficha: "Ficha Climática",
-  hydro: "Hidrología",
+  hydro: "Curvas IDF y caudal",
   historia: "La historia del dato",
   status: "Estado del Espejo",
   extractor: "Extractor de Datos",
   history: "Historial",
-  settings: "Ajustes de API",
-  docs: "Documentación",
 };
 
 const EXTRACTOR_SYSTEM = `Extrae de la ÚLTIMA pregunta del usuario (usa los mensajes previos solo para resolver referencias como "¿y en 2022?") una intención de consulta sobre datos hidrometeorológicos de Colombia. Responde SOLO un objeto JSON, sin texto adicional, con EXACTAMENTE estas claves:
