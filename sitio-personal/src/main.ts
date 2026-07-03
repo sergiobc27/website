@@ -1,6 +1,6 @@
 import {
-  textos, cvPerfil, certificados, certCats, certUrl,
-  metaDescripcion, titulos, type Lang, type CertCat,
+  textos, cvPerfil, certificados, certCats, certUrl, roles,
+  metaDescripcion, titulos, type Lang, type CertCat, type Cert, type Rol,
 } from './i18n'
 
 const punteroFino = matchMedia('(pointer: fine)').matches
@@ -26,27 +26,27 @@ function aplicarIdioma(l: Lang): void {
   document.querySelectorAll<HTMLElement>('.flag').forEach(f =>
     f.classList.toggle('active', f.dataset.lang === l),
   )
-  pintarCuentasBtn()
+  pintarChips()
   actualizarPdf()
   if (!modal.hidden) { cvLang = l; pintarCV() }
 }
 
-let irisTimer1 = 0, irisTimer2 = 0
+let sweepTimer1 = 0, sweepTimer2 = 0
 function cambiarIdioma(l: Lang): void {
   if (l === lang) return
   if (reduceMotion()) { aplicarIdioma(l); return }
-  const iris = document.getElementById('iris')!
+  const sweep = document.getElementById('sweep')!
   const app = document.getElementById('app')!
-  clearTimeout(irisTimer1); clearTimeout(irisTimer2)
-  iris.classList.remove('on'); app.classList.remove('lang-fade')
-  void iris.offsetWidth
-  iris.classList.add('on')
+  clearTimeout(sweepTimer1); clearTimeout(sweepTimer2)
+  sweep.classList.remove('on'); app.classList.remove('lang-fade')
+  void sweep.offsetWidth
+  sweep.classList.add('on')
   app.classList.add('lang-fade')
-  irisTimer1 = window.setTimeout(() => aplicarIdioma(l), 600)
-  irisTimer2 = window.setTimeout(() => {
-    iris.classList.remove('on')
+  sweepTimer1 = window.setTimeout(() => aplicarIdioma(l), 620)
+  sweepTimer2 = window.setTimeout(() => {
+    sweep.classList.remove('on')
     app.classList.remove('lang-fade')
-  }, 1350)
+  }, 1400)
 }
 
 document.querySelectorAll<HTMLElement>('.flag').forEach(f =>
@@ -105,10 +105,23 @@ addEventListener('click', e => {
 const barraProgreso = document.querySelector<HTMLElement>('.progress')!
 const tfill = document.getElementById('tfill')
 const zonas = document.querySelectorAll<HTMLElement>('[data-zone]')
+const rioPath = document.getElementById('rioPath') as unknown as SVGPathElement | null
+const rioGota = document.getElementById('rioGota') as unknown as SVGCircleElement | null
+const rioLargo = rioPath ? rioPath.getTotalLength() : 0
+if (rioPath) {
+  rioPath.style.strokeDasharray = String(rioLargo)
+  rioPath.style.strokeDashoffset = String(rioLargo)
+}
 
 addEventListener('scroll', () => {
   const p = scrollY / (document.body.scrollHeight - innerHeight)
   barraProgreso.style.width = `${p * 100}%`
+  if (rioPath && rioGota) {
+    rioPath.style.strokeDashoffset = String(rioLargo * (1 - p))
+    const punta = rioPath.getPointAtLength(rioLargo * p)
+    rioGota.setAttribute('cx', String(punta.x))
+    rioGota.setAttribute('cy', String(punta.y))
+  }
   if (tfill) {
     const caja = tfill.parentElement!.parentElement!.getBoundingClientRect()
     const visible = Math.min(Math.max((innerHeight * 0.8 - caja.top) / caja.height, 0), 1)
@@ -162,22 +175,67 @@ if (punteroFino && !reduceMotion()) {
   })
 }
 
-/* ===================== cuentas de Foundever (expandible) ===================== */
-const cuentasBtn = document.getElementById('cuentasBtn')!
-const cuentasSub = document.getElementById('cuentasSub') as HTMLElement
-let cuentasAbiertas = false
+/* ===================== chips de cuentas y modal de detalle ===================== */
+const detModal = document.getElementById('detModal')!
+const detLogo = document.getElementById('detLogo') as HTMLImageElement
+const detTitulo = document.getElementById('detTitulo')!
+const detMeta = document.getElementById('detMeta')!
+const detBody = document.getElementById('detBody')!
+let detFocoPrevio: HTMLElement | null = null
 
-function pintarCuentasBtn(): void {
-  cuentasBtn.innerHTML = textos[cuentasAbiertas ? 'tray1.btn.close' : 'tray1.btn'][lang]
-  cuentasBtn.setAttribute('aria-expanded', String(cuentasAbiertas))
-  if (cuentasAbiertas) cuentasSub.innerHTML = textos['tray1.sub'][lang]
+function abrirDetalle(logo: string | null, titulo: string, meta: string, cuerpo: string): void {
+  detFocoPrevio = document.activeElement as HTMLElement
+  if (logo) { detLogo.src = logo; detLogo.hidden = false } else { detLogo.hidden = true }
+  detTitulo.textContent = titulo
+  detMeta.textContent = meta
+  detBody.innerHTML = cuerpo
+  detModal.hidden = false
+  document.body.style.overflow = 'hidden'
+  ;(detModal.querySelector('#detClose') as HTMLElement).focus()
 }
 
-cuentasBtn.addEventListener('click', () => {
-  cuentasAbiertas = !cuentasAbiertas
-  cuentasSub.hidden = !cuentasAbiertas
-  pintarCuentasBtn()
-})
+function cerrarDetalle(): void {
+  detModal.hidden = true
+  detBody.innerHTML = ''
+  document.body.style.overflow = ''
+  detFocoPrevio?.focus()
+}
+
+document.getElementById('detClose')!.addEventListener('click', cerrarDetalle)
+detModal.addEventListener('click', e => { if (e.target === detModal) cerrarDetalle() })
+detModal.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarDetalle() })
+
+function abrirRol(rol: Rol): void {
+  abrirDetalle(
+    `/logos/${rol.logoCuenta}.png`,
+    rol.titulo[lang],
+    `${rol.empresa} · ${rol.fechas[lang]} · ${rol.lugar[lang]}`,
+    `<div class="det-texto">${rol.cuerpo[lang]}</div>`,
+  )
+}
+
+function pintarChips(): void {
+  const cont = document.getElementById('cuentasChips')!
+  cont.innerHTML = ''
+  roles.forEach(rol => {
+    const b = document.createElement('button')
+    b.className = 'chipcuenta hover-target'
+    b.innerHTML = `<img src="/logos/${rol.logoCuenta}.png" alt=""><span>${rol.cuenta}</span>`
+    b.addEventListener('click', () => abrirRol(rol))
+    cont.appendChild(b)
+  })
+}
+
+function abrirCert(c: Cert): void {
+  const url = certUrl(c)
+  const partes: string[] = []
+  if (c.id) partes.push(`<p class="det-cred">${textos['det.credencial'][lang]}: <code>${c.id}</code>${url ? ` · <a class="cver hover-target" href="${url}" target="_blank" rel="noopener">${textos['cvv.ver'][lang]}</a>` : ''}</p>`)
+  if (c.media) {
+    partes.push(`<object class="pdf-frame" data="${c.media}" type="application/pdf"><p>${textos['det.pdfalt'][lang]}</p></object>`)
+    partes.push(`<p style="margin-top:10px"><a class="cver hover-target" href="${c.media}" target="_blank" rel="noopener">${textos['det.pdfalt'][lang]}</a></p>`)
+  }
+  abrirDetalle(c.logo ? `/logos/${c.logo}.png` : null, c.nombre, `${c.emisor} · ${c.fecha}`, partes.join(''))
+}
 
 /* ===================== visor de hoja de vida ===================== */
 const modal = document.getElementById('cvModal')!
@@ -199,15 +257,17 @@ function htmlCerts(): string {
   }).join('')
   const visibles = certificados.filter(c => certFiltro === 'todas' || c.cat === certFiltro)
   const items = visibles.map((c, i) => {
-    const url = certUrl(c)
-    const ver = url ? ` · <a class="cver hover-target" href="${url}" target="_blank" rel="noopener">${textos['cvv.ver'][cvLang]}</a>` : ''
-    return `<div class="cert-item" style="animation-delay:${Math.min(i * 40, 500)}ms">
+    const idx = certificados.indexOf(c)
+    const logo = c.logo ? `<img class="clogo" src="/logos/${c.logo}.png" alt="">` : ''
+    const doc = c.media ? ' <span class="cdoc">PDF</span>' : ''
+    return `<button class="cert-item hover-target" data-idx="${idx}" style="animation-delay:${Math.min(i * 40, 500)}ms">
       <span class="ccat">${certCats[c.cat][cvLang]}</span>
-      <b>${c.nombre}</b>
-      <span class="cmeta">${c.emisor} · ${c.fecha}${ver}</span>
-    </div>`
+      ${logo}<b>${c.nombre}${doc}</b>
+      <span class="cmeta">${c.emisor} · ${c.fecha}</span>
+    </button>`
   }).join('')
   return `<div class="cv-sec"><h4>${textos['cvv.certs.h'][cvLang]}</h4>
+    <p class="cmeta" style="margin-bottom:10px">${textos['cvv.clic'][cvLang]}</p>
     <div class="cert-filtros">${chips}</div>
     <div class="certs-lista">${items}</div>
   </div>`
@@ -223,6 +283,9 @@ function pintarCV(): void {
       certFiltro = chip.dataset.cat as CertCat | 'todas'
       pintarCV()
     }),
+  )
+  cvBody.querySelectorAll<HTMLElement>('.cert-item').forEach(item =>
+    item.addEventListener('click', () => abrirCert(certificados[Number(item.dataset.idx)])),
   )
   actualizarPdf()
 }

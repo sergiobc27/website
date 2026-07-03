@@ -156,6 +156,10 @@ export const textos: Record<string, { es: string; en: string }> = {
   'cvv.certs.h': { es: 'Certificaciones (29)', en: 'Certifications (29)' },
   'cvv.todas': { es: 'Todas', en: 'All' },
   'cvv.ver': { es: 'Ver credencial ↗', en: 'View credential ↗' },
+  'cvv.clic': { es: 'Toca cualquier certificado para abrirlo con su documento.', en: 'Tap any certification to open it with its document.' },
+  'tray1.chips': { es: 'Toca una cuenta para leer la historia completa:', en: 'Tap an account to read the full story:' },
+  'det.credencial': { es: 'ID de credencial', en: 'Credential ID' },
+  'det.pdfalt': { es: 'Si el documento no carga, ábrelo aquí ↗', en: 'If the document does not load, open it here ↗' },
 }
 
 export const cvPerfil: Record<Lang, string> = {
@@ -216,6 +220,10 @@ export interface Cert {
   id?: string
   /** true si el ID corresponde a un certificado profesional (otra ruta de Coursera) */
   pro?: boolean
+  /** dominio del logo en /logos/<dominio>.png */
+  logo?: string
+  /** ruta del certificado en PDF dentro de /certs/ para verlo embebido */
+  media?: string
 }
 
 export const certCats: Record<CertCat, { es: string; en: string }> = {
@@ -226,35 +234,202 @@ export const certCats: Record<CertCat, { es: string; en: string }> = {
 }
 
 export const certificados: Cert[] = [
-  { nombre: 'Google AI Professional Certificate', emisor: 'Google', fecha: '2026', cat: 'ia', id: 'TAI0G1UUXH10', pro: true },
-  { nombre: 'AI for App Building', emisor: 'Google', fecha: '2026', cat: 'ia', id: 'AD7YJO90N838' },
-  { nombre: 'AI for Data Analysis', emisor: 'Google', fecha: '2026', cat: 'ia', id: 'LZWG9WQNBI1Z' },
-  { nombre: 'AI for Content Creation', emisor: 'Google', fecha: '2026', cat: 'ia', id: 'F0MS0CL8SCH7' },
-  { nombre: 'AI for Writing and Communicating', emisor: 'Google', fecha: '2026', cat: 'ia', id: '6G22X94MAG8Q' },
-  { nombre: 'AI for Research and Insights', emisor: 'Google', fecha: '2026', cat: 'ia', id: '8BDPWL9YNSAT' },
-  { nombre: 'AI for Brainstorming and Planning', emisor: 'Google', fecha: '2026', cat: 'ia', id: 'JWLUWSNA3A99' },
-  { nombre: 'AI Fundamentals', emisor: 'Google', fecha: '2026', cat: 'ia', id: '2PE4RTGN12GV' },
-  { nombre: 'Extract, Transform and Load Data in Power BI', emisor: 'Microsoft', fecha: '2025', cat: 'datos', id: 'EADX0QK2GVN1' },
-  { nombre: 'Harnessing the Power of Data with Power BI', emisor: 'Microsoft', fecha: '2025', cat: 'datos', id: '8FMW0VG18DEI' },
-  { nombre: 'Preparing Data for Analysis with Microsoft Excel', emisor: 'Microsoft', fecha: '2024', cat: 'datos', id: '63QNX2OO60XF' },
-  { nombre: 'Work Smarter with Microsoft Excel (with Honors)', emisor: 'Microsoft', fecha: '2024', cat: 'datos', id: 'ZURI2G89MFQY' },
-  { nombre: 'Fundamentos profesionales del análisis de datos', emisor: 'Microsoft + LinkedIn', fecha: '2023', cat: 'datos' },
-  { nombre: 'Aprende análisis de datos: ampliación y aplicación', emisor: 'LinkedIn', fecha: '2023', cat: 'datos' },
-  { nombre: 'Aprende análisis de datos: fundamentos', emisor: 'LinkedIn', fecha: '2023', cat: 'datos' },
-  { nombre: 'Data science: cuenta historias con los datos', emisor: 'LinkedIn', fecha: '2023', cat: 'datos' },
-  { nombre: 'Aprende análisis de datos', emisor: 'LinkedIn', fecha: '2023', cat: 'datos' },
-  { nombre: 'Data science: conceptos básicos', emisor: 'LinkedIn', fecha: '2023', cat: 'datos' },
-  { nombre: 'Habilidades profesionales en análisis de datos', emisor: 'LinkedIn', fecha: '2023', cat: 'datos' },
-  { nombre: 'Pavement Construction Practices (IRC and MoRTH)', emisor: 'L&T EduTech', fecha: '2025', cat: 'civil', id: 'ZUM0ULK71M65' },
-  { nombre: 'Pavement Materials and Design (IRC and MoRTH)', emisor: 'L&T EduTech', fecha: '2025', cat: 'civil', id: '5YEALOLZJUE7' },
-  { nombre: 'Highway Geometry and Pavement Design', emisor: 'L&T EduTech', fecha: '2025', cat: 'civil', id: '412024CLX6AV' },
-  { nombre: 'Mastering Bitumen for Better Roads', emisor: 'École des Ponts ParisTech', fecha: '2025', cat: 'civil', id: '9YZMUVLMH7ZV' },
-  { nombre: 'Verano de Investigación Científica (acelerogramas, Barichara)', emisor: 'U. Autónoma de Manizales', fecha: '2022', cat: 'civil' },
-  { nombre: 'Foundations of Project Management', emisor: 'Google', fecha: '2025', cat: 'gestion', id: '83S2Z8CAOB4Z' },
-  { nombre: 'Six Sigma White Belt', emisor: 'CSSC', fecha: '2023', cat: 'gestion' },
-  { nombre: 'Redacción Científica', emisor: 'Universidad de la Costa', fecha: '2025', cat: 'gestion' },
-  { nombre: 'Monitor académico UNICOSTA', emisor: 'Universidad de la Costa', fecha: '2022', cat: 'gestion' },
-  { nombre: 'Semillero de investigación adjunto', emisor: 'Universidad de la Costa', fecha: '2022', cat: 'gestion' },
+  { nombre: 'Google AI Professional Certificate', emisor: 'Google', fecha: '2026', cat: 'ia', id: 'TAI0G1UUXH10', pro: true, logo: 'google.com', media: '/certs/google-ai.pdf' },
+  { nombre: 'AI for App Building', emisor: 'Google', fecha: '2026', cat: 'ia', id: 'AD7YJO90N838', logo: 'google.com', media: '/certs/ai-for-app-building.pdf' },
+  { nombre: 'AI for Data Analysis', emisor: 'Google', fecha: '2026', cat: 'ia', id: 'LZWG9WQNBI1Z', logo: 'google.com', media: '/certs/ai-for-data-analysis.pdf' },
+  { nombre: 'AI for Content Creation', emisor: 'Google', fecha: '2026', cat: 'ia', id: 'F0MS0CL8SCH7', logo: 'google.com', media: '/certs/ai-for-content-creation.pdf' },
+  { nombre: 'AI for Writing and Communicating', emisor: 'Google', fecha: '2026', cat: 'ia', id: '6G22X94MAG8Q', logo: 'google.com', media: '/certs/ai-for-writing-and-communicating.pdf' },
+  { nombre: 'AI for Research and Insights', emisor: 'Google', fecha: '2026', cat: 'ia', id: '8BDPWL9YNSAT', logo: 'google.com', media: '/certs/ai-for-research-and-insights.pdf' },
+  { nombre: 'AI for Brainstorming and Planning', emisor: 'Google', fecha: '2026', cat: 'ia', id: 'JWLUWSNA3A99', logo: 'google.com', media: '/certs/ai-for-brainstorming-and-planning.pdf' },
+  { nombre: 'AI Fundamentals', emisor: 'Google', fecha: '2026', cat: 'ia', id: '2PE4RTGN12GV', logo: 'google.com', media: '/certs/ai-fundamentals.pdf' },
+  { nombre: 'Extract, Transform and Load Data in Power BI', emisor: 'Microsoft', fecha: '2025', cat: 'datos', id: 'EADX0QK2GVN1', logo: 'microsoft.com', media: '/certs/etl-power-bi.pdf' },
+  { nombre: 'Harnessing the Power of Data with Power BI', emisor: 'Microsoft', fecha: '2025', cat: 'datos', id: '8FMW0VG18DEI', logo: 'microsoft.com', media: '/certs/harnessing-power-bi.pdf' },
+  { nombre: 'Preparing Data for Analysis with Microsoft Excel', emisor: 'Microsoft', fecha: '2024', cat: 'datos', id: '63QNX2OO60XF', logo: 'microsoft.com' },
+  { nombre: 'Work Smarter with Microsoft Excel (with Honors)', emisor: 'Microsoft', fecha: '2024', cat: 'datos', id: 'ZURI2G89MFQY', logo: 'microsoft.com' },
+  { nombre: 'Fundamentos profesionales del análisis de datos', emisor: 'Microsoft + LinkedIn', fecha: '2023', cat: 'datos', logo: 'linkedin.com' },
+  { nombre: 'Aprende análisis de datos: ampliación y aplicación', emisor: 'LinkedIn', fecha: '2023', cat: 'datos', logo: 'linkedin.com' },
+  { nombre: 'Aprende análisis de datos: fundamentos', emisor: 'LinkedIn', fecha: '2023', cat: 'datos', logo: 'linkedin.com' },
+  { nombre: 'Data science: cuenta historias con los datos', emisor: 'LinkedIn', fecha: '2023', cat: 'datos', logo: 'linkedin.com' },
+  { nombre: 'Aprende análisis de datos', emisor: 'LinkedIn', fecha: '2023', cat: 'datos', logo: 'linkedin.com' },
+  { nombre: 'Data science: conceptos básicos', emisor: 'LinkedIn', fecha: '2023', cat: 'datos', logo: 'linkedin.com' },
+  { nombre: 'Habilidades profesionales en análisis de datos', emisor: 'LinkedIn', fecha: '2023', cat: 'datos', logo: 'linkedin.com' },
+  { nombre: 'Pavement Construction Practices (IRC and MoRTH)', emisor: 'L&T EduTech', fecha: '2025', cat: 'civil', id: 'ZUM0ULK71M65', logo: 'lntedutech.com' },
+  { nombre: 'Pavement Materials and Design (IRC and MoRTH)', emisor: 'L&T EduTech', fecha: '2025', cat: 'civil', id: '5YEALOLZJUE7', logo: 'lntedutech.com' },
+  { nombre: 'Highway Geometry and Pavement Design', emisor: 'L&T EduTech', fecha: '2025', cat: 'civil', id: '412024CLX6AV', logo: 'lntedutech.com' },
+  { nombre: 'Mastering Bitumen for Better Roads', emisor: 'École des Ponts ParisTech', fecha: '2025', cat: 'civil', id: '9YZMUVLMH7ZV', logo: 'ecoledesponts.fr' },
+  { nombre: 'Verano de Investigación Científica (acelerogramas, Barichara)', emisor: 'U. Autónoma de Manizales', fecha: '2022', cat: 'civil', logo: 'autonoma.edu.co' },
+  { nombre: 'Foundations of Project Management', emisor: 'Google', fecha: '2025', cat: 'gestion', id: '83S2Z8CAOB4Z', logo: 'google.com', media: '/certs/foundations-project-management.pdf' },
+  { nombre: 'Six Sigma White Belt', emisor: 'CSSC', fecha: '2023', cat: 'gestion', logo: 'sixsigmacouncil.org' },
+  { nombre: 'Redacción Científica', emisor: 'Universidad de la Costa', fecha: '2025', cat: 'gestion', logo: 'cuc.edu.co' },
+  { nombre: 'Monitor académico UNICOSTA', emisor: 'Universidad de la Costa', fecha: '2022', cat: 'gestion', logo: 'cuc.edu.co' },
+  { nombre: 'Semillero de investigación adjunto', emisor: 'Universidad de la Costa', fecha: '2022', cat: 'gestion', logo: 'cuc.edu.co' },
+]
+
+/* ===== Experiencia completa (texto íntegro de LinkedIn, ES y EN) ===== */
+
+export interface Rol {
+  id: string
+  empresa: string
+  logoEmpresa: string
+  logoCuenta: string
+  cuenta: string
+  titulo: { es: string; en: string }
+  fechas: { es: string; en: string }
+  lugar: { es: string; en: string }
+  cuerpo: { es: string; en: string }
+}
+
+export const roles: Rol[] = [
+  {
+    id: 'uhc-rta', empresa: 'Foundever', logoEmpresa: 'foundever.com', logoCuenta: 'uhc.com', cuenta: 'UnitedHealthcare',
+    titulo: { es: 'Real Time Analyst · UnitedHealthcare (UHC)', en: 'Real Time Analyst · UnitedHealthcare (UHC)' },
+    fechas: { es: 'Dic 2022 – Abr 2026 · 3 años 5 meses', en: 'Dec 2022 – Apr 2026 · 3 yrs 5 mos' },
+    lugar: { es: 'Barranquilla, Colombia · En remoto', en: 'Barranquilla, Colombia · Remote' },
+    cuerpo: {
+      es: `<p>UnitedHealthcare es la división de beneficios de salud de UnitedHealth Group, la aseguradora de salud más grande de Estados Unidos. Controlo las operaciones de workforce en tiempo real para una plantilla de más de 300 agentes en Colombia, coordinando de cerca con equipos Nearshore, Offshore y Onshore para mantener los niveles de servicio en la meta. Trabajando en un entorno Citrix y usando NICE IEX para programación y monitoreo de adherencia, actúo como el analista senior de la cuenta en Colombia, con liderazgo directo para asegurar el cumplimiento de los objetivos.</p><ul>
+<li>Monitoreo en tiempo real de adherencia, asistencia, volumen de contactos y niveles de servicio.</li>
+<li>Alertas y reforecasting intradía para equilibrar la dotación con la demanda.</li>
+<li>Ajuste de descansos, tiempo libre voluntario y horas extra para optimizar ocupación y shrinkage.</li>
+<li>Resúmenes diarios de desempeño.</li>
+<li>Dashboards automatizados en Excel con visibilidad de SLA, AHT y ocupación.</li>
+<li>Trabajo conjunto con Operaciones, QA, Entrenamiento y Finanzas para alinear las decisiones de dotación con el negocio.</li>
+<li>Comunicación directa con el cliente para compartir avances y prioridades.</li></ul>`,
+      en: `<p>UnitedHealthcare is the health benefits division of UnitedHealth Group, the largest health insurer in the United States. I control real-time workforce operations for a headcount of more than 300 agents in Colombia while coordinating closely with Nearshore, Offshore and Onshore teams to keep service levels on target. Working in a Citrix environment and using NICE IEX for scheduling and adherence monitoring, I act as the senior analyst for the account in Colombia, providing hands-on leadership to ensure goals are met.</p><ul>
+<li>Monitored adherence, attendance, contact volume and service levels in real time.</li>
+<li>Issued alerts and executed intraday reforecasting to balance staffing with demand.</li>
+<li>Adjusted breaks, voluntary time off and overtime to optimise occupancy and shrinkage.</li>
+<li>Prepared daily performance summaries.</li>
+<li>Built automated Excel dashboards for visibility into SLA, AHT and occupancy.</li>
+<li>Partnered with Operations, QA, Training and Finance to align staffing decisions with business goals.</li>
+<li>Maintained direct communication with the client to share performance updates and priorities.</li></ul>`,
+    },
+  },
+  {
+    id: 'ebay', empresa: 'Foundever', logoEmpresa: 'foundever.com', logoCuenta: 'ebay.com', cuenta: 'eBay',
+    titulo: { es: 'Real Time Analyst · eBay', en: 'Real Time Analyst · eBay' },
+    fechas: { es: 'Abr 2025 – actualidad · 1 año 4 meses', en: 'Apr 2025 – present · 1 yr 4 mos' },
+    lugar: { es: 'Barranquilla, Colombia · En remoto', en: 'Barranquilla, Colombia · Remote' },
+    cuerpo: {
+      es: `<p>eBay Inc. es un marketplace global de comercio electrónico que conecta a millones de compradores y vendedores. Superviso el desempeño intradía de una fuerza laboral de más de 100 agentes de soporte al cliente.</p><ul>
+<li>Monitoreo de colas en vivo, adherencia de agentes y niveles de servicio por intervalo con Alvaria (Aspect).</li>
+<li>Cambios intradía de horarios y reasignación de skills para proteger los KPI.</li>
+<li>Reportes diarios de desempeño y horas perdidas en Microsoft Access y Excel.</li>
+<li>Acceso a los sistemas operativos a través de un entorno seguro Citrix.</li>
+<li>Alertas y actualizaciones de estado en tiempo real al liderazgo por Microsoft Teams, Slack y Outlook.</li></ul>`,
+      en: `<p>eBay Inc. is a global e-commerce marketplace connecting millions of buyers and sellers. I supervise intraday performance for a workforce of more than 100 customer-support agents.</p><ul>
+<li>Monitored live queues, agent adherence and interval service levels with Alvaria (Aspect).</li>
+<li>Applied intraday schedule changes and skill reassignments to protect KPIs.</li>
+<li>Generated daily performance and lost-hours reports in Microsoft Access and Excel.</li>
+<li>Accessed operational systems through a secure Citrix environment.</li>
+<li>Communicated real-time alerts and status updates to leadership via Microsoft Teams, Slack and Outlook.</li></ul>`,
+    },
+  },
+  {
+    id: 'doordash', empresa: 'Foundever', logoEmpresa: 'foundever.com', logoCuenta: 'doordash.com', cuenta: 'DoorDash',
+    titulo: { es: 'Real Time Analyst · DoorDash', en: 'Real Time Analyst · DoorDash' },
+    fechas: { es: 'Dic 2025 – actualidad · 8 meses', en: 'Dec 2025 – present · 8 mos' },
+    lugar: { es: 'Barranquilla, Colombia · En remoto', en: 'Barranquilla, Colombia · Remote' },
+    cuerpo: {
+      es: `<p>DoorDash es una compañía global de tecnología que conecta a los consumidores con negocios locales. Soy responsable de las operaciones de workforce en tiempo real para un equipo de ventas dedicado de 20 FTE en Colombia, usando NICE IEX para programación y monitoreo de adherencia con el fin de asegurar la estabilidad operativa y el alineamiento con las metas.</p><ul>
+<li>Monitoreo de adherencia y asistencia en tiempo real para una operación de ventas de 20 FTE vía NICE IEX.</li>
+<li>Gestión de disponibilidad y ocupación del personal para que el equipo cumpla las metas de ventas y contactos.</li>
+<li>Coordinación de descansos, almuerzos y actividades offline para minimizar el shrinkage y mantener cobertura constante.</li></ul>`,
+      en: `<p>DoorDash is a global technology company that connects consumers with local businesses. Responsibility for real-time workforce operations for a dedicated sales team of 20 FTE in Colombia. Using NICE IEX for scheduling and adherence monitoring to ensure operational stability and goal alignment.</p><ul>
+<li>Monitoring of real-time adherence and attendance for a 20 FTE sales operation via NICE IEX.</li>
+<li>Management of staff availability and occupancy to ensure the team is positioned to meet sales and contact targets.</li>
+<li>Coordination of breaks, lunches, and offline activities to minimize shrinkage and maintain consistent coverage.</li></ul>`,
+    },
+  },
+  {
+    id: 'doxo', empresa: 'Foundever', logoEmpresa: 'foundever.com', logoCuenta: 'doxo.com', cuenta: 'doxo',
+    titulo: { es: 'Real Time Analyst · doxo', en: 'Real Time Analyst · doxo' },
+    fechas: { es: 'Ene 2025 – Dic 2025 · 1 año', en: 'Jan 2025 – Dec 2025 · 1 yr' },
+    lugar: { es: 'Barranquilla, Colombia · En remoto', en: 'Barranquilla, Colombia · Remote' },
+    cuerpo: {
+      es: `<p>Doxo es una plataforma estadounidense de pago de facturas que permite a millones de usuarios administrar y pagar sus cuentas del hogar de forma segura. Como Real Time Analyst de la cuenta, gestiono una plantilla de ocho agentes, descargo datos crudos desde Amazon AWS y creo reportes de desempeño con Microsoft Access, Power BI y Excel, manteniendo alineados a los interesados por Microsoft Teams y Outlook.</p><ul>
+<li>Seguimiento de adherencia de horarios y niveles de servicio en vivo para 8 FTE.</li>
+<li>Extracción de datos detallados de contactos y transacciones desde Amazon AWS para análisis.</li>
+<li>Construcción y actualización de dashboards de desempeño y reportes de horas perdidas en Access, Power BI y Excel.</li>
+<li>Novedades intradía e insights para supervisores y contactos del cliente vía Teams y Outlook.</li></ul>`,
+      en: `<p>Doxo is a U.S. bill-payment platform that allows millions of users to manage and pay household bills securely. As the Real-Time Analyst for the account, I manage an eight-agent headcount, download raw data from Amazon AWS, and create performance reporting using Microsoft Access, Power BI and Excel, while keeping stakeholders aligned through Microsoft Teams and Outlook.</p><ul>
+<li>Tracked schedule adherence and live service levels for 8 FTE.</li>
+<li>Pulled detailed contact and transaction data from Amazon AWS for analysis.</li>
+<li>Built and refreshed performance dashboards and lost-hours reports in Access, Power BI and Excel.</li>
+<li>Shared intraday updates and insights with supervisors and client contacts via Teams and Outlook.</li></ul>`,
+    },
+  },
+  {
+    id: 'lendingusa', empresa: 'Foundever', logoEmpresa: 'foundever.com', logoCuenta: 'lendingusa.com', cuenta: 'LendingUSA',
+    titulo: { es: 'Real Time Analyst · LendingUSA', en: 'Real Time Analyst · LendingUSA' },
+    fechas: { es: 'Jun 2023 – Dic 2023 · 7 meses', en: 'Jun 2023 – Dec 2023 · 7 mos' },
+    lugar: { es: 'Barranquilla, Colombia · En remoto', en: 'Barranquilla, Colombia · Remote' },
+    cuerpo: {
+      es: `<p>LendingUSA es una fintech estadounidense que ofrece préstamos en punto de venta a través de más de diez mil comercios aliados. Como Real Time Analyst de respaldo, gestioné una plantilla de 30 agentes, cargué campañas outbound y de cobranza por SMS, y produje reportes de desempeño usando NICE IEX para el control de horarios y adherencia.</p><ul>
+<li>Carga diaria de listas de llamadas salientes y campañas de cobranza por SMS en la plataforma del marcador.</li>
+<li>Reportes de desempeño, adherencia y horas perdidas con Microsoft Access y Excel.</li>
+<li>Seguimiento del cumplimiento de horarios de 30 FTE y recomendaciones de ajustes intradía en NICE IEX.</li>
+<li>Comunicación de novedades e insights a supervisores y contactos del cliente vía Microsoft Teams y Outlook.</li></ul>`,
+      en: `<p>LendingUSA is a U.S. fintech that offers point-of-sale loans through more than ten thousand merchant partners. As the backup Real-Time Analyst, I managed a 30-agent headcount, uploaded outbound and SMS collections campaigns, and produced performance reporting while using NICE IEX for schedule and adherence control.</p><ul>
+<li>Uploaded daily outbound calling lists and SMS collections campaigns through the dialer platform.</li>
+<li>Generated performance, adherence and lost-hours reports using Microsoft Access and Excel.</li>
+<li>Tracked schedule compliance for 30 FTE and recommended intraday staffing adjustments in NICE IEX.</li>
+<li>Communicated status updates and insights to supervisors and client contacts via Microsoft Teams and Outlook.</li></ul>`,
+    },
+  },
+  {
+    id: 'uhc-csr', empresa: 'Foundever', logoEmpresa: 'foundever.com', logoCuenta: 'uhc.com', cuenta: 'UHC Servicio',
+    titulo: { es: 'Representante bilingüe de servicio · UnitedHealthcare', en: 'Bilingual Customer Service Representative · UnitedHealthcare' },
+    fechas: { es: 'Jun 2022 – Dic 2022 · 7 meses', en: 'Jun 2022 – Dec 2022 · 7 mos' },
+    lugar: { es: 'Barranquilla, Colombia · En remoto', en: 'Barranquilla, Colombia · Remote' },
+    cuerpo: {
+      es: `<p>UnitedHealthcare atiende a más de cuarenta y seis millones de afiliados. Apoyé a miembros de Medicare, principalmente adultos mayores, resolviendo casos complejos de beneficios en un entorno de llamadas de alto volumen.</p><ul>
+<li>Asistencia con beneficios, facturación, deducibles y consultas de póliza.</li>
+<li>Orientación sobre cobertura, subsidios del gobierno, reclamaciones y planes de medicamentos.</li>
+<li>Ayuda para ubicar proveedores en red, médicos de cabecera y especialistas.</li>
+<li>Solicitudes de preautorización y escalamiento de casos médicos urgentes.</li>
+<li>Comunicación clara y empática adaptada a adultos mayores con dificultades auditivas o cognitivas.</li>
+<li>Educación sobre portales en línea y estados de beneficios enviados por correo.</li>
+<li>Cumplimiento de HIPAA, verificación de identidad y documentación de cada interacción en CRM.</li>
+<li>Cumplimiento o superación de metas de AHT, calidad y satisfacción del cliente.</li>
+<li>Coordinación con administradores de beneficios de farmacia y equipos clínicos para resolver negaciones de reclamos.</li></ul>`,
+      en: `<p>UnitedHealthcare serves more than forty-six million members. I supported Medicare members, primarily seniors, by resolving complex benefit issues in a high-volume, back-to-back call environment.</p><ul>
+<li>Assisted customers with benefits, billing, deductibles and policy inquiries.</li>
+<li>Guided members on coverage, government subsidies, claims and prescription drug plans.</li>
+<li>Helped callers locate in-network providers, primary doctors and specialists.</li>
+<li>Submitted prior-authorization requests and escalated urgent medical cases when needed.</li>
+<li>Delivered clear, empathetic communication adapted to seniors with hearing or cognitive challenges.</li>
+<li>Educated members on using online portals and mailed explanation-of-benefits statements.</li>
+<li>Followed HIPAA rules, verified caller identity and documented each interaction in CRM notes.</li>
+<li>Met or exceeded targets for average handle time, quality assurance and customer satisfaction.</li>
+<li>Coordinated with pharmacy benefit managers and internal clinical teams to resolve claim denials.</li></ul>`,
+    },
+  },
+  {
+    id: 'walmart', empresa: 'Teleperformance', logoEmpresa: 'teleperformance.com', logoCuenta: 'walmart.com', cuenta: 'Walmart.com',
+    titulo: { es: 'Representante bilingüe de servicio · Walmart.com', en: 'Bilingual Customer Service Representative · Walmart.com' },
+    fechas: { es: 'Jun 2021 – Jul 2021 · 2 meses', en: 'Jun 2021 – Jul 2021 · 2 mos' },
+    lugar: { es: 'Colombia · En remoto', en: 'Colombia · Remote' },
+    cuerpo: {
+      es: `<p>Walmart Inc. es el minorista más grande del mundo, llegando a más de doscientos cincuenta millones de clientes cada semana a través de diez mil tiendas y una plataforma líder de comercio electrónico. Apoyando a Walmart.com a través de Teleperformance, aseguré experiencias de cliente fluidas durante picos de volumen de pedidos.</p><ul>
+<li>Atención de llamadas, chats y correos sobre pedidos, devoluciones, reemplazos y estado de entregas.</li>
+<li>Investigación de problemas de pago, demoras de reembolsos y discrepancias de inventario.</li>
+<li>Acompañamiento en pasos de solución de errores del sitio web y la app.</li>
+<li>Ajustes por artículos dañados y coordinación de recogidas con transportadoras.</li>
+<li>Escucha activa y enfoque en soluciones para lograr resolución en el primer contacto.</li>
+<li>Protección de datos confidenciales y cumplimiento de PCI-DSS para pagos con tarjeta.</li>
+<li>Resolución proactiva para mejorar el Net Promoter Score y la lealtad de marca.</li>
+<li>Cumplimiento de metas diarias de tiempo de atención, calidad y empatía.</li></ul>`,
+      en: `<p>Walmart Inc. is the world's largest retailer, reaching more than two hundred fifty million customers weekly through ten thousand stores and a leading ecommerce platform. Supporting Walmart.com through Teleperformance, I ensured seamless customer experiences during peak order volumes.</p><ul>
+<li>Handled calls, chats and emails about orders, returns, replacements and delivery status.</li>
+<li>Investigated payment issues, refund delays and inventory discrepancies.</li>
+<li>Walked customers through troubleshooting steps for website and app errors.</li>
+<li>Processed adjustments for damaged items and arranged carrier pickups when required.</li>
+<li>Applied active listening and solution-focused techniques to achieve first-contact resolution.</li>
+<li>Protected confidential data and adhered to PCI-DSS guidelines for card payments.</li>
+<li>Resolved inquiries proactively to boost Net Promoter Score and brand loyalty.</li>
+<li>Met daily targets for handle time, quality and customer empathy scores.</li></ul>`,
+    },
+  },
 ]
 
 export const certUrl = (c: Cert): string | null =>

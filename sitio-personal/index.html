@@ -9,7 +9,8 @@
   <meta property="og:description" content="Ingeniería civil, análisis de datos, workforce e hidrología: datos convertidos en decisiones.">
   <meta property="og:url" content="https://sergiobc.com">
   <meta property="og:type" content="website">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90' font-family='Georgia'>S</text></svg>">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="apple-touch-icon" href="/favicon.svg">
   <link rel="stylesheet" href="/src/styles.css">
 </head>
 <body>
@@ -17,12 +18,20 @@
 <div class="cursor-dot" aria-hidden="true"></div>
 <div class="cursor-ring" aria-hidden="true"></div>
 <div class="progress" aria-hidden="true"></div>
-<div class="iris" id="iris" aria-hidden="true"></div>
+<div class="sweep" id="sweep" aria-hidden="true"><i></i><i></i><i></i></div>
+<svg class="rio" id="rio" aria-hidden="true" viewBox="0 0 24 1200" preserveAspectRatio="xMidYMin meet">
+  <path id="rioPath" d="M12 0 Q20 50 12 100 T12 200 T12 300 T12 400 T12 500 T12 600 T12 700 T12 800 T12 900 T12 1000 T12 1100 T12 1200" fill="none" stroke="url(#rioGrad)" stroke-width="3" stroke-linecap="round"/>
+  <defs><linearGradient id="rioGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b0483b"/><stop offset=".5" stop-color="#d98e42"/><stop offset="1" stop-color="#2e6f8e"/></linearGradient></defs>
+  <circle id="rioGota" cx="12" cy="0" r="5" fill="#2e6f8e"/>
+</svg>
 
 <div id="app">
 
 <nav aria-label="Principal">
-  <a class="logo hover-target" href="#inicio">Sergio Beltrán Coley<small data-i18n="nav.sub">Ingeniería · Datos · IA</small></a>
+  <a class="logo hover-target" href="#inicio">
+    <svg class="logo-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#1c1a17"/><text x="30" y="44" text-anchor="middle" font-family="Georgia, serif" font-size="38" font-style="italic" fill="#faf7f2">S</text><path d="M46 18 C46 18 40.5 26 40.5 29.5 a5.5 5.5 0 0 0 11 0 C51.5 26 46 18 46 18" fill="#b0483b"/><path d="M12 52 Q22 47 32 52 T52 52" fill="none" stroke="#2e6f8e" stroke-width="2.6" stroke-linecap="round"/></svg>
+    <span>Sergio Beltrán Coley<small data-i18n="nav.sub">Ingeniería · Datos · IA</small></span>
+  </a>
   <div class="links">
     <a class="hover-target" href="#mundos" data-i18n="nav.mundos">Mundos</a>
     <a class="hover-target" href="#trayectoria" data-i18n="nav.trayectoria">Trayectoria</a>
@@ -169,8 +178,8 @@
       <div class="meta" data-i18n="tray1.meta">JUN 2022 – HOY · FOUNDEVER</div>
       <h3 data-i18n="tray1.t">Real Time Analyst | Workforce Analyst</h3>
       <p data-i18n="tray1.p">Gestión de workforce en tiempo real para campañas globales de alto volumen, coordinando 300+ agentes y el equilibrio entre nivel de servicio (SLA) y costos. NICE IEX, Alvaria, Power BI, Access y Excel avanzado.</p>
-      <button class="texpand hover-target" id="cuentasBtn" aria-expanded="false" data-i18n="tray1.btn">Ver las cuentas que he manejado +</button>
-      <ul class="tsub" id="cuentasSub" data-i18n="tray1.sub" hidden></ul>
+      <p class="chips-hint" data-i18n="tray1.chips">Toca una cuenta para leer la historia completa:</p>
+      <div class="cuentas-chips" id="cuentasChips"></div>
     </div>
     <div class="titem reveal">
       <div class="meta" data-i18n="tray2.meta">AGO 2021 – DIC 2025 · UNIVERSIDAD DE LA COSTA (CUC)</div>
@@ -364,6 +373,23 @@
       </div>
     </div>
     <div class="cv-body" id="cvBody"></div>
+  </div>
+</div>
+
+<!-- Visor de detalle (experiencias y certificados) -->
+<div class="cv-modal" id="detModal" role="dialog" aria-modal="true" aria-label="Detalle" hidden>
+  <div class="cv-shell det-shell">
+    <div class="cv-toolbar">
+      <div class="det-head">
+        <img class="det-logo" id="detLogo" alt="" hidden>
+        <div>
+          <b id="detTitulo"></b>
+          <div class="det-meta" id="detMeta"></div>
+        </div>
+      </div>
+      <button class="cv-close hover-target" id="detClose" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="cv-body" id="detBody"></div>
   </div>
 </div>
 
