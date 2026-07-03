@@ -31,13 +31,13 @@ export function LloviznaLigera() {
     };
 
     const rnd = (a: number, b: number) => a + Math.random() * (b - a);
-    const N = 48; // llovizna ligera
+    const N = 64; // llovizna: visible pero sutil
     const gotas = Array.from({ length: N }, () => ({
       x: Math.random(),
       y: Math.random(),
-      largo: rnd(9, 20),
+      largo: rnd(10, 22),
       vel: rnd(2.4, 5),
-      op: rnd(0.05, 0.16),
+      op: rnd(0.1, 0.28),
     }));
 
     redim();
@@ -49,7 +49,7 @@ export function LloviznaLigera() {
     const dibujar = () => {
       ctx.clearRect(0, 0, ancho, alto);
       ctx.strokeStyle = '#3a9fe0';
-      ctx.lineWidth = 1.1;
+      ctx.lineWidth = 1.4;
       ctx.lineCap = 'round';
       for (const g of gotas) {
         const px = g.x * ancho;
