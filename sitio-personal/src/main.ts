@@ -207,7 +207,7 @@ detModal.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarDetall
 
 function abrirRol(rol: Rol): void {
   abrirDetalle(
-    `/logos/${rol.logoCuenta}.png`,
+    `/logos/${rol.logoCuenta}`,
     rol.titulo[lang],
     `${rol.empresa} · ${rol.fechas[lang]} · ${rol.lugar[lang]}`,
     `<div class="det-texto">${rol.cuerpo[lang]}</div>`,
@@ -217,14 +217,35 @@ function abrirRol(rol: Rol): void {
 function pintarChips(): void {
   const cont = document.getElementById('cuentasChips')!
   cont.innerHTML = ''
-  roles.forEach(rol => {
+  roles.filter(r => r.empresa === 'Foundever').forEach(rol => {
     const b = document.createElement('button')
     b.className = 'chipcuenta hover-target'
-    b.innerHTML = `<img src="/logos/${rol.logoCuenta}.png" alt=""><span>${rol.cuenta}</span>`
+    b.innerHTML = `<img src="/logos/${rol.logoCuenta}" alt=""><span>${rol.cuenta}</span><small>${rol.fechas[lang]}</small>`
     b.addEventListener('click', () => abrirRol(rol))
     cont.appendChild(b)
   })
 }
+
+const eduDetalles: Record<string, { logo: string; t: string; meta: string; body: string }> = {}
+function abrirEdu(clave: string): void {
+  if (clave === 'walmart') {
+    const rol = roles.find(r => r.id === 'walmart')!
+    abrirRol(rol)
+    return
+  }
+  const mapa: Record<string, { logo: string; t: string; meta: string; body: string }> = {
+    cuc: { logo: 'cuc.edu.co.png', t: textos['tray2.t'][lang], meta: textos['tray2.meta'][lang], body: textos['edu.cuc.body'][lang] },
+    verano: { logo: 'autonoma.edu.co.png', t: textos['tray3.t'][lang], meta: textos['tray3.meta'][lang], body: textos['edu.verano.body'][lang] },
+    uninorte: { logo: 'uninorte.edu.co.png', t: textos['tray4.t'][lang], meta: textos['tray4.meta'][lang], body: textos['edu.uninorte.body'][lang] },
+  }
+  const d = mapa[clave]
+  if (d) abrirDetalle(`/logos/${d.logo}`, d.t, d.meta, `<div class="det-texto">${d.body}</div>`)
+}
+void eduDetalles
+
+document.querySelectorAll<HTMLElement>('.tdet').forEach(b =>
+  b.addEventListener('click', () => abrirEdu(b.dataset.det!)),
+)
 
 function abrirCert(c: Cert): void {
   const url = certUrl(c)
@@ -234,7 +255,7 @@ function abrirCert(c: Cert): void {
     partes.push(`<object class="pdf-frame" data="${c.media}" type="application/pdf"><p>${textos['det.pdfalt'][lang]}</p></object>`)
     partes.push(`<p style="margin-top:10px"><a class="cver hover-target" href="${c.media}" target="_blank" rel="noopener">${textos['det.pdfalt'][lang]}</a></p>`)
   }
-  abrirDetalle(c.logo ? `/logos/${c.logo}.png` : null, c.nombre, `${c.emisor} · ${c.fecha}`, partes.join(''))
+  abrirDetalle(c.logo ? `/logos/${c.logo}` : null, c.nombre, `${c.emisor} · ${c.fecha}`, partes.join(''))
 }
 
 /* ===================== visor de hoja de vida ===================== */
@@ -258,7 +279,7 @@ function htmlCerts(): string {
   const visibles = certificados.filter(c => certFiltro === 'todas' || c.cat === certFiltro)
   const items = visibles.map((c, i) => {
     const idx = certificados.indexOf(c)
-    const logo = c.logo ? `<img class="clogo" src="/logos/${c.logo}.png" alt="">` : ''
+    const logo = c.logo ? `<img class="clogo" src="/logos/${c.logo}" alt="">` : ''
     const doc = c.media ? ' <span class="cdoc">PDF</span>' : ''
     return `<button class="cert-item hover-target" data-idx="${idx}" style="animation-delay:${Math.min(i * 40, 500)}ms">
       <span class="ccat">${certCats[c.cat][cvLang]}</span>

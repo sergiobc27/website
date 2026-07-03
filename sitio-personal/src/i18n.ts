@@ -14,8 +14,8 @@ export const textos: Record<string, { es: string; en: string }> = {
   'hero.t3': { es: 'y&nbsp;<em>personas</em>', en: 'and&nbsp;<em>people</em>' },
   'hero.t4': { es: 'en&nbsp;movimiento.', en: 'in&nbsp;motion.' },
   'hero.sub': {
-    es: 'Ingeniero civil con tesis honorífica y analista de datos y workforce: 4 años optimizando operaciones globales (eBay, DoorDash, UnitedHealthcare) con Python, Power BI e IA generativa.',
-    en: 'Civil engineer with an honors thesis and data and workforce analyst: 4 years optimizing global operations (eBay, DoorDash, UnitedHealthcare) with Python, Power BI and generative AI.',
+    es: 'Ingeniero civil con tesis honorífica y analista de datos y workforce: 4 años optimizando 6 cuentas globales (eBay, DoorDash, UnitedHealthcare, doxo, LendingUSA y Just Energy) con Python, Power BI e IA generativa.',
+    en: 'Civil engineer with an honors thesis and data and workforce analyst: 4 years optimizing 6 global accounts (eBay, DoorDash, UnitedHealthcare, doxo, LendingUSA and Just Energy) with Python, Power BI and generative AI.',
   },
   'hero.btn1': { es: 'Explorar ↓', en: 'Explore ↓' },
   'hero.btn2': { es: 'Hoja de vida', en: 'Resume' },
@@ -35,8 +35,8 @@ export const textos: Record<string, { es: string; en: string }> = {
   },
   'mundo1.t': { es: 'Workforce', en: 'Workforce' },
   'mundo1.p': {
-    es: 'Operaciones globales en tiempo real: eBay, DoorDash, UnitedHealthcare, doxo y LendingUSA, con equipos de 300+ personas.',
-    en: 'Global real-time operations: eBay, DoorDash, UnitedHealthcare, doxo and LendingUSA, with 300+ person teams.',
+    es: 'Operaciones globales en tiempo real: eBay, DoorDash, UnitedHealthcare, doxo, LendingUSA y Just Energy, con equipos de 300+ personas.',
+    en: 'Global real-time operations: eBay, DoorDash, UnitedHealthcare, doxo, LendingUSA and Just Energy, with 300+ person teams.',
   },
   'mundo2.t': { es: 'Ingeniería civil', en: 'Civil engineering' },
   'mundo2.p': {
@@ -59,7 +59,7 @@ export const textos: Record<string, { es: string; en: string }> = {
     es: 'Un recorrido entre la operación<br>y la ingeniería.',
     en: 'A path between operations<br>and engineering.',
   },
-  'tray1.meta': { es: 'JUN 2022 – HOY · FOUNDEVER', en: 'JUN 2022 – PRESENT · FOUNDEVER' },
+  'tray1.meta': { es: 'JUN 2022 – HOY · FOUNDEVER · JORNADA COMPLETA · 4 AÑOS 2 MESES', en: 'JUN 2022 – PRESENT · FOUNDEVER · FULL-TIME · 4 YRS 2 MOS' },
   'tray1.t': { es: 'Real Time Analyst | Workforce Analyst', en: 'Real Time Analyst | Workforce Analyst' },
   'tray1.p': {
     es: 'Gestión de workforce en tiempo real para campañas globales de alto volumen, coordinando 300+ agentes y el equilibrio entre nivel de servicio (SLA) y costos. NICE IEX, Alvaria, Power BI, Access y Excel avanzado.',
@@ -96,8 +96,46 @@ export const textos: Record<string, { es: string; en: string }> = {
   'tray4.meta': { es: 'ENE 2020 – JUN 2021 · UNIVERSIDAD DEL NORTE', en: 'JAN 2020 – JUN 2021 · UNIVERSIDAD DEL NORTE' },
   'tray4.t': { es: 'Ingeniería Civil (inicio)', en: 'Civil Engineering (first years)' },
   'tray4.p': {
-    es: 'Primeros semestres de la carrera. En 2021 también fui representante bilingüe de servicio para Walmart.com con Teleperformance.',
-    en: 'First years of the degree. In 2021 I was also a bilingual customer service representative for Walmart.com with Teleperformance.',
+    es: 'Primeros semestres de la carrera, luego transferido a la Universidad de la Costa (CUC).',
+    en: 'First years of the degree, later transferred to Universidad de la Costa (CUC).',
+  },
+
+  'tray5.meta': { es: 'JUN 2021 – JUL 2021 · TELEPERFORMANCE · 2 MESES', en: 'JUN 2021 – JUL 2021 · TELEPERFORMANCE · 2 MOS' },
+  'tray5.t': { es: 'Representante bilingüe de servicio, Walmart.com', en: 'Bilingual Customer Service Representative, Walmart.com' },
+  'tray5.p': {
+    es: 'Soporte a Walmart.com durante picos de pedidos: llamadas, chats y correos sobre pedidos, devoluciones y entregas, con resolución en el primer contacto.',
+    en: 'Support for Walmart.com during peak order volumes: calls, chats and emails about orders, returns and deliveries, with first-contact resolution.',
+  },
+  'edu.ver': { es: 'Ver detalle completo +', en: 'See full detail +' },
+  'edu.cuc.body': {
+    es: `<p><b>Ingeniería Civil</b> · Agosto 2021 – Diciembre 2025 · Barranquilla, Colombia</p><ul>
+<li>Graduado con <b>tesis honorífica</b>: "Automatización inteligente para la gestión visual de datos hidrometeorológicos del IDEAM con Python y Power BI".</li>
+<li>Promedio acumulado <b>4.34 / 5.00</b> (último semestre: 4.74 / 5.00).</li>
+<li>Monitor académico (tutor de estudiantes).</li>
+<li>Reconocimiento por alto puntaje en las pruebas nacionales <b>Saber Pro</b>.</li>
+<li>Representante nacional en <b>RedCOLSI 2025</b>: puntaje perfecto (100/100) en la presentación del proyecto de investigación.</li>
+<li>Miembro adjunto del semillero de investigación.</li></ul>`,
+    en: `<p><b>B.S. in Civil Engineering</b> · August 2021 – December 2025 · Barranquilla, Colombia</p><ul>
+<li>Graduated with an <b>honors thesis</b>: "Intelligent automation for the visual management of IDEAM hydrometeorological data using Python and Power BI".</li>
+<li>Cumulative GPA <b>4.34 / 5.00</b> (last semester: 4.74 / 5.00).</li>
+<li>Academic tutor / monitor.</li>
+<li>Top-tier score recognition on the national <b>Saber Pro</b> standardized examination.</li>
+<li>National representative at <b>RedCOLSI 2025</b>: perfect score (100/100) on the research project presentation.</li>
+<li>Attached research seedbed member.</li></ul>`,
+  },
+  'edu.uninorte.body': {
+    es: `<p><b>Ingeniería Civil</b> · Enero 2020 – Junio 2021 · Barranquilla, Colombia</p>
+<p>Primeros semestres de la carrera, luego transferido a la Universidad de la Costa (CUC) donde me gradué.</p>`,
+    en: `<p><b>B.S. in Civil Engineering</b> · January 2020 – June 2021 · Barranquilla, Colombia</p>
+<p>First years of the degree, later transferred to Universidad de la Costa (CUC) where I graduated.</p>`,
+  },
+  'edu.verano.body': {
+    es: `<p><b>XXVII Verano de la Investigación Científica y Tecnológica del Pacífico (Programa Delfín)</b> · Universidad Autónoma de Manizales · Julio 2022</p>
+<p>Proyecto: "Análisis de acelerogramas en el municipio de Barichara, Santander, con énfasis en el historial sísmico colombiano", desarrollado en colaboración con la Universidad Veracruzana (México).</p>
+<p>Aptitudes: analítica de datos, ingeniería sísmica, procesamiento de señales, investigación aplicada.</p>`,
+    en: `<p><b>XXVII Pacific Scientific and Technological Research Summer (Delfín Program)</b> · Universidad Autónoma de Manizales · July 2022</p>
+<p>Project: "Accelerogram analysis in the municipality of Barichara, Santander, with emphasis on Colombian seismic history", developed in collaboration with Universidad Veracruzana (Mexico).</p>
+<p>Skills: data analytics, earthquake engineering, signal processing, applied research.</p>`,
   },
 
   'proy.kicker': { es: 'Proyectos', en: 'Projects' },
@@ -234,35 +272,35 @@ export const certCats: Record<CertCat, { es: string; en: string }> = {
 }
 
 export const certificados: Cert[] = [
-  { nombre: 'Google AI Professional Certificate', emisor: 'Google', fecha: '2026', cat: 'ia', id: 'TAI0G1UUXH10', pro: true, logo: 'google.com', media: '/certs/google-ai.pdf' },
-  { nombre: 'AI for App Building', emisor: 'Google', fecha: '2026', cat: 'ia', id: 'AD7YJO90N838', logo: 'google.com', media: '/certs/ai-for-app-building.pdf' },
-  { nombre: 'AI for Data Analysis', emisor: 'Google', fecha: '2026', cat: 'ia', id: 'LZWG9WQNBI1Z', logo: 'google.com', media: '/certs/ai-for-data-analysis.pdf' },
-  { nombre: 'AI for Content Creation', emisor: 'Google', fecha: '2026', cat: 'ia', id: 'F0MS0CL8SCH7', logo: 'google.com', media: '/certs/ai-for-content-creation.pdf' },
-  { nombre: 'AI for Writing and Communicating', emisor: 'Google', fecha: '2026', cat: 'ia', id: '6G22X94MAG8Q', logo: 'google.com', media: '/certs/ai-for-writing-and-communicating.pdf' },
-  { nombre: 'AI for Research and Insights', emisor: 'Google', fecha: '2026', cat: 'ia', id: '8BDPWL9YNSAT', logo: 'google.com', media: '/certs/ai-for-research-and-insights.pdf' },
-  { nombre: 'AI for Brainstorming and Planning', emisor: 'Google', fecha: '2026', cat: 'ia', id: 'JWLUWSNA3A99', logo: 'google.com', media: '/certs/ai-for-brainstorming-and-planning.pdf' },
-  { nombre: 'AI Fundamentals', emisor: 'Google', fecha: '2026', cat: 'ia', id: '2PE4RTGN12GV', logo: 'google.com', media: '/certs/ai-fundamentals.pdf' },
-  { nombre: 'Extract, Transform and Load Data in Power BI', emisor: 'Microsoft', fecha: '2025', cat: 'datos', id: 'EADX0QK2GVN1', logo: 'microsoft.com', media: '/certs/etl-power-bi.pdf' },
-  { nombre: 'Harnessing the Power of Data with Power BI', emisor: 'Microsoft', fecha: '2025', cat: 'datos', id: '8FMW0VG18DEI', logo: 'microsoft.com', media: '/certs/harnessing-power-bi.pdf' },
-  { nombre: 'Preparing Data for Analysis with Microsoft Excel', emisor: 'Microsoft', fecha: '2024', cat: 'datos', id: '63QNX2OO60XF', logo: 'microsoft.com' },
-  { nombre: 'Work Smarter with Microsoft Excel (with Honors)', emisor: 'Microsoft', fecha: '2024', cat: 'datos', id: 'ZURI2G89MFQY', logo: 'microsoft.com' },
-  { nombre: 'Fundamentos profesionales del análisis de datos', emisor: 'Microsoft + LinkedIn', fecha: '2023', cat: 'datos', logo: 'linkedin.com' },
-  { nombre: 'Aprende análisis de datos: ampliación y aplicación', emisor: 'LinkedIn', fecha: '2023', cat: 'datos', logo: 'linkedin.com' },
-  { nombre: 'Aprende análisis de datos: fundamentos', emisor: 'LinkedIn', fecha: '2023', cat: 'datos', logo: 'linkedin.com' },
-  { nombre: 'Data science: cuenta historias con los datos', emisor: 'LinkedIn', fecha: '2023', cat: 'datos', logo: 'linkedin.com' },
-  { nombre: 'Aprende análisis de datos', emisor: 'LinkedIn', fecha: '2023', cat: 'datos', logo: 'linkedin.com' },
-  { nombre: 'Data science: conceptos básicos', emisor: 'LinkedIn', fecha: '2023', cat: 'datos', logo: 'linkedin.com' },
-  { nombre: 'Habilidades profesionales en análisis de datos', emisor: 'LinkedIn', fecha: '2023', cat: 'datos', logo: 'linkedin.com' },
-  { nombre: 'Pavement Construction Practices (IRC and MoRTH)', emisor: 'L&T EduTech', fecha: '2025', cat: 'civil', id: 'ZUM0ULK71M65', logo: 'lntedutech.com' },
-  { nombre: 'Pavement Materials and Design (IRC and MoRTH)', emisor: 'L&T EduTech', fecha: '2025', cat: 'civil', id: '5YEALOLZJUE7', logo: 'lntedutech.com' },
-  { nombre: 'Highway Geometry and Pavement Design', emisor: 'L&T EduTech', fecha: '2025', cat: 'civil', id: '412024CLX6AV', logo: 'lntedutech.com' },
-  { nombre: 'Mastering Bitumen for Better Roads', emisor: 'École des Ponts ParisTech', fecha: '2025', cat: 'civil', id: '9YZMUVLMH7ZV', logo: 'ecoledesponts.fr' },
-  { nombre: 'Verano de Investigación Científica (acelerogramas, Barichara)', emisor: 'U. Autónoma de Manizales', fecha: '2022', cat: 'civil', logo: 'autonoma.edu.co' },
-  { nombre: 'Foundations of Project Management', emisor: 'Google', fecha: '2025', cat: 'gestion', id: '83S2Z8CAOB4Z', logo: 'google.com', media: '/certs/foundations-project-management.pdf' },
-  { nombre: 'Six Sigma White Belt', emisor: 'CSSC', fecha: '2023', cat: 'gestion', logo: 'sixsigmacouncil.org' },
-  { nombre: 'Redacción Científica', emisor: 'Universidad de la Costa', fecha: '2025', cat: 'gestion', logo: 'cuc.edu.co' },
-  { nombre: 'Monitor académico UNICOSTA', emisor: 'Universidad de la Costa', fecha: '2022', cat: 'gestion', logo: 'cuc.edu.co' },
-  { nombre: 'Semillero de investigación adjunto', emisor: 'Universidad de la Costa', fecha: '2022', cat: 'gestion', logo: 'cuc.edu.co' },
+  { nombre: 'Google AI Professional Certificate', emisor: 'Google', fecha: '2026', cat: 'ia', id: 'TAI0G1UUXH10', pro: true, logo: 'google.com.png', media: '/certs/google-ai.pdf' },
+  { nombre: 'AI for App Building', emisor: 'Google', fecha: '2026', cat: 'ia', id: 'AD7YJO90N838', logo: 'google.com.png', media: '/certs/ai-for-app-building.pdf' },
+  { nombre: 'AI for Data Analysis', emisor: 'Google', fecha: '2026', cat: 'ia', id: 'LZWG9WQNBI1Z', logo: 'google.com.png', media: '/certs/ai-for-data-analysis.pdf' },
+  { nombre: 'AI for Content Creation', emisor: 'Google', fecha: '2026', cat: 'ia', id: 'F0MS0CL8SCH7', logo: 'google.com.png', media: '/certs/ai-for-content-creation.pdf' },
+  { nombre: 'AI for Writing and Communicating', emisor: 'Google', fecha: '2026', cat: 'ia', id: '6G22X94MAG8Q', logo: 'google.com.png', media: '/certs/ai-for-writing-and-communicating.pdf' },
+  { nombre: 'AI for Research and Insights', emisor: 'Google', fecha: '2026', cat: 'ia', id: '8BDPWL9YNSAT', logo: 'google.com.png', media: '/certs/ai-for-research-and-insights.pdf' },
+  { nombre: 'AI for Brainstorming and Planning', emisor: 'Google', fecha: '2026', cat: 'ia', id: 'JWLUWSNA3A99', logo: 'google.com.png', media: '/certs/ai-for-brainstorming-and-planning.pdf' },
+  { nombre: 'AI Fundamentals', emisor: 'Google', fecha: '2026', cat: 'ia', id: '2PE4RTGN12GV', logo: 'google.com.png', media: '/certs/ai-fundamentals.pdf' },
+  { nombre: 'Extract, Transform and Load Data in Power BI', emisor: 'Microsoft', fecha: '2025', cat: 'datos', id: 'EADX0QK2GVN1', logo: 'microsoft.com.png', media: '/certs/etl-power-bi.pdf' },
+  { nombre: 'Harnessing the Power of Data with Power BI', emisor: 'Microsoft', fecha: '2025', cat: 'datos', id: '8FMW0VG18DEI', logo: 'microsoft.com.png', media: '/certs/harnessing-power-bi.pdf' },
+  { nombre: 'Preparing Data for Analysis with Microsoft Excel', emisor: 'Microsoft', fecha: '2024', cat: 'datos', id: '63QNX2OO60XF', logo: 'microsoft.com.png' },
+  { nombre: 'Work Smarter with Microsoft Excel (with Honors)', emisor: 'Microsoft', fecha: '2024', cat: 'datos', id: 'ZURI2G89MFQY', logo: 'microsoft.com.png' },
+  { nombre: 'Fundamentos profesionales del análisis de datos', emisor: 'Microsoft + LinkedIn', fecha: '2023', cat: 'datos', logo: 'linkedin.com.png' },
+  { nombre: 'Aprende análisis de datos: ampliación y aplicación', emisor: 'LinkedIn', fecha: '2023', cat: 'datos', logo: 'linkedin.com.png' },
+  { nombre: 'Aprende análisis de datos: fundamentos', emisor: 'LinkedIn', fecha: '2023', cat: 'datos', logo: 'linkedin.com.png' },
+  { nombre: 'Data science: cuenta historias con los datos', emisor: 'LinkedIn', fecha: '2023', cat: 'datos', logo: 'linkedin.com.png' },
+  { nombre: 'Aprende análisis de datos', emisor: 'LinkedIn', fecha: '2023', cat: 'datos', logo: 'linkedin.com.png' },
+  { nombre: 'Data science: conceptos básicos', emisor: 'LinkedIn', fecha: '2023', cat: 'datos', logo: 'linkedin.com.png' },
+  { nombre: 'Habilidades profesionales en análisis de datos', emisor: 'LinkedIn', fecha: '2023', cat: 'datos', logo: 'linkedin.com.png' },
+  { nombre: 'Pavement Construction Practices (IRC and MoRTH)', emisor: 'L&T EduTech', fecha: '2025', cat: 'civil', id: 'ZUM0ULK71M65', logo: 'lntedutech.com.png' },
+  { nombre: 'Pavement Materials and Design (IRC and MoRTH)', emisor: 'L&T EduTech', fecha: '2025', cat: 'civil', id: '5YEALOLZJUE7', logo: 'lntedutech.com.png' },
+  { nombre: 'Highway Geometry and Pavement Design', emisor: 'L&T EduTech', fecha: '2025', cat: 'civil', id: '412024CLX6AV', logo: 'lntedutech.com.png' },
+  { nombre: 'Mastering Bitumen for Better Roads', emisor: 'École des Ponts ParisTech', fecha: '2025', cat: 'civil', id: '9YZMUVLMH7ZV', logo: 'ecoledesponts.fr.png' },
+  { nombre: 'Verano de Investigación Científica (acelerogramas, Barichara)', emisor: 'U. Autónoma de Manizales', fecha: '2022', cat: 'civil', logo: 'autonoma.edu.co.png' },
+  { nombre: 'Foundations of Project Management', emisor: 'Google', fecha: '2025', cat: 'gestion', id: '83S2Z8CAOB4Z', logo: 'google.com.png', media: '/certs/foundations-project-management.pdf' },
+  { nombre: 'Six Sigma White Belt', emisor: 'CSSC', fecha: '2023', cat: 'gestion', logo: 'sixsigmacouncil.org.png' },
+  { nombre: 'Redacción Científica', emisor: 'Universidad de la Costa', fecha: '2025', cat: 'gestion', logo: 'cuc.edu.co.png', media: '/certs/redaccion-cientifica.pdf' },
+  { nombre: 'Monitor académico UNICOSTA', emisor: 'Universidad de la Costa', fecha: '2022', cat: 'gestion', logo: 'cuc.edu.co.png' },
+  { nombre: 'Semillero de investigación adjunto', emisor: 'Universidad de la Costa', fecha: '2022', cat: 'gestion', logo: 'cuc.edu.co.png' },
 ]
 
 /* ===== Experiencia completa (texto íntegro de LinkedIn, ES y EN) ===== */
@@ -281,7 +319,7 @@ export interface Rol {
 
 export const roles: Rol[] = [
   {
-    id: 'uhc-rta', empresa: 'Foundever', logoEmpresa: 'foundever.com', logoCuenta: 'uhc.com', cuenta: 'UnitedHealthcare',
+    id: 'uhc-rta', empresa: 'Foundever', logoEmpresa: 'foundever.com.png', logoCuenta: 'uhc.com.svg', cuenta: 'UnitedHealthcare',
     titulo: { es: 'Real Time Analyst · UnitedHealthcare (UHC)', en: 'Real Time Analyst · UnitedHealthcare (UHC)' },
     fechas: { es: 'Dic 2022 – Abr 2026 · 3 años 5 meses', en: 'Dec 2022 – Apr 2026 · 3 yrs 5 mos' },
     lugar: { es: 'Barranquilla, Colombia · En remoto', en: 'Barranquilla, Colombia · Remote' },
@@ -305,7 +343,7 @@ export const roles: Rol[] = [
     },
   },
   {
-    id: 'ebay', empresa: 'Foundever', logoEmpresa: 'foundever.com', logoCuenta: 'ebay.com', cuenta: 'eBay',
+    id: 'ebay', empresa: 'Foundever', logoEmpresa: 'foundever.com.png', logoCuenta: 'ebay.com.png', cuenta: 'eBay',
     titulo: { es: 'Real Time Analyst · eBay', en: 'Real Time Analyst · eBay' },
     fechas: { es: 'Abr 2025 – actualidad · 1 año 4 meses', en: 'Apr 2025 – present · 1 yr 4 mos' },
     lugar: { es: 'Barranquilla, Colombia · En remoto', en: 'Barranquilla, Colombia · Remote' },
@@ -325,7 +363,7 @@ export const roles: Rol[] = [
     },
   },
   {
-    id: 'doordash', empresa: 'Foundever', logoEmpresa: 'foundever.com', logoCuenta: 'doordash.com', cuenta: 'DoorDash',
+    id: 'doordash', empresa: 'Foundever', logoEmpresa: 'foundever.com.png', logoCuenta: 'doordash.com.png', cuenta: 'DoorDash',
     titulo: { es: 'Real Time Analyst · DoorDash', en: 'Real Time Analyst · DoorDash' },
     fechas: { es: 'Dic 2025 – actualidad · 8 meses', en: 'Dec 2025 – present · 8 mos' },
     lugar: { es: 'Barranquilla, Colombia · En remoto', en: 'Barranquilla, Colombia · Remote' },
@@ -341,7 +379,7 @@ export const roles: Rol[] = [
     },
   },
   {
-    id: 'doxo', empresa: 'Foundever', logoEmpresa: 'foundever.com', logoCuenta: 'doxo.com', cuenta: 'doxo',
+    id: 'doxo', empresa: 'Foundever', logoEmpresa: 'foundever.com.png', logoCuenta: 'doxo.com.png', cuenta: 'doxo',
     titulo: { es: 'Real Time Analyst · doxo', en: 'Real Time Analyst · doxo' },
     fechas: { es: 'Ene 2025 – Dic 2025 · 1 año', en: 'Jan 2025 – Dec 2025 · 1 yr' },
     lugar: { es: 'Barranquilla, Colombia · En remoto', en: 'Barranquilla, Colombia · Remote' },
@@ -359,7 +397,7 @@ export const roles: Rol[] = [
     },
   },
   {
-    id: 'lendingusa', empresa: 'Foundever', logoEmpresa: 'foundever.com', logoCuenta: 'lendingusa.com', cuenta: 'LendingUSA',
+    id: 'lendingusa', empresa: 'Foundever', logoEmpresa: 'foundever.com.png', logoCuenta: 'lendingusa.com.png', cuenta: 'LendingUSA',
     titulo: { es: 'Real Time Analyst · LendingUSA', en: 'Real Time Analyst · LendingUSA' },
     fechas: { es: 'Jun 2023 – Dic 2023 · 7 meses', en: 'Jun 2023 – Dec 2023 · 7 mos' },
     lugar: { es: 'Barranquilla, Colombia · En remoto', en: 'Barranquilla, Colombia · Remote' },
@@ -377,7 +415,7 @@ export const roles: Rol[] = [
     },
   },
   {
-    id: 'uhc-csr', empresa: 'Foundever', logoEmpresa: 'foundever.com', logoCuenta: 'uhc.com', cuenta: 'UHC Servicio',
+    id: 'uhc-csr', empresa: 'Foundever', logoEmpresa: 'foundever.com.png', logoCuenta: 'uhc.com.svg', cuenta: 'UHC Servicio',
     titulo: { es: 'Representante bilingüe de servicio · UnitedHealthcare', en: 'Bilingual Customer Service Representative · UnitedHealthcare' },
     fechas: { es: 'Jun 2022 – Dic 2022 · 7 meses', en: 'Jun 2022 – Dec 2022 · 7 mos' },
     lugar: { es: 'Barranquilla, Colombia · En remoto', en: 'Barranquilla, Colombia · Remote' },
@@ -405,7 +443,7 @@ export const roles: Rol[] = [
     },
   },
   {
-    id: 'walmart', empresa: 'Teleperformance', logoEmpresa: 'teleperformance.com', logoCuenta: 'walmart.com', cuenta: 'Walmart.com',
+    id: 'walmart', empresa: 'Teleperformance', logoEmpresa: 'teleperformance.com.png', logoCuenta: 'walmart.com.png', cuenta: 'Walmart.com',
     titulo: { es: 'Representante bilingüe de servicio · Walmart.com', en: 'Bilingual Customer Service Representative · Walmart.com' },
     fechas: { es: 'Jun 2021 – Jul 2021 · 2 meses', en: 'Jun 2021 – Jul 2021 · 2 mos' },
     lugar: { es: 'Colombia · En remoto', en: 'Colombia · Remote' },
