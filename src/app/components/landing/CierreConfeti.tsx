@@ -2,6 +2,7 @@ import { ArrowRight, BookOpen } from 'lucide-react';
 import { usePrefersReducedMotion } from '../../lib/usePrefersReducedMotion';
 import { construirRafagas } from '../../lib/celebracion';
 import { CurvaIdfAnimada } from './CurvaIdfAnimada';
+import { CaudalAnimado } from './CaudalAnimado';
 import { Reveal, RevealItem } from './Reveal';
 
 interface CierreConfetiProps {
@@ -31,11 +32,16 @@ export function CierreConfeti({ onNavigate }: CierreConfetiProps) {
     <section className="relative overflow-hidden bg-[#15110a] px-6 py-20 text-center md:px-10">
       <Reveal className="mx-auto max-w-3xl">
         <RevealItem>
-          <div className="mx-auto mb-3 h-52 w-72 max-w-full md:h-64 md:w-[28rem]">
-            <CurvaIdfAnimada className="h-full w-full" />
+          <div className="mb-3 flex flex-wrap items-center justify-center gap-2 md:gap-8">
+            <div className="h-44 w-64 max-w-full md:h-56 md:w-80">
+              <CurvaIdfAnimada className="h-full w-full" />
+            </div>
+            <div className="h-44 w-64 max-w-full md:h-56 md:w-80">
+              <CaudalAnimado className="h-full w-full" />
+            </div>
           </div>
           <p className="mb-8 text-xs font-bold uppercase tracking-[0.18em] text-[#d8c98c]">
-            El resultado: curvas IDF reales
+            El resultado: de la curva IDF al caudal de diseño
           </p>
         </RevealItem>
         <RevealItem>
