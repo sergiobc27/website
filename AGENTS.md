@@ -1,4 +1,4 @@
-# AGENTS.md - IDEAM Hydrology Data Automator
+# AGENTS.md - IDEAM Data Automator
 
 ## Purpose
 
