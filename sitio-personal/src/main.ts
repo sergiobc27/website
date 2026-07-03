@@ -1,4 +1,7 @@
-import { textos, cvContenido, metaDescripcion, titulos, type Lang } from './i18n'
+import {
+  textos, cvPerfil, certificados, certCats, certUrl,
+  metaDescripcion, titulos, type Lang, type CertCat,
+} from './i18n'
 
 const punteroFino = matchMedia('(pointer: fine)').matches
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -15,13 +18,17 @@ function aplicarIdioma(l: Lang): void {
   document.title = titulos[l]
   document.querySelector('meta[name="description"]')?.setAttribute('content', metaDescripcion[l])
   document.querySelectorAll<HTMLElement>('[data-i18n]').forEach(el => {
-    const t = textos[el.dataset.i18n!]
+    const clave = el.dataset.i18n!
+    if (clave === 'tray1.btn') return // texto controlado por el toggle de cuentas
+    const t = textos[clave]
     if (t) el.innerHTML = t[l]
   })
   document.querySelectorAll<HTMLElement>('.flag').forEach(f =>
     f.classList.toggle('active', f.dataset.lang === l),
   )
+  pintarCuentasBtn()
   actualizarPdf()
+  if (!modal.hidden) { cvLang = l; pintarCV() }
 }
 
 let irisTimer1 = 0, irisTimer2 = 0
@@ -55,7 +62,7 @@ if (punteroFino && !reduceMotion()) {
   addEventListener('mousemove', e => {
     mx = e.clientX; my = e.clientY
     dot.style.left = `${mx}px`; dot.style.top = `${my}px`
-    document.querySelectorAll<SVGGElement>('.layer').forEach(l => {
+    document.querySelectorAll<SVGGElement>('.scene .layer').forEach(l => {
       const d = Number(l.dataset.depth) || 10
       l.style.transform = `translate(${(mx - innerWidth / 2) / -d}px, ${(my - innerHeight / 2) / -d}px)`
     })
@@ -68,12 +75,10 @@ if (punteroFino && !reduceMotion()) {
   }
   seguir()
 
-  const marcarInteractivos = (root: ParentNode): void =>
-    root.querySelectorAll<HTMLElement>('a, button, .hover-target').forEach(el => {
-      el.addEventListener('mouseenter', () => ring.classList.add('big'))
-      el.addEventListener('mouseleave', () => ring.classList.remove('big'))
-    })
-  marcarInteractivos(document)
+  addEventListener('mouseover', e => {
+    const objetivo = (e.target as HTMLElement).closest('a, button, .hover-target')
+    ring.classList.toggle('big', Boolean(objetivo))
+  })
 }
 
 /* ===================== onda y chispas por clic ===================== */
@@ -130,11 +135,12 @@ const cio = new IntersectionObserver(
     if (!e.isIntersecting || el.dataset.done) return
     el.dataset.done = '1'
     const fin = Number(el.dataset.count)
-    if (reduceMotion()) { el.textContent = String(fin); return }
+    const dec = Number(el.dataset.decimals ?? 0)
+    if (reduceMotion()) { el.textContent = fin.toFixed(dec); return }
     const t0 = performance.now()
     const tick = (ahora: number): void => {
       const p = Math.min((ahora - t0) / 1600, 1)
-      el.textContent = String(Math.round(fin * (1 - Math.pow(1 - p, 3))))
+      el.textContent = (fin * (1 - Math.pow(1 - p, 3))).toFixed(dec)
       if (p < 1) requestAnimationFrame(tick)
     }
     requestAnimationFrame(tick)
@@ -156,10 +162,28 @@ if (punteroFino && !reduceMotion()) {
   })
 }
 
+/* ===================== cuentas de Foundever (expandible) ===================== */
+const cuentasBtn = document.getElementById('cuentasBtn')!
+const cuentasSub = document.getElementById('cuentasSub') as HTMLElement
+let cuentasAbiertas = false
+
+function pintarCuentasBtn(): void {
+  cuentasBtn.innerHTML = textos[cuentasAbiertas ? 'tray1.btn.close' : 'tray1.btn'][lang]
+  cuentasBtn.setAttribute('aria-expanded', String(cuentasAbiertas))
+  if (cuentasAbiertas) cuentasSub.innerHTML = textos['tray1.sub'][lang]
+}
+
+cuentasBtn.addEventListener('click', () => {
+  cuentasAbiertas = !cuentasAbiertas
+  cuentasSub.hidden = !cuentasAbiertas
+  pintarCuentasBtn()
+})
+
 /* ===================== visor de hoja de vida ===================== */
 const modal = document.getElementById('cvModal')!
 const cvBody = document.getElementById('cvBody')!
 let cvLang: Lang = lang
+let certFiltro: CertCat | 'todas' = 'todas'
 let focoPrevio: HTMLElement | null = null
 
 function actualizarPdf(): void {
@@ -167,10 +191,38 @@ function actualizarPdf(): void {
   if (pdf) pdf.href = `/cv/sergio-beltran-coley-${modal.hidden ? lang : cvLang}.pdf`
 }
 
+function htmlCerts(): string {
+  const cats: (CertCat | 'todas')[] = ['todas', 'ia', 'datos', 'civil', 'gestion']
+  const chips = cats.map(c => {
+    const etiqueta = c === 'todas' ? textos['cvv.todas'][cvLang] : certCats[c][cvLang]
+    return `<button class="chip hover-target${c === certFiltro ? ' active' : ''}" data-cat="${c}">${etiqueta}</button>`
+  }).join('')
+  const visibles = certificados.filter(c => certFiltro === 'todas' || c.cat === certFiltro)
+  const items = visibles.map((c, i) => {
+    const url = certUrl(c)
+    const ver = url ? ` · <a class="cver hover-target" href="${url}" target="_blank" rel="noopener">${textos['cvv.ver'][cvLang]}</a>` : ''
+    return `<div class="cert-item" style="animation-delay:${Math.min(i * 40, 500)}ms">
+      <span class="ccat">${certCats[c.cat][cvLang]}</span>
+      <b>${c.nombre}</b>
+      <span class="cmeta">${c.emisor} · ${c.fecha}${ver}</span>
+    </div>`
+  }).join('')
+  return `<div class="cv-sec"><h4>${textos['cvv.certs.h'][cvLang]}</h4>
+    <div class="cert-filtros">${chips}</div>
+    <div class="certs-lista">${items}</div>
+  </div>`
+}
+
 function pintarCV(): void {
-  cvBody.innerHTML = cvContenido[cvLang]
+  cvBody.innerHTML = cvPerfil[cvLang] + htmlCerts()
   document.querySelectorAll<HTMLElement>('.cv-tab').forEach(t =>
     t.classList.toggle('active', t.dataset.cvlang === cvLang),
+  )
+  cvBody.querySelectorAll<HTMLElement>('.chip').forEach(chip =>
+    chip.addEventListener('click', () => {
+      certFiltro = chip.dataset.cat as CertCat | 'todas'
+      pintarCV()
+    }),
   )
   actualizarPdf()
 }
@@ -178,6 +230,7 @@ function pintarCV(): void {
 function abrirCV(): void {
   focoPrevio = document.activeElement as HTMLElement
   cvLang = lang
+  certFiltro = 'todas'
   modal.hidden = false
   pintarCV()
   document.body.style.overflow = 'hidden'
@@ -187,6 +240,7 @@ function abrirCV(): void {
 function cerrarCV(): void {
   modal.hidden = true
   document.body.style.overflow = ''
+  actualizarPdf()
   focoPrevio?.focus()
 }
 
