@@ -8,6 +8,8 @@ import { SeccionCifras } from './SeccionCifras';
 import { SeccionCreditos } from './SeccionCreditos';
 import { CierreConfeti } from './CierreConfeti';
 import { OndaDivisor } from './OndaDivisor';
+import { OndasClic } from './OndasClic';
+import { LloviznaLigera } from './LloviznaLigera';
 
 interface LandingProps {
   onNavigate: (view: string) => void;
@@ -38,7 +40,9 @@ export function Landing({ onNavigate }: LandingProps) {
   return (
     <MotionConfig reducedMotion="user">
       <div className="landing h-screen overflow-y-auto bg-background text-foreground scrollbar-thin scrollbar-track-transparent">
+        <LloviznaLigera />
         {!reducido && <div className="cursor-glow" aria-hidden />}
+        <OndasClic />
         <h1 className="sr-only">Automatización de datos hídricos del IDEAM, trabajo de grado de Sergio Beltran Coley</h1>
         <HeroGota onNavigate={onNavigate} />
         <SeccionProblemaSolucion />

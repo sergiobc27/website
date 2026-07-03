@@ -727,6 +727,38 @@
   0% { transform: scale(0.4); opacity: 0.75; }
   100% { transform: scale(13); opacity: 0; }
 }
+/* Onda "gota en el agua" al hacer clic en cualquier parte de la portada
+   (OndasClic) + llovizna ligera de fondo (LloviznaLigera, canvas). Ambas
+   decorativas y pointer-events:none; el bloque global de prefers-reduced-motion
+   las neutraliza y los componentes tampoco se montan con reduced-motion. */
+.llovizna-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 30;
+}
+.ondas-clic-capa {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 45;
+}
+.onda-clic {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border-radius: 9999px;
+  border: 2px solid rgba(58, 159, 224, 0.55);
+  animation: onda-clic 780ms ease-out forwards;
+}
+@keyframes onda-clic {
+  0% { transform: scale(0.3); opacity: 0.7; }
+  70% { opacity: 0.3; }
+  100% { transform: scale(9); opacity: 0; }
+}
 /* Divisor de ola entre secciones (componente OndaDivisor). El componente pasa
    los 4 colores como CSS vars en `style`; aquí elegimos el par claro/oscuro
    según la clase `.dark` global. Estático, decorativo. El fondo del bloque =
