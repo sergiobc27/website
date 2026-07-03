@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { ArrowRight, ChevronDown, Sun, Moon, Github, Package, Globe } from 'lucide-react';
+import { ArrowRight, ChevronDown, Sun, Moon, Github, Package, Globe, Linkedin } from 'lucide-react';
 import logoCuc from '../../../imports/Logo_CUC_PNG_letra_blanca_barra_roja_vtcal.png';
 import logoIdeam from '../../../imports/Ideam_(Colombia)_logo.png';
 import { usePrefersReducedMotion } from '../../lib/usePrefersReducedMotion';
 import { getThemeChoice, applyTheme, resolveIsDark, type ThemeChoice } from '../../lib/theme';
-import { GotaAnimada } from './GotaAnimada';
+import { GotaInteractiva } from './GotaInteractiva';
 import { Reveal, RevealItem } from './Reveal';
 
 interface HeroGotaProps {
@@ -67,6 +67,16 @@ export function HeroGota({ onNavigate }: HeroGotaProps) {
             <Package className="anim-wiggle h-5 w-5" />
           </a>
           <a
+            href="https://www.linkedin.com/in/sergiobeltrancoley/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group rounded-lg p-2 text-muted-foreground transition-transform duration-150 hover:scale-110 hover:text-primary"
+            title="LinkedIn de Sergio Beltrán Coley"
+            aria-label="Perfil de LinkedIn de Sergio Beltrán Coley (abre en una pestaña nueva)"
+          >
+            <Linkedin className="anim-wiggle h-5 w-5" />
+          </a>
+          <a
             href="https://sergiobc.com"
             target="_blank"
             rel="noopener noreferrer"
@@ -125,10 +135,9 @@ export function HeroGota({ onNavigate }: HeroGotaProps) {
             <span className="onda-anillo onda-anillo-2" />
             <span className="onda-anillo onda-anillo-3" />
           </div>
-          {/* La gota es el foco único: más grande, con halo azul. */}
-          <div className="relative z-10 h-72 w-72 [filter:drop-shadow(0_18px_34px_rgba(43,143,214,0.4))] md:h-[24rem] md:w-[24rem] lg:scale-105">
-            <GotaAnimada />
-          </div>
+          {/* La gota es el foco único: interactiva (se inclina hacia el cursor y
+              suelta ondas al clic). Con reduced-motion queda quieta. */}
+          <GotaInteractiva />
         </div>
       </div>
 
