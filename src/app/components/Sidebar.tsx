@@ -78,11 +78,11 @@ export function SidebarContent({
               aria-label="Ir al inicio"
               className="block w-full rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#C9A227]"
             >
-              <img src={logoVertical} alt="Universidad de la Costa CUC" className="mx-auto h-auto w-28" />
+              <img src={logoVertical} alt="Universidad de la Costa CUC" className="anim-float mx-auto h-auto w-28" />
             </button>
             <div className="pt-1 text-center">
-              <p className="text-xs font-bold leading-4 text-white">AUTOMATIZACIÓN DE DATOS HÍDRICOS DEL IDEAM</p>
-              <p className="text-[0.7rem] text-white/80">Por: Sergio Beltran Coley</p>
+              <p className="marca-brillo text-xs font-bold leading-4">AUTOMATIZACIÓN DE DATOS HÍDRICOS DEL IDEAM</p>
+              <p className="text-[0.7rem] text-white/80"><span className="marca-firma">Por: Sergio Beltran Coley</span></p>
             </div>
           </div>
         ) : (
