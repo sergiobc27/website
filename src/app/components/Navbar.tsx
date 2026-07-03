@@ -1,4 +1,4 @@
-import { Sun, Moon, Monitor, User, ChevronRight, History, Search, Trash2, Menu, Github, Package } from 'lucide-react';
+import { Sun, Moon, Monitor, User, ChevronRight, History, Search, Trash2, Menu, Github, Package, Linkedin } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ExtractorRuntimeState } from './DataExtractor';
 import {
@@ -194,6 +194,16 @@ export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMenu }: NavbarP
           aria-label="Paquete en PyPI (abre en una pestaña nueva)"
         >
           <Package className="anim-wiggle h-5 w-5" />
+        </a>
+        <a
+          href="https://www.linkedin.com/in/sergiobeltrancoley/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group hidden rounded-lg p-2 text-muted-foreground transition-[transform,background-color,color] duration-150 ease-out hover:scale-105 hover:bg-muted hover:text-accent active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:inline-flex"
+          title="LinkedIn de Sergio Beltrán Coley"
+          aria-label="Perfil de LinkedIn de Sergio Beltrán Coley (abre en una pestaña nueva)"
+        >
+          <Linkedin className="anim-wiggle h-5 w-5" />
         </a>
 
         <DropdownMenu>
