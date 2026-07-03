@@ -247,12 +247,27 @@ document.querySelectorAll<HTMLElement>('.tdet').forEach(b =>
   b.addEventListener('click', () => abrirEdu(b.dataset.det!)),
 )
 
+document.getElementById('proyVerano')?.addEventListener('click', () => {
+  abrirDetalle(
+    '/logos/autonoma.edu.co.png',
+    textos['proy4.t'][lang],
+    textos['tray3.meta'][lang],
+    `<div class="det-texto">${textos['edu.verano.body'][lang]}</div>
+     <img class="cert-img" src="/certs/acelerogramas-proyecto.jpeg" alt="">
+     <img class="cert-img" src="/certs/verano-investigacion.jpeg" alt="">`,
+  )
+})
+
 function abrirCert(c: Cert): void {
   const url = certUrl(c)
   const partes: string[] = []
   if (c.id) partes.push(`<p class="det-cred">${textos['det.credencial'][lang]}: <code>${c.id}</code>${url ? ` · <a class="cver hover-target" href="${url}" target="_blank" rel="noopener">${textos['cvv.ver'][lang]}</a>` : ''}</p>`)
   if (c.media) {
-    partes.push(`<object class="pdf-frame" data="${c.media}" type="application/pdf"><p>${textos['det.pdfalt'][lang]}</p></object>`)
+    if (c.media.endsWith('.pdf')) {
+      partes.push(`<object class="pdf-frame" data="${c.media}" type="application/pdf"><p>${textos['det.pdfalt'][lang]}</p></object>`)
+    } else {
+      partes.push(`<img class="cert-img" src="${c.media}" alt="${c.nombre}">`)
+    }
     partes.push(`<p style="margin-top:10px"><a class="cver hover-target" href="${c.media}" target="_blank" rel="noopener">${textos['det.pdfalt'][lang]}</a></p>`)
   }
   abrirDetalle(c.logo ? `/logos/${c.logo}` : null, c.nombre, `${c.emisor} · ${c.fecha}`, partes.join(''))
@@ -280,7 +295,7 @@ function htmlCerts(): string {
   const items = visibles.map((c, i) => {
     const idx = certificados.indexOf(c)
     const logo = c.logo ? `<img class="clogo" src="/logos/${c.logo}" alt="">` : ''
-    const doc = c.media ? ' <span class="cdoc">PDF</span>' : ''
+    const doc = c.media ? ' <span class="cdoc">DOC</span>' : ''
     return `<button class="cert-item hover-target" data-idx="${idx}" style="animation-delay:${Math.min(i * 40, 500)}ms">
       <span class="ccat">${certCats[c.cat][cvLang]}</span>
       ${logo}<b>${c.nombre}${doc}</b>

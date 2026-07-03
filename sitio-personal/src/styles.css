@@ -168,6 +168,7 @@ h2 { font-family: var(--serif); font-size: clamp(34px, 4.6vw, 58px); line-height
 .det-cred { font-size: 14px; color: var(--muted); margin-bottom: 14px; }
 .det-cred code { background: rgba(28,26,23,.07); padding: 2px 8px; border-radius: 6px; }
 .pdf-frame { width: 100%; height: 60vh; border: 1px solid rgba(28,26,23,.12); border-radius: 12px; background: #fff; }
+.cert-img { width: 100%; border: 1px solid rgba(28,26,23,.12); border-radius: 12px; background: #fff; margin-bottom: 10px; }
 
 /* logos y marca PDF en la lista de certificados */
 .clogo { width: 20px; height: 20px; border-radius: 5px; object-fit: contain; vertical-align: -4px; margin-right: 6px; }
@@ -198,6 +199,8 @@ h2 { font-family: var(--serif); font-size: clamp(34px, 4.6vw, 58px); line-height
 @keyframes tickfade { 0% { opacity: 0; } 25%, 80% { opacity: 1; } 100% { opacity: 0; } }
 .clock-hand { animation: clockspin 6s linear infinite; transform-origin: 268px 136px; }
 @keyframes clockspin { to { transform: rotate(360deg); } }
+.sismo-linea { stroke-dasharray: 900; stroke-dashoffset: 900; animation: sismodraw 5s linear infinite; }
+@keyframes sismodraw { 0% { stroke-dashoffset: 900; } 70%, 92% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
 .pcard .body { padding: 24px 26px 28px; }
 .pcard h3 { font-family: var(--serif); font-size: 24px; margin-bottom: 8px; }
 .pcard p { font-size: 15px; color: var(--muted); }
