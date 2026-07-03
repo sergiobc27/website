@@ -5,8 +5,12 @@ import { Reveal, RevealItem } from './Reveal';
 const CIFRAS = [
   { valor: 764, sufijo: 'M', etiqueta: 'observaciones cargadas', color: 'text-primary' },
   { valor: 13, sufijo: '', etiqueta: 'variables hidrometeorológicas', color: 'text-secondary' },
-  { valor: 15, sufijo: '', etiqueta: 'curvas IDF publicables', color: 'text-success' },
-  { valor: 0, sufijo: '', etiqueta: 'costo de operación ($)', color: 'text-primary' },
+  { valor: 33, sufijo: '', etiqueta: 'departamentos (cobertura nacional)', color: 'text-success' },
+  { valor: 17976, sufijo: '', etiqueta: 'estaciones en el catálogo', color: 'text-primary' },
+  { valor: 15, sufijo: '', etiqueta: 'curvas IDF publicables', color: 'text-secondary' },
+  { valor: 15, sufijo: '', etiqueta: 'gráficas interactivas', color: 'text-success' },
+  { valor: 38, sufijo: '', etiqueta: 'referencias citadas', color: 'text-primary' },
+  { valor: 0, sufijo: '', etiqueta: 'costo de operación ($)', color: 'text-secondary' },
 ];
 
 function Contador({ valor, sufijo, reducido }: { valor: number; sufijo: string; reducido: boolean }) {
