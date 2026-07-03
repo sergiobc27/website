@@ -4,9 +4,8 @@ import { Reveal, RevealItem } from './Reveal';
 
 const CIFRAS = [
   { valor: 400, sufijo: 'M+', etiqueta: 'registros procesados', color: 'text-primary' },
-  { valor: 569, sufijo: '', etiqueta: 'municipios', color: 'text-secondary' },
   { valor: 15, sufijo: '', etiqueta: 'curvas IDF publicables', color: 'text-success' },
-  { valor: 0, sufijo: '', etiqueta: 'costo de operación ($)', color: 'text-primary' },
+  { valor: 0, sufijo: '', etiqueta: 'costo de operación ($)', color: 'text-secondary' },
 ];
 
 function Contador({ valor, sufijo, reducido }: { valor: number; sufijo: string; reducido: boolean }) {
@@ -57,7 +56,7 @@ export function SeccionCifras() {
   const reducido = usePrefersReducedMotion();
   return (
     <section className="bg-gradient-to-b from-[#fbf7ee] to-[#fbe9c9] px-6 py-16 dark:from-[#15110a] dark:to-[#1b1407] md:px-10">
-      <Reveal className="mx-auto grid max-w-5xl grid-cols-2 gap-6 md:grid-cols-4">
+      <Reveal className="mx-auto grid max-w-4xl grid-cols-1 gap-6 sm:grid-cols-3">
         {CIFRAS.map(({ valor, sufijo, etiqueta, color }) => (
           <RevealItem key={etiqueta} className="text-center">
             <div className={`text-5xl font-black leading-none tracking-tight md:text-7xl ${color}`}>
