@@ -10,6 +10,7 @@ const PASOS = [
   {
     icon: Clock,
     tono: 'text-muted-foreground',
+    chip: 'bg-muted-foreground/10',
     kicker: 'El problema',
     titulo: 'Conseguir los datos era una odisea',
     texto:
@@ -18,6 +19,7 @@ const PASOS = [
   {
     icon: Cog,
     tono: 'text-secondary',
+    chip: 'bg-secondary/10',
     kicker: 'Lo que construimos',
     titulo: 'Automatizar, ordenar, publicar',
     texto:
@@ -26,6 +28,7 @@ const PASOS = [
   {
     icon: Zap,
     tono: 'text-success',
+    chip: 'bg-success/10',
     kicker: 'El resultado',
     titulo: 'Todo en segundos',
     texto:
@@ -55,10 +58,10 @@ export function SeccionProblemaSolucion() {
             <Fragment key={p.kicker}>
               <RevealItem className="group flex flex-col rounded-2xl border border-border bg-card p-6 transition-all duration-300 hover:-translate-y-1 hover:border-secondary hover:shadow-glow">
                 <span
-                  className={`paso-icono anim-float mb-4 inline-flex ${p.tono}`}
-                  style={{ animationDelay: `${i * 0.3}s` }}
+                  className={`paso-chip mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl ${p.chip} ${p.tono}`}
+                  style={{ animationDelay: `${i * 0.4}s` }}
                 >
-                  <p.icon className="relative h-9 w-9 transition-transform duration-300 group-hover:scale-125" />
+                  <p.icon className="h-7 w-7 transition-transform duration-300 group-hover:scale-110" />
                 </span>
                 <p className="text-[0.7rem] font-bold uppercase tracking-wider text-muted-foreground">{p.kicker}</p>
                 <h3 className="mt-0.5 font-bold text-card-foreground">{p.titulo}</h3>
