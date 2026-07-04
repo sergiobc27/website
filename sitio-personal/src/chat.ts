@@ -51,7 +51,6 @@ export function initChat(): void {
   panel.className = 'chat-panel'
   panel.setAttribute('role', 'dialog')
   panel.setAttribute('aria-label', t('Chat sobre Sergio', 'Chat about Sergio'))
-  panel.hidden = true
   panel.innerHTML = `
     <div class="chat-head">
       <div>
@@ -131,21 +130,22 @@ export function initChat(): void {
 
   form.addEventListener('submit', (e) => { e.preventDefault(); void enviar(input.value) })
 
+  const abierto = () => panel.classList.contains('on')
   function abrir(): void {
-    panel.hidden = false
+    panel.classList.add('on')
     fab.classList.add('open')
     if (!msgs.childElementCount) saludo()
     input.focus()
   }
   function cerrarPanel(): void {
-    panel.hidden = true
+    panel.classList.remove('on')
     fab.classList.remove('open')
     fab.focus()
   }
-  fab.addEventListener('click', () => (panel.hidden ? abrir() : cerrarPanel()))
+  fab.addEventListener('click', () => (abierto() ? cerrarPanel() : abrir()))
   cerrar.addEventListener('click', cerrarPanel)
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !panel.hidden) cerrarPanel()
+    if (e.key === 'Escape' && abierto()) cerrarPanel()
   })
 
   document.body.append(fab, panel)

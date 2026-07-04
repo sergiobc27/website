@@ -305,7 +305,13 @@ footer .wave-footer { position: absolute; top: -2px; left: 0; right: 0; width: 1
 .chat-fab svg { width: 26px; height: 26px; }
 .chat-fab:hover { transform: translateY(-2px); background: var(--accent); }
 .chat-fab.open { background: var(--accent); }
-.chat-panel { position: fixed; right: 22px; bottom: 90px; z-index: 900; width: min(370px, calc(100vw - 32px)); height: min(520px, calc(100vh - 130px)); display: flex; flex-direction: column; background: var(--bg); border: 1px solid rgba(28,26,23,.14); border-radius: 14px; box-shadow: 0 18px 50px rgba(28,26,23,.22); overflow: hidden; }
+.chat-panel { position: fixed; right: 22px; bottom: 90px; z-index: 900; width: min(370px, calc(100vw - 32px)); height: min(520px, calc(100vh - 130px)); display: flex; flex-direction: column; background: var(--bg); border: 1px solid rgba(28,26,23,.14); border-radius: 14px; box-shadow: 0 18px 50px rgba(28,26,23,.22); overflow: hidden; transform-origin: bottom right; opacity: 0; visibility: hidden; transform: translateY(14px) scale(.96); transition: opacity .28s ease, transform .32s cubic-bezier(.34,1.4,.4,1), visibility 0s linear .32s; }
+.chat-panel.on { opacity: 1; visibility: visible; transform: none; transition: opacity .28s ease, transform .32s cubic-bezier(.34,1.4,.4,1), visibility 0s; }
+.chat-msg, .chat-chips { animation: chatin .28s cubic-bezier(.25,1,.4,1) both; }
+@keyframes chatin { from { opacity: 0; transform: translateY(8px); } }
+.chat-fab svg { transition: transform .25s ease; }
+.chat-fab.open svg { transform: rotate(-8deg) scale(.9); }
+@media (prefers-reduced-motion: reduce) { .chat-panel, .chat-panel.on, .chat-fab svg { transition: none; } .chat-msg, .chat-chips { animation: none; } }
 .chat-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 13px 16px; background: var(--ink); color: var(--bg); }
 .chat-head b { font-family: var(--serif); font-size: 1.02rem; display: block; line-height: 1.25; }
 .chat-head small { opacity: .72; font-size: .74rem; }
