@@ -234,7 +234,7 @@ function abrirEdu(clave: string): void {
     return
   }
   const mapa: Record<string, { logo: string; t: string; meta: string; body: string }> = {
-    cuc: { logo: 'cuc.edu.co.png', t: textos['tray2.t'][lang], meta: textos['tray2.meta'][lang], body: textos['edu.cuc.body'][lang] },
+    cuc: { logo: 'cuc.edu.co.svg', t: textos['tray2.t'][lang], meta: textos['tray2.meta'][lang], body: textos['edu.cuc.body'][lang] },
     verano: { logo: 'autonoma.edu.co.png', t: textos['tray3.t'][lang], meta: textos['tray3.meta'][lang], body: textos['edu.verano.body'][lang] },
     uninorte: { logo: 'uninorte.edu.co.png', t: textos['tray4.t'][lang], meta: textos['tray4.meta'][lang], body: textos['edu.uninorte.body'][lang] },
   }
@@ -253,8 +253,8 @@ document.getElementById('proyVerano')?.addEventListener('click', () => {
     textos['proy4.t'][lang],
     textos['tray3.meta'][lang],
     `<div class="det-texto">${textos['edu.verano.body'][lang]}</div>
-     <img class="cert-img" src="/certs/acelerogramas-proyecto.jpeg" alt="">
-     <img class="cert-img" src="/certs/verano-investigacion.jpeg" alt="">`,
+     <object class="pdf-frame" data="/certs/acelerogramas-proyecto.pdf" type="application/pdf"><p>${textos['det.pdfalt'][lang]}</p></object>
+     <p style="margin-top:10px"><a class="cver hover-target" href="/certs/acelerogramas-proyecto.pdf" target="_blank" rel="noopener">${textos['det.pdfalt'][lang]}</a> · <a class="cver hover-target" href="/certs/verano-investigacion.pdf" target="_blank" rel="noopener">Certificado ↗</a></p>`,
   )
 })
 
