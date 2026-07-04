@@ -492,7 +492,6 @@ test("red-team: lugar malicioso del extractor llega truncado y nunca como instru
 });
 
 // --- Tanda 2: corrección -----------------------------------------------------
-// (spec: docs/superpowers/specs/2026-06-12-bot-tanda2-correccion-design.md)
 
 // #7 — parseIntentJson intercambia un rango de años invertido.
 test("parseIntentJson intercambia anioDesde/anioHasta si vienen invertidos", () => {

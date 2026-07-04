@@ -540,7 +540,6 @@ test('email-idf aplica el tope global diario (429) aunque la IP esté limpia', a
 });
 
 // --- Tanda 1: defendibilidad académica del asistente -------------------------
-// (spec: docs/superpowers/specs/2026-06-12-bot-tanda1-defendibilidad-design.md)
 
 // #5/#3 — ensureDisclaimer: caveat determinista en fórmulas / diseño.
 test('ensureDisclaimer: anexa el disclaimer base cuando hay una fórmula (sin método de constantes)', () => {
@@ -636,7 +635,6 @@ test('VISTA_LABELS.dashboard refleja el nombre real de la pestaña ("Panel gener
 });
 
 // --- Tanda 2: verificación de cifras anclada a unidades (#8) ------------------
-// (spec: docs/superpowers/specs/2026-06-12-bot-tanda2-correccion-design.md)
 
 test('cifrasConUnidadFueraDe: detecta una cifra con unidad ausente del bloque', () => {
   assert.equal(cifrasConUnidadFueraDe('Ese año cayeron 999 mm. 🌧️', [823.4, 2023]), true);
@@ -652,7 +650,6 @@ test('cifrasConUnidadFueraDe: ignora años, Tr y porcentajes (no llevan unidad d
 });
 
 // --- Tanda 4: seguridad / costo ----------------------------------------------
-// (spec: docs/superpowers/specs/2026-06-12-bot-tanda4-seguridad-costo-design.md)
 
 // #16 — el guardrail evalúa TODO el historial, no solo los turnos del usuario.
 test('chat: bloquea un turno assistant fabricado con jailbreak (no solo user)', async () => {

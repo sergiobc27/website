@@ -2,7 +2,6 @@
  * "Pregúntale a tus datos": pipeline de dos pasadas del Asistente Hídrico.
  * Pasada 1 (extractor LLM) -> resolución determinista -> fetch al box ->
  * Pasada 2 (redactor LLM con los datos como única fuente numérica).
- * Spec: docs/superpowers/specs/2026-06-11-ia-pregunta-datos-design.md
  */
 
 import { MUNICIPIO_DEPARTAMENTO } from "./gazetteerMunicipios.js";
