@@ -301,12 +301,12 @@ export const certificados: Cert[] = [
   { nombre: 'Pavement Materials and Design (IRC and MoRTH)', emisor: 'L&T EduTech', fecha: '2025', cat: 'civil', id: '5YEALOLZJUE7', logo: 'lntedutech.com.png', media: '/certs/pavement-materials.jpeg' },
   { nombre: 'Highway Geometry and Pavement Design', emisor: 'L&T EduTech', fecha: '2025', cat: 'civil', id: '412024CLX6AV', logo: 'lntedutech.com.png', media: '/certs/highway-geometry.jpeg' },
   { nombre: 'Mastering Bitumen for Better Roads', emisor: 'École des Ponts ParisTech', fecha: '2025', cat: 'civil', id: '9YZMUVLMH7ZV', logo: 'ecoledesponts.fr.png', media: '/certs/bitumen.jpeg' },
-  { nombre: 'Verano de Investigación Científica (acelerogramas, Barichara)', emisor: 'U. Autónoma de Manizales', fecha: '2022', cat: 'civil', logo: 'autonoma.edu.co.png', media: '/certs/verano-investigacion.jpeg' },
+  { nombre: 'Verano de Investigación Científica (acelerogramas, Barichara)', emisor: 'U. Autónoma de Manizales', fecha: '2022', cat: 'civil', logo: 'autonoma.edu.co.png', media: '/certs/verano-investigacion.pdf' },
   { nombre: 'Foundations of Project Management', emisor: 'Google', fecha: '2025', cat: 'gestion', id: '83S2Z8CAOB4Z', logo: 'google.com.png', media: '/certs/foundations-project-management.pdf' },
   { nombre: 'Six Sigma White Belt', emisor: 'CSSC', fecha: '2023', cat: 'gestion', logo: 'sixsigmacouncil.org.png', media: '/certs/six-sigma-white-belt.jpeg' },
-  { nombre: 'Redacción Científica', emisor: 'Universidad de la Costa', fecha: '2025', cat: 'gestion', logo: 'cuc.edu.co.png', media: '/certs/redaccion-cientifica.pdf' },
-  { nombre: 'Monitor académico UNICOSTA', emisor: 'Universidad de la Costa', fecha: '2022', cat: 'gestion', logo: 'cuc.edu.co.png', media: '/certs/monitor-unicosta.jpeg' },
-  { nombre: 'Semillero de investigación adjunto', emisor: 'Universidad de la Costa', fecha: '2022', cat: 'gestion', logo: 'cuc.edu.co.png', media: '/certs/semillero-adjunto.jpeg' },
+  { nombre: 'Redacción Científica', emisor: 'Universidad de la Costa', fecha: '2025', cat: 'gestion', logo: 'cuc.edu.co.svg', media: '/certs/redaccion-cientifica.pdf' },
+  { nombre: 'Monitor académico UNICOSTA', emisor: 'Universidad de la Costa', fecha: '2022', cat: 'gestion', logo: 'cuc.edu.co.svg', media: '/certs/monitor-unicosta.jpeg' },
+  { nombre: 'Semillero de investigación adjunto', emisor: 'Universidad de la Costa', fecha: '2022', cat: 'gestion', logo: 'cuc.edu.co.svg', media: '/certs/semillero-adjunto.pdf' },
 ]
 
 /* ===== Experiencia completa (texto íntegro de LinkedIn, ES y EN) ===== */
