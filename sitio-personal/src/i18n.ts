@@ -421,7 +421,7 @@ export const roles: Rol[] = [
     },
   },
   {
-    id: 'uhc-csr', empresa: 'Foundever', logoEmpresa: 'foundever.com.png', logoCuenta: 'uhc.com.svg', cuenta: 'UHC Servicio',
+    id: 'uhc-csr', empresa: 'Foundever', logoEmpresa: 'foundever.com.png', logoCuenta: 'uhc.com.svg', cuenta: 'UnitedHealthcare',
     titulo: { es: 'Representante bilingüe de servicio · UnitedHealthcare', en: 'Bilingual Customer Service Representative · UnitedHealthcare' },
     fechas: { es: 'Jun 2022 – Dic 2022 · 7 meses', en: 'Jun 2022 – Dec 2022 · 7 mos' },
     lugar: { es: 'Barranquilla, Colombia · En remoto', en: 'Barranquilla, Colombia · Remote' },
