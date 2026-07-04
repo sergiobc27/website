@@ -44,9 +44,19 @@ export function initChat(): void {
   const fab = document.createElement('button')
   fab.className = 'chat-fab hover-target'
   fab.setAttribute('aria-label', t('Abrir asistente con IA sobre Sergio', 'Open AI assistant about Sergio'))
-  // cabeza de robot: antena, ojos y sonrisa; insignia "IA" encima
+  // cabeza de robot con casco blanco de ingeniero: antena, ojos y sonrisa;
+  // insignia "IA" encima
   fab.innerHTML =
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="2.2" x2="12" y2="5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="2.2" r="1.3" fill="currentColor"/><rect x="4.5" y="5" width="15" height="12.5" rx="4" fill="currentColor"/><circle cx="9.2" cy="10.3" r="1.5" fill="var(--bg)"/><circle cx="14.8" cy="10.3" r="1.5" fill="var(--bg)"/><path d="M9 14.2c.9.9 1.9 1.35 3 1.35s2.1-.45 3-1.35" fill="none" stroke="var(--bg)" stroke-width="1.4" stroke-linecap="round"/><rect x="2" y="9" width="1.6" height="4.5" rx="0.8" fill="currentColor"/><rect x="20.4" y="9" width="1.6" height="4.5" rx="0.8" fill="currentColor"/></svg>' +
+    '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+    '<line x1="12" y1="1.7" x2="12" y2="3.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="1.6" r="1.1" fill="currentColor"/>' +
+    '<rect x="4.5" y="8.2" width="15" height="10.6" rx="4" fill="currentColor"/>' +
+    '<rect x="2" y="11.3" width="1.6" height="4.5" rx="0.8" fill="currentColor"/><rect x="20.4" y="11.3" width="1.6" height="4.5" rx="0.8" fill="currentColor"/>' +
+    '<path d="M5.5 8 A 6.5 5.2 0 0 1 18.5 8 Z" fill="#fff"/>' +
+    '<rect x="10.9" y="3.1" width="2.2" height="2.6" rx="1.1" fill="#fff"/>' +
+    '<rect x="3.8" y="7.6" width="16.4" height="1.8" rx="0.9" fill="#fff"/>' +
+    '<circle cx="9.2" cy="12.9" r="1.5" fill="var(--bg)"/><circle cx="14.8" cy="12.9" r="1.5" fill="var(--bg)"/>' +
+    '<path d="M9 16.1c.9.9 1.9 1.35 3 1.35s2.1-.45 3-1.35" fill="none" stroke="var(--bg)" stroke-width="1.4" stroke-linecap="round"/>' +
+    '</svg>' +
     `<span class="chat-badge" aria-hidden="true">${t('IA', 'AI')}</span>`
 
   const pill = document.createElement('button')
