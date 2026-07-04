@@ -28,21 +28,21 @@ Antes: Teleperformance (jun - jul 2021), representante bilingüe para Walmart.co
 Logro transversal: automatización de reportes con más del 50% de ahorro en tiempo de preparación; modelos de datos con DAX personalizado; planificación de personal equilibrando SLA y costos.
 
 EDUCACIÓN:
-- Universidad de la Costa (CUC), Ingeniería Civil, ago 2021 - dic 2025. Graduado con tesis honorífica. Promedio 4.34/5.00 (último semestre 4.74). Monitor académico. Reconocimiento por alto puntaje en Saber Pro. Representante nacional en RedCOLSI 2025 con puntaje perfecto 100/100. Miembro adjunto del semillero de investigación.
+- Universidad de la Costa (CUC), Ingeniería Civil, ago 2021 - dic 2025. Graduado con tesis honorífica. Promedio 4.34/5.00 (último semestre 4.74). Monitor académico. Reconocimiento por alto puntaje en Saber Pro. Proyecto de tesis presentado en las TRES etapas de RedCOLSI 2025: Expociencias CUC (institucional), XXII EDESI Nodo Atlántico en Barranquilla (departamental, proyecto MERITORIO) y XXVIII ENISI en Bogotá, oct 2025 (nacional, como ponente, con PUNTAJE PERFECTO 100/100). Miembro adjunto del semillero de investigación.
 - Universidad del Norte, Ingeniería Civil, 2020-2021 (primeros semestres, luego transferido a la CUC).
 - Verano de Investigación Programa Delfín (jul 2022, U. Autónoma de Manizales con la U. Veracruzana de México): análisis de acelerogramas en Barichara, Santander, con énfasis en el historial sísmico colombiano.
 
 TESIS Y PROYECTOS:
-- Tesis honorífica: "Automatización inteligente para la gestión visual de datos hidrometeorológicos del IDEAM con Python y Power BI". Es una plataforma web EN VIVO en ideam.sergiobc.com con cientos de millones de registros del IDEAM: consultas, mapas, cálculos según normativa colombiana (RAS, INVÍAS), curvas IDF, asistente con IA y reportes PDF.
+- Tesis honorífica: "Automatización inteligente para la gestión visual de datos hidrometeorológicos del IDEAM con Python y Power BI". Es una plataforma web EN VIVO en ideam.sergiobc.com con cientos de millones de registros del IDEAM: consultas, mapas, cálculos según normativa colombiana (RAS, INVÍAS), curvas IDF, asistente con IA y reportes PDF. El documento completo de la tesis está publicado en el repositorio institucional de la CUC: https://repositorio.cuc.edu.co/entities/publication/ceb07de4-0501-4248-bffe-30807146fdf0
 - Automatizador de datos públicos: paquete Python publicado en PyPI (ideam-data-automator) que extrae, valida y organiza datos abiertos de Colombia, con CLI y TUI propias.
 - Analítica para workforce: reportes automatizados y dashboards en Power BI, Access y Excel (DAX, VBA, Power Query) para operaciones globales en tiempo real.
 - Investigación sísmica (Programa Delfín 2022): análisis de acelerogramas en Barichara.
 
-CERTIFICACIONES (29 en total, muchas con credencial verificable en Coursera; se pueden ver todas en la sección Hoja de vida de sergiobc.com):
+CERTIFICACIONES (32 en total, muchas con credencial verificable en Coursera; se pueden ver todas en la sección Hoja de vida de sergiobc.com):
 - IA (8, Google, 2026): Google AI Professional Certificate y la serie AI for (App Building, Data Analysis, Content Creation, Writing, Research, Brainstorming) más AI Fundamentals.
 - Datos y BI (11): Power BI y Excel de Microsoft (ETL in Power BI, Harnessing the Power of Data, Preparing Data with Excel, Work Smarter with Excel con honores), análisis de datos de LinkedIn y Microsoft + LinkedIn.
 - Ingeniería civil (5): pavimentos y vías de L&T EduTech (3), bitumen de École des Ponts ParisTech, Verano de Investigación UAM.
-- Gestión y calidad (5): Foundations of Project Management (Google), Six Sigma White Belt (CSSC), Redacción Científica (CUC), monitor académico y semillero (CUC).
+- Gestión y calidad (8): Foundations of Project Management (Google), Six Sigma White Belt (CSSC), Redacción Científica (CUC), monitor académico y semillero (CUC), y los certificados de las tres etapas de RedCOLSI 2025 (Expociencias CUC, EDESI meritorio y ENISI nacional 100/100).
 
 HABILIDADES: Python, DAX, Excel avanzado (VBA, Power Query), Access, Power BI, modelado relacional de datos; prompt engineering e integración de flujos con LLMs; Workforce Management (WFM), Lean Six Sigma, gestión ágil; NICE IEX, Alvaria, Citrix, AWS (extracción de datos).
 
