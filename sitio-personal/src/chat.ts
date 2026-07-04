@@ -43,19 +43,26 @@ export function initChat(): void {
 
   const fab = document.createElement('button')
   fab.className = 'chat-fab hover-target'
-  fab.setAttribute('aria-label', t('Abrir chat sobre Sergio', 'Open chat about Sergio'))
+  fab.setAttribute('aria-label', t('Abrir asistente con IA sobre Sergio', 'Open AI assistant about Sergio'))
+  // cabeza de robot: antena, ojos y sonrisa; insignia "IA" encima
   fab.innerHTML =
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H9l-4.2 3.6c-.4.34-.8.05-.8-.45V5.5z" fill="currentColor"/><circle cx="9" cy="9.5" r="1.15" fill="var(--bg)"/><circle cx="12.2" cy="9.5" r="1.15" fill="var(--bg)"/><circle cx="15.4" cy="9.5" r="1.15" fill="var(--bg)"/></svg>'
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="2.2" x2="12" y2="5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="2.2" r="1.3" fill="currentColor"/><rect x="4.5" y="5" width="15" height="12.5" rx="4" fill="currentColor"/><circle cx="9.2" cy="10.3" r="1.5" fill="var(--bg)"/><circle cx="14.8" cy="10.3" r="1.5" fill="var(--bg)"/><path d="M9 14.2c.9.9 1.9 1.35 3 1.35s2.1-.45 3-1.35" fill="none" stroke="var(--bg)" stroke-width="1.4" stroke-linecap="round"/><rect x="2" y="9" width="1.6" height="4.5" rx="0.8" fill="currentColor"/><rect x="20.4" y="9" width="1.6" height="4.5" rx="0.8" fill="currentColor"/></svg>' +
+    `<span class="chat-badge" aria-hidden="true">${t('IA', 'AI')}</span>`
+
+  const pill = document.createElement('button')
+  pill.type = 'button'
+  pill.className = 'chat-pill hover-target'
+  pill.innerHTML = `<span aria-hidden="true">✦</span> ${t('Pregúntame sobre Sergio', 'Ask me about Sergio')}`
 
   const panel = document.createElement('div')
   panel.className = 'chat-panel'
   panel.setAttribute('role', 'dialog')
-  panel.setAttribute('aria-label', t('Chat sobre Sergio', 'Chat about Sergio'))
+  panel.setAttribute('aria-label', t('Asistente con IA sobre Sergio', 'AI assistant about Sergio'))
   panel.innerHTML = `
     <div class="chat-head">
       <div>
         <b>${t('Pregúntame por Sergio', 'Ask me about Sergio')}</b>
-        <small>${t('Responde en tu idioma', 'Replies in your language')}</small>
+        <small>${t('Asistente con IA · responde en tu idioma', 'AI assistant · replies in your language')}</small>
       </div>
       <button class="chat-close hover-target" aria-label="${t('Cerrar', 'Close')}">×</button>
     </div>
@@ -134,6 +141,7 @@ export function initChat(): void {
   function abrir(): void {
     panel.classList.add('on')
     fab.classList.add('open')
+    pill.classList.remove('on')
     if (!msgs.childElementCount) saludo()
     input.focus()
   }
@@ -143,10 +151,13 @@ export function initChat(): void {
     fab.focus()
   }
   fab.addEventListener('click', () => (abierto() ? cerrarPanel() : abrir()))
+  pill.addEventListener('click', abrir)
   cerrar.addEventListener('click', cerrarPanel)
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && abierto()) cerrarPanel()
   })
 
-  document.body.append(fab, panel)
+  document.body.append(fab, pill, panel)
+  // la etiqueta saluda un momento después de cargar, si el chat sigue cerrado
+  window.setTimeout(() => { if (!abierto()) pill.classList.add('on') }, 1600)
 }
