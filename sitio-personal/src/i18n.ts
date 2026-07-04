@@ -109,18 +109,18 @@ export const textos: Record<string, { es: string; en: string }> = {
   'edu.ver': { es: 'Ver detalle completo +', en: 'See full detail +' },
   'edu.cuc.body': {
     es: `<p><b>Ingeniería Civil</b> · Agosto 2021 – Diciembre 2025 · Barranquilla, Colombia</p><ul>
-<li>Graduado con <b>tesis honorífica</b>: "Automatización inteligente para la gestión visual de datos hidrometeorológicos del IDEAM con Python y Power BI".</li>
+<li>Graduado con <b>tesis honorífica</b>: "Automatización inteligente para la gestión visual de datos hidrometeorológicos del IDEAM con Python y Power BI". <a href="https://repositorio.cuc.edu.co/entities/publication/ceb07de4-0501-4248-bffe-30807146fdf0" target="_blank" rel="noopener"><b>Leer la tesis en el repositorio CUC ↗</b></a></li>
 <li>Promedio acumulado <b>4.34 / 5.00</b> (último semestre: 4.74 / 5.00).</li>
 <li>Monitor académico (tutor de estudiantes).</li>
 <li>Reconocimiento por alto puntaje en las pruebas nacionales <b>Saber Pro</b>.</li>
-<li>Representante nacional en <b>RedCOLSI 2025</b>: puntaje perfecto (100/100) en la presentación del proyecto de investigación.</li>
+<li>Proyecto de tesis presentado en las tres etapas de <b>RedCOLSI 2025</b>: Expociencias CUC (institucional), XXII EDESI Nodo Atlántico (departamental, <b>proyecto meritorio</b>) y XXVIII ENISI en Bogotá (nacional, <b>puntaje perfecto 100/100</b> como ponente).</li>
 <li>Miembro adjunto del semillero de investigación.</li></ul>`,
     en: `<p><b>B.S. in Civil Engineering</b> · August 2021 – December 2025 · Barranquilla, Colombia</p><ul>
-<li>Graduated with an <b>honors thesis</b>: "Intelligent automation for the visual management of IDEAM hydrometeorological data using Python and Power BI".</li>
+<li>Graduated with an <b>honors thesis</b>: "Intelligent automation for the visual management of IDEAM hydrometeorological data using Python and Power BI". <a href="https://repositorio.cuc.edu.co/entities/publication/ceb07de4-0501-4248-bffe-30807146fdf0" target="_blank" rel="noopener"><b>Read the thesis in the CUC repository ↗</b></a></li>
 <li>Cumulative GPA <b>4.34 / 5.00</b> (last semester: 4.74 / 5.00).</li>
 <li>Academic tutor / monitor.</li>
 <li>Top-tier score recognition on the national <b>Saber Pro</b> standardized examination.</li>
-<li>National representative at <b>RedCOLSI 2025</b>: perfect score (100/100) on the research project presentation.</li>
+<li>Thesis project presented at all three stages of <b>RedCOLSI 2025</b>: Expociencias CUC (institutional), XXII EDESI Atlántico Node (departmental, <b>meritorious project</b>) and XXVIII ENISI in Bogotá (national, <b>perfect 100/100 score</b> as speaker).</li>
 <li>Attached research seedbed member.</li></ul>`,
   },
   'edu.uninorte.body': {
@@ -176,8 +176,8 @@ export const textos: Record<string, { es: string; en: string }> = {
   'cv.libro': { es: '▲ clic para abrir el visor', en: '▲ click to open the viewer' },
   'cv.h': { es: 'Un visor interactivo, no un PDF.', en: 'An interactive viewer, not a PDF.' },
   'cv.p': {
-    es: 'Haz clic en las páginas: se abre un visor animado con pestañas de español e inglés, mi perfil completo y las 29 certificaciones filtrables por tema, muchas con credencial verificable. La descarga en PDF queda como opción secundaria.',
-    en: 'Click the pages: an animated viewer opens with Spanish and English tabs, my full profile and all 29 certifications filterable by topic, many with a verifiable credential. The PDF download stays as a secondary option.',
+    es: 'Haz clic en las páginas: se abre un visor animado con pestañas de español e inglés, mi perfil completo y las 32 certificaciones filtrables por tema, muchas con credencial verificable. La descarga en PDF queda como opción secundaria.',
+    en: 'Click the pages: an animated viewer opens with Spanish and English tabs, my full profile and all 32 certifications filterable by topic, many with a verifiable credential. The PDF download stays as a secondary option.',
   },
   'cv.btn': { es: 'Abrir hoja de vida', en: 'Open resume' },
 
@@ -197,7 +197,7 @@ export const textos: Record<string, { es: string; en: string }> = {
   'foot.c6.p': { es: 'Mi tesis, en vivo', en: 'My thesis, live' },
 
   'cvv.descargar': { es: 'Descargar PDF', en: 'Download PDF' },
-  'cvv.certs.h': { es: 'Certificaciones (29)', en: 'Certifications (29)' },
+  'cvv.certs.h': { es: 'Certificaciones (32)', en: 'Certifications (32)' },
   'cvv.todas': { es: 'Todas', en: 'All' },
   'cvv.ver': { es: 'Ver credencial ↗', en: 'View credential ↗' },
   'cvv.clic': { es: 'Toca cualquier certificado para abrirlo con su documento.', en: 'Tap any certification to open it with its document.' },
@@ -220,7 +220,7 @@ export const cvPerfil: Record<Lang, string> = {
       <p style="margin-top:10px"><b>Teleperformance · Representante bilingüe, Walmart.com</b> · Jun – Jul 2021</p>
     </div>
     <div class="cv-sec"><h4>Educación</h4><ul>
-      <li><b>Universidad de la Costa (CUC)</b> · Ingeniería Civil · 2021 – Dic 2025 · Graduado con tesis honorífica (automatización de datos IDEAM con Python y Power BI), promedio 4.34, monitor académico, Saber Pro destacado y RedCOLSI 2025 con 100/100.</li>
+      <li><b>Universidad de la Costa (CUC)</b> · Ingeniería Civil · 2021 – Dic 2025 · Graduado con tesis honorífica (automatización de datos IDEAM con Python y Power BI; <a href="https://repositorio.cuc.edu.co/entities/publication/ceb07de4-0501-4248-bffe-30807146fdf0" target="_blank" rel="noopener"><b>leerla en el repositorio CUC ↗</b></a>), promedio 4.34, monitor académico, Saber Pro destacado y RedCOLSI 2025 (meritorio departamental y 100/100 nacional).</li>
       <li><b>Universidad del Norte</b> · Ingeniería Civil · 2020 – 2021.</li>
     </ul></div>
     <div class="cv-sec"><h4>Habilidades</h4><ul>
@@ -242,7 +242,7 @@ export const cvPerfil: Record<Lang, string> = {
       <p style="margin-top:10px"><b>Teleperformance · Bilingual representative, Walmart.com</b> · Jun – Jul 2021</p>
     </div>
     <div class="cv-sec"><h4>Education</h4><ul>
-      <li><b>Universidad de la Costa (CUC)</b> · Civil Engineering · 2021 – Dec 2025 · Graduated with an honors thesis (IDEAM data automation with Python and Power BI), 4.34 GPA, academic tutor, top-tier Saber Pro score and RedCOLSI 2025 with 100/100.</li>
+      <li><b>Universidad de la Costa (CUC)</b> · Civil Engineering · 2021 – Dec 2025 · Graduated with an honors thesis (IDEAM data automation with Python and Power BI; <a href="https://repositorio.cuc.edu.co/entities/publication/ceb07de4-0501-4248-bffe-30807146fdf0" target="_blank" rel="noopener"><b>read it in the CUC repository ↗</b></a>), 4.34 GPA, academic tutor, top-tier Saber Pro score and RedCOLSI 2025 (departmental meritorious and national 100/100).</li>
       <li><b>Universidad del Norte</b> · Civil Engineering · 2020 – 2021.</li>
     </ul></div>
     <div class="cv-sec"><h4>Skills</h4><ul>
@@ -302,6 +302,9 @@ export const certificados: Cert[] = [
   { nombre: 'Highway Geometry and Pavement Design', emisor: 'L&T EduTech', fecha: '2025', cat: 'civil', id: '412024CLX6AV', logo: 'lntedutech.com.png', media: '/certs/highway-geometry.jpeg' },
   { nombre: 'Mastering Bitumen for Better Roads', emisor: 'École des Ponts ParisTech', fecha: '2025', cat: 'civil', id: '9YZMUVLMH7ZV', logo: 'ecoledesponts.fr.png', media: '/certs/bitumen.jpeg' },
   { nombre: 'Verano de Investigación Científica (acelerogramas, Barichara)', emisor: 'U. Autónoma de Manizales', fecha: '2022', cat: 'civil', logo: 'autonoma.edu.co.png', media: '/certs/verano-investigacion.pdf' },
+  { nombre: 'ENISI 2025: XXVIII Encuentro Nacional de Semilleros (ponente nacional, 100/100)', emisor: 'RedCOLSI', fecha: '2025', cat: 'gestion', logo: 'redcolsi.org.png', media: '/certs/enisi-2025.pdf' },
+  { nombre: 'EDESI 2025: XXII Encuentro Departamental de Semilleros (ponente, proyecto meritorio)', emisor: 'RedCOLSI Nodo Atlántico', fecha: '2025', cat: 'gestion', logo: 'redcolsi.org.png', media: '/certs/edesi-2025.pdf' },
+  { nombre: 'Expociencias CUC 2025: III Encuentro Institucional de Semilleros', emisor: 'Universidad de la Costa', fecha: '2025', cat: 'gestion', logo: 'cuc.edu.co.svg', media: '/certs/expociencias-cuc-2025.pdf' },
   { nombre: 'Foundations of Project Management', emisor: 'Google', fecha: '2025', cat: 'gestion', id: '83S2Z8CAOB4Z', logo: 'google.com.png', media: '/certs/foundations-project-management.pdf' },
   { nombre: 'Six Sigma White Belt', emisor: 'CSSC', fecha: '2023', cat: 'gestion', logo: 'sixsigmacouncil.org.png', media: '/certs/six-sigma-white-belt.jpeg' },
   { nombre: 'Redacción Científica', emisor: 'Universidad de la Costa', fecha: '2025', cat: 'gestion', logo: 'cuc.edu.co.svg', media: '/certs/redaccion-cientifica.pdf' },
