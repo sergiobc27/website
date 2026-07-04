@@ -1,3 +1,4 @@
+import { initChat } from './chat'
 import {
   textos, cvPerfil, certificados, certCats, certUrl, roles,
   metaDescripcion, titulos, type Lang, type CertCat, type Cert, type Rol,
@@ -364,3 +365,6 @@ modal.addEventListener('keydown', e => {
 
 /* ===================== arranque ===================== */
 aplicarIdioma(lang)
+
+/* asistente del portafolio */
+initChat()
