@@ -30,6 +30,7 @@ function aplicarIdioma(l: Lang): void {
   pintarChips()
   actualizarPdf()
   if (!modal.hidden) { cvLang = l; pintarCV() }
+  document.dispatchEvent(new CustomEvent('cambioidioma'))
 }
 
 let sweepTimer1 = 0, sweepTimer2 = 0
