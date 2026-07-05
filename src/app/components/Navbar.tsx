@@ -1,30 +1,7 @@
-import { Sun, Moon, Monitor, User, ChevronRight, History, Search, Trash2, Home, Menu, Github, Package, Linkedin } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Sun, Moon, ChevronRight, Search, Home, Menu, Github, Package, Linkedin } from 'lucide-react';
+import { useState } from 'react';
 import type { ExtractorRuntimeState } from './DataExtractor';
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-} from './ui/dropdown-menu';
-import {
-  AlertDialog,
-  AlertDialogTrigger,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogCancel,
-  AlertDialogAction,
-} from './ui/alert-dialog';
-import { toast } from 'sonner';
 import { getThemeChoice, applyTheme, type ThemeChoice } from '../lib/theme';
-import { clearLocalData } from '../lib/localData';
 import { CopyLinkButton } from './CopyLinkButton';
 
 interface NavbarProps {
@@ -43,15 +20,6 @@ function formatDuration(value: number) {
   return `${Math.floor(totalSeconds / 60)}m ${String(totalSeconds % 60).padStart(2, '0')}s`;
 }
 
-function readDownloadCount() {
-  try {
-    const history = JSON.parse(localStorage.getItem('ideam-history') || '[]');
-    return Array.isArray(history) ? history.length : 0;
-  } catch {
-    return 0;
-  }
-}
-
 // El botón rápido sol/luna alterna entre claro y oscuro explícitos, partiendo
 // del tema efectivo actual (si está en 'system', usa la preferencia del SO).
 function resolveQuickToggle(current: ThemeChoice): ThemeChoice {
@@ -63,12 +31,6 @@ function resolveQuickToggle(current: ThemeChoice): ThemeChoice {
 
 export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMenu }: NavbarProps) {
   const [theme, setTheme] = useState<ThemeChoice>(getThemeChoice);
-  const [downloadCount, setDownloadCount] = useState(0);
-
-  const refreshCount = () => setDownloadCount(readDownloadCount());
-  useEffect(() => {
-    refreshCount();
-  }, []);
 
   const onThemeChange = (value: string) => {
     const choice = value as ThemeChoice;
@@ -180,8 +142,8 @@ export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMenu }: NavbarP
         <button
           type="button"
           onClick={quickToggle}
-          className="group hidden h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-[transform,background-color,color] duration-150 ease-out hover:scale-105 hover:bg-muted hover:text-accent active:scale-95 sm:inline-flex md:h-10 md:w-10"
-          title="Cambiar tema (también en el menú de perfil)"
+          className="group inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-[transform,background-color,color] duration-150 ease-out hover:scale-105 hover:bg-muted hover:text-accent active:scale-95 md:h-10 md:w-10"
+          title="Cambiar tema"
           aria-label="Cambiar tema rápido"
         >
           {resolveQuickToggle(theme) === 'light' ? <Sun className="anim-wiggle h-5 w-5" /> : <Moon className="anim-wiggle h-5 w-5" />}
@@ -222,82 +184,6 @@ export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMenu }: NavbarP
         >
           <Linkedin className="anim-wiggle h-5 w-5" />
         </a>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#A3161A] to-[#C9A227] shadow-[0_0_15px_rgba(201,162,39,0.3)] transition-transform duration-150 ease-out hover:scale-105 hover:shadow-[0_0_25px_rgba(201,162,39,0.5)] active:scale-95"
-              title="Perfil"
-              aria-label="Perfil y sesión"
-            >
-              <User className="h-5 w-5 text-white" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-64">
-            <DropdownMenuLabel>
-              <div className="flex flex-col">
-                <span className="font-bold">Sesión local</span>
-                <span className="text-xs font-normal text-muted-foreground">
-                  Sin inicio de sesión · {downloadCount} {downloadCount === 1 ? 'descarga' : 'descargas'}
-                </span>
-              </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-
-            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Tema</DropdownMenuLabel>
-            <DropdownMenuRadioGroup value={theme} onValueChange={onThemeChange}>
-              <DropdownMenuRadioItem value="light">
-                <Sun className="mr-2 h-4 w-4" />Claro
-              </DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="dark">
-                <Moon className="mr-2 h-4 w-4" />Oscuro
-              </DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="system">
-                <Monitor className="mr-2 h-4 w-4" />Sistema
-              </DropdownMenuRadioItem>
-            </DropdownMenuRadioGroup>
-            <DropdownMenuSeparator />
-
-            <DropdownMenuItem onSelect={() => onNavigate('history')}>
-              <History className="mr-2 h-4 w-4" />Historial de descargas
-            </DropdownMenuItem>
-
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <DropdownMenuItem onSelect={(e: Event) => e.preventDefault()} className="text-destructive focus:text-destructive">
-                  <Trash2 className="mr-2 h-4 w-4" />Limpiar datos locales
-                </DropdownMenuItem>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>¿Limpiar datos locales?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Se borrarán el historial de descargas, la configuración del extractor y las estaciones del comparador guardadas en este navegador. Tu preferencia de tema se conserva. Esta acción no se puede deshacer.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => {
-                      clearLocalData();
-                      refreshCount();
-                      toast.success('Datos locales borrados');
-                    }}
-                  >
-                    Borrar
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-
-            <DropdownMenuSeparator />
-            <div className="px-2 py-1.5 text-xs text-muted-foreground">
-              <p>Por: Sergio Beltrán Coley</p>
-              <p>Versión {__APP_VERSION__}</p>
-            </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
 
       {runtime.isBusy && (
