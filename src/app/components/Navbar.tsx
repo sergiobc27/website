@@ -93,7 +93,10 @@ export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMenu }: NavbarP
           const isLast = index === breadcrumbs.length - 1;
           const clickable = !isLast && crumb.view;
           return (
-            <div key={index} className="flex min-w-0 items-center gap-2">
+            // En movil/tablet (<lg) solo se muestra "Inicio" (vuelta al landing);
+            // los niveles siguientes se ocultan por redundar con el titulo de la
+            // vista (h1) y con la vista activa de la barra inferior. Ahorra espacio.
+            <div key={index} className={`min-w-0 items-center gap-2 ${index > 0 ? 'hidden lg:flex' : 'flex'}`}>
               {index > 0 && <ChevronRight className="h-4 w-4 shrink-0 text-border" />}
               {clickable ? (
                 <button

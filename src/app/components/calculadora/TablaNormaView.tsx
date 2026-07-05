@@ -36,11 +36,15 @@ export function TablaNormaView({
         </p>
       )}
       <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full min-w-[28rem] text-xs">
+        {/* Sin ancho minimo forzado en movil: las tablas angostas (2 columnas)
+            caben en pantalla y el valor a elegir queda visible sin deslizar. En
+            escritorio se restaura un piso comodo. Las tablas anchas de verdad
+            (muchas columnas) siguen con scroll horizontal propio. */}
+        <table className="w-full text-xs sm:min-w-[28rem]">
           <thead className="bg-muted/40 text-muted-foreground">
             <tr>
               {tabla.columnas.map((c) => (
-                <th key={c} className="px-3 py-2 text-left font-semibold">{c}</th>
+                <th key={c} className="px-2 py-2 text-left font-semibold sm:px-3">{c}</th>
               ))}
             </tr>
           </thead>
@@ -71,14 +75,14 @@ export function TablaNormaView({
                           : 'text-muted-foreground';
                       const barra = filaActiva && j === 0 ? 'border-l-2 border-accent' : '';
                       return (
-                        <td key={j} className={`px-3 py-1.5 ${alineacion} ${color} ${barra}`}>
+                        <td key={j} className={`px-2 py-1.5 sm:px-3 ${alineacion} ${color} ${barra}`}>
                           {celda}
                         </td>
                       );
                     }
                     const activo = activa?.fila === i && activa?.col === j;
                     return (
-                      <td key={j} className="px-1 py-1 text-right">
+                      <td key={j} className="px-0.5 py-1 text-right sm:px-1">
                         <motion.button
                           type="button"
                           onClick={() => onCelda!(i, j, celda)}
@@ -91,7 +95,7 @@ export function TablaNormaView({
                               : { boxShadow: '0 0 0 rgba(201,162,39,0)' }
                           }
                           transition={{ duration: 0.5, ease: 'easeOut' }}
-                          className={`w-full cursor-pointer rounded-md border px-2 py-1 font-mono transition-colors ${
+                          className={`w-full cursor-pointer rounded-md border px-1.5 py-1 font-mono transition-colors sm:px-2 ${
                             activo
                               ? 'border-accent bg-accent/20 font-bold text-accent ring-1 ring-accent'
                               : 'border-accent/30 border-dashed bg-accent/5 text-card-foreground hover:border-accent/60 hover:bg-accent/10 hover:text-accent'
