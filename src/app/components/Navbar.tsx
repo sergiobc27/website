@@ -1,4 +1,4 @@
-import { Sun, Moon, Monitor, User, ChevronRight, History, Search, Trash2, Menu, Github, Package, Linkedin } from 'lucide-react';
+import { Sun, Moon, Monitor, User, ChevronRight, History, Search, Trash2, Home, Github, Package, Linkedin } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ExtractorRuntimeState } from './DataExtractor';
 import {
@@ -31,8 +31,6 @@ interface NavbarProps {
   breadcrumbs: Array<{ label: string; view?: string }>;
   runtime: ExtractorRuntimeState;
   onNavigate: (view: string) => void;
-  // Abre el drawer de navegación en móvil (hamburguesa). Solo visible en <lg.
-  onOpenMenu?: () => void;
 }
 
 function formatDuration(value: number) {
@@ -60,7 +58,7 @@ function resolveQuickToggle(current: ThemeChoice): ThemeChoice {
   return isDarkNow ? 'light' : 'dark';
 }
 
-export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMenu }: NavbarProps) {
+export function Navbar({ breadcrumbs, runtime, onNavigate }: NavbarProps) {
   const [theme, setTheme] = useState<ThemeChoice>(getThemeChoice);
   const [downloadCount, setDownloadCount] = useState(0);
 
@@ -79,32 +77,35 @@ export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMenu }: NavbarP
   return (
     <div className="glass-chrome absolute inset-x-0 top-0 z-30 flex min-h-16 items-center justify-between gap-3 border-b border-border px-4 md:px-6">
       <div className="min-w-0 flex items-center gap-2 overflow-hidden text-sm">
-        {onOpenMenu && (
-          <button
-            type="button"
-            onClick={onOpenMenu}
-            aria-label="Abrir menú de navegación"
-            className="-ml-1 mr-1 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:hidden"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
-        )}
         {breadcrumbs.map((crumb, index) => {
           const isLast = index === breadcrumbs.length - 1;
           const clickable = !isLast && crumb.view;
+          const isHome = index === 0;
           return (
-            // En movil/tablet (<lg) solo se muestra "Inicio" (vuelta al landing);
-            // los niveles siguientes se ocultan por redundar con el titulo de la
-            // vista (h1) y con la vista activa de la barra inferior. Ahorra espacio.
+            // En movil/tablet (<lg) solo se muestra el inicio, como icono de casa
+            // (vuelta al landing); los niveles siguientes se ocultan por redundar
+            // con el titulo de la vista (h1) y con la barra inferior. Ahorra espacio.
             <div key={index} className={`min-w-0 items-center gap-2 ${index > 0 ? 'hidden lg:flex' : 'flex'}`}>
               {index > 0 && <ChevronRight className="h-4 w-4 shrink-0 text-border" />}
               {clickable ? (
                 <button
                   type="button"
                   onClick={() => onNavigate(crumb.view!)}
-                  className="-my-1 truncate rounded py-1 text-muted-foreground transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  aria-label={isHome ? 'Ir al inicio' : undefined}
+                  className={
+                    isHome
+                      ? '-ml-1 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:-ml-0 lg:h-auto lg:w-auto lg:rounded lg:px-0 lg:hover:bg-transparent lg:hover:underline'
+                      : '-my-1 truncate rounded py-1 text-muted-foreground transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
+                  }
                 >
-                  {crumb.label}
+                  {isHome ? (
+                    <>
+                      <Home className="h-5 w-5 lg:hidden" />
+                      <span className="hidden lg:inline">{crumb.label}</span>
+                    </>
+                  ) : (
+                    crumb.label
+                  )}
                 </button>
               ) : (
                 <span className={`truncate transition-colors ${isLast ? 'font-semibold text-accent' : 'text-muted-foreground'}`}>
