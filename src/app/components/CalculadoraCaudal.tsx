@@ -155,7 +155,7 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
 
       <div className="space-y-3">
         {/* 1 · Parámetros de cuenca */}
-        <SeccionColapsable titulo="1 · Parámetros de cuenca" descripcion="Geometría y período de retorno de diseño">
+        <SeccionColapsable titulo="1 · Parámetros de cuenca" descripcion="Geometría y período de retorno de diseño" inicialAbierta={false}>
           {sonValoresEjemplo && (
             <div className="mb-3 flex items-start gap-2 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-accent">
               <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -220,7 +220,7 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
         </SeccionColapsable>
 
         {/* 4 · Caudal de diseño */}
-        <SeccionColapsable titulo="4 · Caudal de diseño Q" descripcion="Método racional Q = C·I·A/360" resaltada>
+        <SeccionColapsable titulo="4 · Caudal de diseño Q" descripcion="Método racional Q = C·I·A/360" resaltada inicialAbierta={false}>
           {result ? (
             <>
               {sonValoresEjemplo && (
