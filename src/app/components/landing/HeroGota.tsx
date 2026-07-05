@@ -31,10 +31,10 @@ export function HeroGota({ onNavigate }: HeroGotaProps) {
         {/* Lockup de co-marca: ambos logos sobre una placa blanca con divisor, a
             alturas balanceadas (la placa CUC es maciza, el emblema IDEAM más alto
             para igualar peso visual). La placa los presenta limpios en claro y oscuro. */}
-        <div className="flex items-center gap-3.5 rounded-2xl bg-white px-4 py-2.5 shadow-[0_6px_24px_rgba(0,0,0,0.10)] ring-1 ring-black/5 md:gap-4 md:px-5 md:py-3">
-          <img src={logoCuc} alt="Universidad de la Costa CUC" className="h-12 w-auto md:h-14" />
-          <span className="h-9 w-px bg-black/10 md:h-11" aria-hidden="true" />
-          <img src={logoIdeam} alt="IDEAM, fuente de datos" className="h-12 w-auto md:h-14" />
+        <div className="flex items-center gap-2.5 rounded-2xl bg-white px-3 py-2 shadow-[0_6px_24px_rgba(0,0,0,0.10)] ring-1 ring-black/5 sm:gap-3.5 sm:px-4 sm:py-2.5 md:gap-4 md:px-5 md:py-3">
+          <img src={logoCuc} alt="Universidad de la Costa CUC" className="h-9 w-auto sm:h-11 md:h-14" />
+          <span className="h-6 w-px bg-black/10 sm:h-9 md:h-11" aria-hidden="true" />
+          <img src={logoIdeam} alt="IDEAM, fuente de datos" className="h-9 w-auto sm:h-11 md:h-14" />
         </div>
         <div className="flex items-center gap-1">
           <button

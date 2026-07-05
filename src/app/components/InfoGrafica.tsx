@@ -38,7 +38,13 @@ export function InfoGrafica({ id }: { id: string }) {
           <Info className="h-4 w-4" />
         </motion.button>
       </PopoverTrigger>
-      <PopoverContent align="end" side="bottom" aria-labelledby={tituloId} className="w-[20rem] max-w-[92vw] p-0">
+      <PopoverContent
+        align="end"
+        side="bottom"
+        collisionPadding={12}
+        aria-labelledby={tituloId}
+        className="max-h-[min(75vh,var(--radix-popover-content-available-height))] w-[20rem] max-w-[92vw] overflow-y-auto overscroll-contain p-0"
+      >
         <motion.div
           initial={reducido ? false : { opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}

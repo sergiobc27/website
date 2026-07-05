@@ -16,7 +16,7 @@ export function CopyLinkButton() {
     <button
       type="button"
       onClick={onCopy}
-      className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:h-10 md:w-10"
       title="Copiar enlace de esta vista"
       aria-label="Copiar enlace de esta vista"
     >

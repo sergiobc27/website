@@ -36,13 +36,13 @@ export function CeldaCalendario({ serie, cargando, error, onClick, indice, class
         <div className="grid flex-1 gap-x-1.5 gap-y-1" style={{ gridTemplateColumns: 'auto repeat(12, 1fr)' }}>
           <span />
           {MESES.map((m, i) => (
-            <span key={`${m}-${i}`} className="text-center text-[10px] text-muted-foreground">{m}</span>
+            <span key={`${m}-${i}`} className="text-center text-[11px] text-muted-foreground">{m}</span>
           ))}
           {anios.map((fila) => (
             <Fila key={fila.anio} fila={fila} max={matriz.max} />
           ))}
         </div>
-        <div className="flex items-center justify-end gap-1.5 text-[10px] text-muted-foreground">
+        <div className="flex items-center justify-end gap-1.5 text-[11px] text-muted-foreground">
           seco
           {[0.1, 0.35, 0.6, 0.85].map((t) => (
             <span key={t} className="h-2.5 w-2.5 rounded-[2px]" style={{ backgroundColor: colorCalendario(t, 1) }} />
@@ -57,7 +57,7 @@ export function CeldaCalendario({ serie, cargando, error, onClick, indice, class
 function Fila({ fila, max }: { fila: { anio: number; meses: Array<number | null> }; max: number }) {
   return (
     <>
-      <span className="pr-1 text-right text-[10px] tabular-nums text-muted-foreground">{fila.anio}</span>
+      <span className="pr-1 text-right text-[11px] tabular-nums text-muted-foreground">{fila.anio}</span>
       {fila.meses.map((valor, mes) => (
         <span
           key={mes}
