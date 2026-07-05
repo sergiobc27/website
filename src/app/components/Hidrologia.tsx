@@ -762,7 +762,7 @@ export function Hidrologia() {
 
           {/* CURVAS IDF — pieza estrella, ancho completo */}
           <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
-            <div className="mb-4 flex items-center justify-between gap-4">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <div>
                 <h3 className="font-bold text-card-foreground">Curvas IDF · Intensidad–Duración–Frecuencia</h3>
                 <p className="text-sm text-muted-foreground">
@@ -771,7 +771,7 @@ export function Hidrologia() {
                     : 'Familia de curvas de diseño de drenaje'}
                 </p>
               </div>
-              <div className="flex shrink-0 items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:gap-3">
                 <InfoGrafica id="idf" />
                 {idf?.available && (
                   <>
@@ -915,12 +915,12 @@ export function Hidrologia() {
 
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
             <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
-              <div className="mb-4 flex items-center justify-between gap-4">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 <div>
                   <h3 className="font-bold text-card-foreground">Períodos de retorno · lluvia máxima diaria</h3>
                   <p className="text-sm text-muted-foreground">{returnPeriods?.recommended ?? 'Ajuste de extremos'} sobre {returnPeriods?.n ?? 0} máximos anuales{returnPeriods?.recommended ? ' · recomendada por AIC' : ''}</p>
                 </div>
-                <div className="flex shrink-0 items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:gap-3">
                   <InfoGrafica id="periodos-retorno" />
                   {returnPeriods?.reliability && (() => {
                     const r = returnPeriods.reliability;
@@ -1017,12 +1017,12 @@ export function Hidrologia() {
             </div>
 
             <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
-              <div className="mb-4 flex items-center justify-between gap-4">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 <div>
                   <h3 className="font-bold text-card-foreground">Monitor de sequía · SPI-{spiScale}</h3>
                   <p className="text-sm text-muted-foreground">Índice de Precipitación Estandarizada (últimos 10 años)</p>
                 </div>
-                <div className="flex shrink-0 items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:gap-3">
                   <InfoGrafica id="spi" />
                   <div className="flex gap-1">
                   {([3, 6, 12] as const).map((scale) => (
@@ -1078,12 +1078,12 @@ export function Hidrologia() {
             </div>
 
             <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
-              <div className="mb-4 flex items-center justify-between gap-4">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 <div>
                   <h3 className="font-bold text-card-foreground">Hietograma mensual</h3>
                   <p className="text-sm text-muted-foreground">Lluvia acumulada por mes del año elegido</p>
                 </div>
-                <div className="flex shrink-0 items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:gap-3">
                   <InfoGrafica id="hietograma" />
                   <select
                     value={hyetographYear}
@@ -1115,7 +1115,7 @@ export function Hidrologia() {
             </div>
 
             <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
-              <div className="mb-4 flex items-center justify-between gap-4">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 <div>
                   <h3 className="font-bold text-card-foreground">Histograma de acumulados diarios</h3>
                   <p className="text-sm text-muted-foreground">
@@ -1124,7 +1124,7 @@ export function Hidrologia() {
                       : 'Distribución de frecuencias'}
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:gap-3">
                   <InfoGrafica id="histograma" />
                   <BarChart4 className="h-5 w-5 shrink-0 text-accent" />
                 </div>
