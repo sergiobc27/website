@@ -54,29 +54,25 @@ function collectRootVars(): Record<string, string> {
 }
 
 // Rasteriza el gráfico a un <img>, SIEMPRE en claro (un PNG con fondo oscuro es
-// inservible para pegar en un informe impreso). Camino preferido: clonar el
-// nodo en un host fuera de pantalla con las variables claras aplicadas, así la
-// página visible nunca cambia y no hay parpadeo. Respaldo (si no pudimos leer
-// las variables, p. ej. hojas cross-origin): quitar `.dark` global como antes.
+// inservible para pegar en un informe impreso). Se captura el nodo EN VIVO (así
+// el tamaño y el detalle son idénticos a los originales), pero forzando el tema
+// claro SOLO en ese nodo con variables CSS inline: sus descendientes las heredan
+// y el resto de la página no se toca, así que no parpadea. Respaldo (si no se
+// pudieron leer las variables, p. ej. hojas cross-origin): quitar `.dark` global.
 async function captureChartImage(node: HTMLElement, bg: string): Promise<HTMLImageElement> {
   const lightVars = collectRootVars();
   let dataUrl: string;
 
   if (Object.keys(lightVars).length > 0) {
-    const rect = node.getBoundingClientRect();
-    const host = document.createElement('div');
-    host.style.cssText = 'position:fixed;left:-99999px;top:0;pointer-events:none;z-index:-1;';
-    host.style.colorScheme = 'light';
-    for (const [k, v] of Object.entries(lightVars)) host.style.setProperty(k, v);
-    const clone = node.cloneNode(true) as HTMLElement;
-    clone.style.width = `${rect.width}px`;
-    clone.style.height = `${rect.height}px`;
-    host.appendChild(clone);
-    document.body.appendChild(host);
+    const applied = Object.keys(lightVars);
+    for (const k of applied) node.style.setProperty(k, lightVars[k]);
+    const prevColorScheme = node.style.colorScheme;
+    node.style.colorScheme = 'light';
     try {
-      dataUrl = await toPng(clone, { pixelRatio: 2, cacheBust: true, backgroundColor: bg });
+      dataUrl = await toPng(node, { pixelRatio: 2, cacheBust: true, backgroundColor: bg });
     } finally {
-      document.body.removeChild(host);
+      for (const k of applied) node.style.removeProperty(k);
+      node.style.colorScheme = prevColorScheme;
     }
   } else {
     const root = document.documentElement;
