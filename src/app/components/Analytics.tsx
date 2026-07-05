@@ -66,6 +66,9 @@ function formatPeriod(first: string | null, last: string | null) {
 
 export function Analytics() {
   const chartRef = useRef<HTMLDivElement>(null);
+  const climatoChartRef = useRef<HTMLDivElement>(null);
+  const regionChartRef = useRef<HTMLDivElement>(null);
+  const anomalyChartRef = useRef<HTMLDivElement>(null);
   const [datasetId, setDatasetId] = useState('s54a-sgyg');
   const [department, setDepartment] = useState(''); // '' = todo el país
   const [interval, setInterval] = useState<AnalyticsInterval>('year');
@@ -516,12 +519,20 @@ export function Analytics() {
             </div>
             <div className="flex shrink-0 items-center gap-3">
               <InfoGrafica id="climatologia" />
+              {!isLoadingPanels && (
+                <ChartDownloadButton
+                  targetRef={climatoChartRef}
+                  title="Climatología mensual"
+                  subtitle={scopeLabel}
+                  filenameParts={['climatologia', selectedDataset?.name || datasetId]}
+                />
+              )}
             </div>
           </div>
           {isLoadingPanels ? (
             <SkeletonLoader rows={4} />
           ) : (
-            <div style={{ width: '100%', height: '260px' }}>
+            <div ref={climatoChartRef} className="bg-card" style={{ width: '100%', height: '260px' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={climatologyData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
@@ -545,6 +556,14 @@ export function Analytics() {
             </div>
             <div className="flex shrink-0 items-center gap-3">
               <InfoGrafica id="top-departamentos" />
+              {!isLoadingPanels && regionData.length > 0 && (
+                <ChartDownloadButton
+                  targetRef={regionChartRef}
+                  title="Top 10 departamentos"
+                  subtitle={selectedDataset?.name || datasetId}
+                  filenameParts={['top-departamentos', selectedDataset?.name || datasetId]}
+                />
+              )}
             </div>
           </div>
           {isLoadingPanels ? (
@@ -552,7 +571,7 @@ export function Analytics() {
           ) : regionData.length === 0 ? (
             <p className="text-muted-foreground text-sm">Sin datos para esta combinación de filtros.</p>
           ) : (
-            <div style={{ width: '100%', height: '260px' }}>
+            <div ref={regionChartRef} className="bg-card" style={{ width: '100%', height: '260px' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={regionData} layout="vertical" margin={{ left: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
@@ -588,12 +607,20 @@ export function Analytics() {
             </div>
             <div className="flex shrink-0 items-center gap-3">
               <InfoGrafica id="anomalias" />
+              {anomalyData.length > 0 && (
+                <ChartDownloadButton
+                  targetRef={anomalyChartRef}
+                  title="Anomalías mensuales (últimos 24 meses)"
+                  subtitle={scopeLabel}
+                  filenameParts={['anomalias', selectedDataset?.name || datasetId]}
+                />
+              )}
             </div>
           </div>
           {anomalyData.length === 0 ? (
             <p className="text-muted-foreground text-sm">Sin datos suficientes para calcular anomalías.</p>
           ) : (
-            <div style={{ width: '100%', height: '240px' }}>
+            <div ref={anomalyChartRef} className="bg-card" style={{ width: '100%', height: '240px' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={anomalyData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />

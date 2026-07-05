@@ -137,6 +137,10 @@ export function Hidrologia() {
   const [corrienteFiltro, setCorrienteFiltro] = useState('');
   const [station, setStation] = useState<StationLite | null>(null);
   const idfChartRef = useRef<HTMLDivElement>(null);
+  const returnChartRef = useRef<HTMLDivElement>(null);
+  const spiChartRef = useRef<HTMLDivElement>(null);
+  const hyetographChartRef = useRef<HTMLDivElement>(null);
+  const histogramChartRef = useRef<HTMLDivElement>(null);
 
   // Municipios del departamento elegido (TODOS, de /api/municipalities): así, si
   // eliges uno sin estación, podemos sugerir la más cercana. Más la respuesta de
@@ -932,6 +936,14 @@ export function Hidrologia() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:gap-3">
                   <InfoGrafica id="periodos-retorno" />
+                  {returnPeriods?.gumbel && (
+                    <ChartDownloadButton
+                      targetRef={returnChartRef}
+                      title="Períodos de retorno · lluvia máxima diaria"
+                      subtitle={station?.nombre ?? station?.codigo}
+                      filenameParts={['periodos-retorno', station?.nombre ?? station?.codigo ?? '']}
+                    />
+                  )}
                   {returnPeriods?.reliability && (() => {
                     const r = returnPeriods.reliability;
                     const cfg = {
@@ -999,7 +1011,7 @@ export function Hidrologia() {
                       </div>
                     ))}
                   </div>
-                  <div style={{ width: '100%', height: '220px' }}>
+                  <div ref={returnChartRef} className="bg-card" style={{ width: '100%', height: '220px' }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={returnCurve}>
                         <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
@@ -1034,6 +1046,14 @@ export function Hidrologia() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:gap-3">
                   <InfoGrafica id="spi" />
+                  {spi?.points?.length ? (
+                    <ChartDownloadButton
+                      targetRef={spiChartRef}
+                      title={`Monitor de sequía · SPI-${spiScale}`}
+                      subtitle={station?.nombre ?? station?.codigo}
+                      filenameParts={['spi', `${spiScale}m`, station?.nombre ?? station?.codigo ?? '']}
+                    />
+                  ) : null}
                   <div className="flex gap-1">
                   {([3, 6, 12] as const).map((scale) => (
                     <button
@@ -1068,7 +1088,7 @@ export function Hidrologia() {
                       </span>
                     </div>
                   )}
-                  <div style={{ width: '100%', height: '190px' }}>
+                  <div ref={spiChartRef} className="bg-card" style={{ width: '100%', height: '190px' }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={spiData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
@@ -1095,6 +1115,14 @@ export function Hidrologia() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:gap-3">
                   <InfoGrafica id="hietograma" />
+                  {hyetograph && (
+                    <ChartDownloadButton
+                      targetRef={hyetographChartRef}
+                      title={`Hietograma mensual · ${hyetographYear}`}
+                      subtitle={station?.nombre ?? station?.codigo}
+                      filenameParts={['hietograma', hyetographYear, station?.nombre ?? station?.codigo ?? '']}
+                    />
+                  )}
                   <select
                     value={hyetographYear}
                     onChange={(event) => setHyetographYear(event.target.value)}
@@ -1110,7 +1138,7 @@ export function Hidrologia() {
               {!hyetograph ? (
                 <SkeletonLoader rows={4} />
               ) : (
-                <div style={{ width: '100%', height: '210px' }}>
+                <div ref={hyetographChartRef} className="bg-card" style={{ width: '100%', height: '210px' }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={hyetographData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
@@ -1136,13 +1164,21 @@ export function Hidrologia() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:gap-3">
                   <InfoGrafica id="histograma" />
+                  {histogramData && (
+                    <ChartDownloadButton
+                      targetRef={histogramChartRef}
+                      title="Histograma de acumulados diarios"
+                      subtitle={station?.nombre ?? station?.codigo}
+                      filenameParts={['histograma', station?.nombre ?? station?.codigo ?? '']}
+                    />
+                  )}
                   <BarChart4 className="h-5 w-5 shrink-0 text-accent" />
                 </div>
               </div>
               {!histogramData ? (
                 <SkeletonLoader rows={4} />
               ) : (
-                <div style={{ width: '100%', height: '210px' }}>
+                <div ref={histogramChartRef} className="bg-card" style={{ width: '100%', height: '210px' }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={histogramBins}>
                       <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
