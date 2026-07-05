@@ -18,6 +18,7 @@ import type {
 
 export function FichaClimatica({ initialDepartment = '', initialMunicipality = '' }: { initialDepartment?: string; initialMunicipality?: string }) {
   const chartRef = useRef<HTMLDivElement>(null);
+  const yearlyChartRef = useRef<HTMLDivElement>(null);
   const [datasets, setDatasets] = useState<Array<{ id: string; name: string }>>([]);
   const [departments, setDepartments] = useState<string[]>([]);
   const [datasetId, setDatasetId] = useState('s54a-sgyg');
@@ -307,8 +308,16 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
                 <div>
                   <h3 className="font-bold text-card-foreground">{isPrecip ? 'Total anual (mm/año)' : `Promedio anual${unitSuffix(unidad)}`}</h3>
                 </div>
-                <div className="flex shrink-0 items-center">
+                <div className="flex shrink-0 items-center gap-3">
                   <InfoGrafica id="serie-temporal" />
+                  {!isLoading && yearlyData.length > 0 && (
+                    <ChartDownloadButton
+                      targetRef={yearlyChartRef}
+                      title={isPrecip ? 'Total anual (mm/año)' : `Promedio anual${unitSuffix(unidad)}`}
+                      subtitle={municipality ? `${municipality}, ${department}` : department}
+                      filenameParts={[isPrecip ? 'total-anual' : 'promedio-anual', municipality || department]}
+                    />
+                  )}
                 </div>
               </div>
               {isLoading ? (
@@ -316,7 +325,7 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
               ) : yearlyData.length === 0 ? (
                 <p className="text-muted-foreground text-sm">Sin datos de {datasetName} en este municipio.</p>
               ) : (
-                <div style={{ width: '100%', height: '260px' }}>
+                <div ref={yearlyChartRef} className="bg-card" style={{ width: '100%', height: '260px' }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={yearlyData}>
                       <defs>
