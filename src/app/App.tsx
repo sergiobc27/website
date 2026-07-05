@@ -44,7 +44,6 @@ import { viewToPath, pathToView, NAVIGATE_EVENT, ACCION_VIEWS, type NavigateDeta
 import { buildSearch } from './lib/urlState';
 import { detectarPlataforma } from './lib/plataforma';
 import { AsistenteFlotante, OPEN_ASISTENTE_EVENT } from './components/AsistenteFlotante';
-import { BarraInferior } from './components/BarraInferior';
 import { BuscadorUniversal } from './components/BuscadorUniversal';
 
 export default function App() {
@@ -157,9 +156,9 @@ export default function App() {
       history: ['Inicio', 'Historial de Descargas'],
     };
     const labels = breadcrumbMap[currentView] || ['Inicio'];
-    // El primer crumb ('Inicio') navega al dashboard; el último es la vista
-    // actual y no es clicable. Antes todos parecían clicables pero ninguno lo era.
-    return labels.map((label, i) => (i === 0 ? { label, view: 'dashboard' } : { label }));
+    // El primer crumb ('Inicio') vuelve a la portada de bienvenida (landing),
+    // igual que el logo del sidebar; el último es la vista actual y no es clicable.
+    return labels.map((label, i) => (i === 0 ? { label, view: 'landing' } : { label }));
   };
 
   const renderContent = () => {
@@ -223,8 +222,8 @@ export default function App() {
 
       <div className="relative flex-1 flex flex-col overflow-hidden min-w-0">
         {/* La navbar es overlay: el contenido scrollea POR DEBAJO del vidrio. */}
-        <Navbar breadcrumbs={getBreadcrumbs()} runtime={runtime} onNavigate={navigate} />
-        <main className="flex-1 overflow-y-auto p-4 pt-20 pb-24 md:p-6 md:pt-20 lg:pb-6 scrollbar-thin scrollbar-track-transparent">
+        <Navbar breadcrumbs={getBreadcrumbs()} runtime={runtime} onNavigate={navigate} onOpenMenu={() => setMobileNavOpen(true)} />
+        <main className="flex-1 overflow-y-auto p-4 pt-20 pb-[max(1.5rem,env(safe-area-inset-bottom))] md:p-6 md:pt-20 scrollbar-thin scrollbar-track-transparent">
           {/* h1 único de la página = título de la vista activa (la marca del panel ya no es h1). */}
           <h1 className="sr-only">{getBreadcrumbs().slice(-1)[0]?.label || 'IDEAM'}</h1>
           {/* Se mantiene SIEMPRE montado (a diferencia del resto de vistas, que se
@@ -250,7 +249,6 @@ export default function App() {
       </div>
       <AsistenteFlotante currentView={currentView} />
       <BuscadorUniversal onNavigate={navigate} />
-      <BarraInferior currentView={currentView} onNavigate={navigate} onMore={() => setMobileNavOpen(true)} />
       <Toaster richColors position="bottom-right" />
     </div>
   );

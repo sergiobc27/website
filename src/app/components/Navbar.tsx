@@ -1,4 +1,4 @@
-import { Sun, Moon, Monitor, User, ChevronRight, History, Search, Trash2, Home, Github, Package, Linkedin } from 'lucide-react';
+import { Sun, Moon, Monitor, User, ChevronRight, History, Search, Trash2, Home, Menu, Github, Package, Linkedin } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ExtractorRuntimeState } from './DataExtractor';
 import {
@@ -31,6 +31,9 @@ interface NavbarProps {
   breadcrumbs: Array<{ label: string; view?: string }>;
   runtime: ExtractorRuntimeState;
   onNavigate: (view: string) => void;
+  // Abre el panel lateral (drawer) en móvil/tablet. Único acceso a la navegación
+  // completa en <lg (ya no hay barra inferior).
+  onOpenMenu?: () => void;
 }
 
 function formatDuration(value: number) {
@@ -58,7 +61,7 @@ function resolveQuickToggle(current: ThemeChoice): ThemeChoice {
   return isDarkNow ? 'light' : 'dark';
 }
 
-export function Navbar({ breadcrumbs, runtime, onNavigate }: NavbarProps) {
+export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMenu }: NavbarProps) {
   const [theme, setTheme] = useState<ThemeChoice>(getThemeChoice);
   const [downloadCount, setDownloadCount] = useState(0);
 
@@ -76,7 +79,17 @@ export function Navbar({ breadcrumbs, runtime, onNavigate }: NavbarProps) {
 
   return (
     <div className="glass-chrome absolute inset-x-0 top-0 z-30 flex min-h-16 items-center justify-between gap-3 border-b border-border px-4 md:px-6">
-      <div className="min-w-0 flex items-center gap-2 overflow-hidden text-sm">
+      <div className="min-w-0 flex items-center gap-1 overflow-hidden text-sm md:gap-2">
+        {onOpenMenu && (
+          <button
+            type="button"
+            onClick={onOpenMenu}
+            aria-label="Abrir menú de navegación"
+            className="-ml-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:hidden"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        )}
         {breadcrumbs.map((crumb, index) => {
           const isLast = index === breadcrumbs.length - 1;
           const clickable = !isLast && crumb.view;
@@ -94,7 +107,7 @@ export function Navbar({ breadcrumbs, runtime, onNavigate }: NavbarProps) {
                   aria-label={isHome ? 'Ir al inicio' : undefined}
                   className={
                     isHome
-                      ? '-ml-1 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:-ml-0 lg:h-auto lg:w-auto lg:rounded lg:px-0 lg:hover:bg-transparent lg:hover:underline'
+                      ? 'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:h-auto lg:w-auto lg:rounded lg:px-0 lg:hover:bg-transparent lg:hover:underline'
                       : '-my-1 truncate rounded py-1 text-muted-foreground transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
                   }
                 >
@@ -117,7 +130,7 @@ export function Navbar({ breadcrumbs, runtime, onNavigate }: NavbarProps) {
         })}
       </div>
 
-      <div className="flex shrink-0 items-center gap-2 md:gap-3">
+      <div className="flex shrink-0 items-center gap-0.5 sm:gap-1 md:gap-3">
         <button
           type="button"
           onClick={() => window.dispatchEvent(new CustomEvent('ideam:abrir-buscador'))}
@@ -167,8 +180,8 @@ export function Navbar({ breadcrumbs, runtime, onNavigate }: NavbarProps) {
         <button
           type="button"
           onClick={quickToggle}
-          className="group inline-flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground transition-[transform,background-color,color] duration-150 ease-out hover:scale-105 hover:bg-muted hover:text-accent active:scale-95 md:h-10 md:w-10"
-          title="Cambiar tema"
+          className="group hidden h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-[transform,background-color,color] duration-150 ease-out hover:scale-105 hover:bg-muted hover:text-accent active:scale-95 sm:inline-flex md:h-10 md:w-10"
+          title="Cambiar tema (también en el menú de perfil)"
           aria-label="Cambiar tema rápido"
         >
           {resolveQuickToggle(theme) === 'light' ? <Sun className="anim-wiggle h-5 w-5" /> : <Moon className="anim-wiggle h-5 w-5" />}
@@ -176,14 +189,14 @@ export function Navbar({ breadcrumbs, runtime, onNavigate }: NavbarProps) {
 
         <CopyLinkButton />
 
-        {/* Enlaces del proyecto (abren en otra pestaña). Ocultos en móvil muy
-            angosto para no saturar la barra; el divisor los separa de las acciones. */}
-        <span className="mx-0.5 hidden h-5 w-px bg-border sm:inline-block" aria-hidden="true" />
+        {/* Enlaces del proyecto (abren en otra pestaña). Visibles también en móvil
+            (paridad con escritorio); el divisor los separa de las acciones. */}
+        <span className="mx-0.5 inline-block h-5 w-px bg-border" aria-hidden="true" />
         <a
           href="https://github.com/sergiobc27/ideam-data-automator"
           target="_blank"
           rel="noopener noreferrer"
-          className="group hidden rounded-lg p-2 text-muted-foreground transition-[transform,background-color,color] duration-150 ease-out hover:scale-105 hover:bg-muted hover:text-accent active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:inline-flex"
+          className="group inline-flex rounded-lg p-1.5 text-muted-foreground transition-[transform,background-color,color] duration-150 ease-out hover:scale-105 hover:bg-muted hover:text-accent active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:p-2"
           title="Código en GitHub"
           aria-label="Repositorio del proyecto en GitHub (abre en una pestaña nueva)"
         >
@@ -193,7 +206,7 @@ export function Navbar({ breadcrumbs, runtime, onNavigate }: NavbarProps) {
           href="https://pypi.org/project/ideam-data-automator/"
           target="_blank"
           rel="noopener noreferrer"
-          className="group hidden rounded-lg p-2 text-muted-foreground transition-[transform,background-color,color] duration-150 ease-out hover:scale-105 hover:bg-muted hover:text-accent active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:inline-flex"
+          className="group inline-flex rounded-lg p-1.5 text-muted-foreground transition-[transform,background-color,color] duration-150 ease-out hover:scale-105 hover:bg-muted hover:text-accent active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:p-2"
           title="Paquete en PyPI (ideam-data-automator)"
           aria-label="Paquete en PyPI (abre en una pestaña nueva)"
         >
@@ -203,7 +216,7 @@ export function Navbar({ breadcrumbs, runtime, onNavigate }: NavbarProps) {
           href="https://www.linkedin.com/in/sergiobeltrancoley/"
           target="_blank"
           rel="noopener noreferrer"
-          className="group hidden rounded-lg p-2 text-muted-foreground transition-[transform,background-color,color] duration-150 ease-out hover:scale-105 hover:bg-muted hover:text-accent active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:inline-flex"
+          className="group inline-flex rounded-lg p-1.5 text-muted-foreground transition-[transform,background-color,color] duration-150 ease-out hover:scale-105 hover:bg-muted hover:text-accent active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:p-2"
           title="LinkedIn de Sergio Beltrán Coley"
           aria-label="Perfil de LinkedIn de Sergio Beltrán Coley (abre en una pestaña nueva)"
         >
