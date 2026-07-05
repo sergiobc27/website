@@ -84,7 +84,7 @@ export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMenu }: NavbarP
             type="button"
             onClick={onOpenMenu}
             aria-label="Abrir menú de navegación"
-            className="-ml-1 mr-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:hidden"
+            className="-ml-1 mr-1 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:hidden"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -99,7 +99,7 @@ export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMenu }: NavbarP
                 <button
                   type="button"
                   onClick={() => onNavigate(crumb.view!)}
-                  className="truncate rounded text-muted-foreground transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  className="-my-1 truncate rounded py-1 text-muted-foreground transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 >
                   {crumb.label}
                 </button>
@@ -117,7 +117,7 @@ export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMenu }: NavbarP
         <button
           type="button"
           onClick={() => window.dispatchEvent(new CustomEvent('ideam:abrir-buscador'))}
-          className="group inline-flex items-center gap-2 rounded-lg border border-border bg-background/60 px-2.5 py-1.5 text-sm text-muted-foreground transition-[border-color,color,transform] duration-150 hover:border-accent/50 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="group inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-background/60 px-3 py-1.5 text-sm text-muted-foreground transition-[border-color,color,transform] duration-150 hover:border-accent/50 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:min-h-0"
           aria-label="Abrir buscador universal (Ctrl+K)"
         >
           <Search className="anim-wiggle h-4 w-4" />
@@ -163,7 +163,7 @@ export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMenu }: NavbarP
         <button
           type="button"
           onClick={quickToggle}
-          className="group rounded-lg p-2 text-muted-foreground transition-[transform,background-color,color] duration-150 ease-out hover:scale-105 hover:bg-muted hover:text-accent active:scale-95"
+          className="group inline-flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground transition-[transform,background-color,color] duration-150 ease-out hover:scale-105 hover:bg-muted hover:text-accent active:scale-95 md:h-10 md:w-10"
           title="Cambiar tema"
           aria-label="Cambiar tema rápido"
         >
@@ -210,11 +210,11 @@ export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMenu }: NavbarP
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#A3161A] to-[#C9A227] shadow-[0_0_15px_rgba(201,162,39,0.3)] transition-transform duration-150 ease-out hover:scale-105 hover:shadow-[0_0_25px_rgba(201,162,39,0.5)] active:scale-95"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#A3161A] to-[#C9A227] shadow-[0_0_15px_rgba(201,162,39,0.3)] transition-transform duration-150 ease-out hover:scale-105 hover:shadow-[0_0_25px_rgba(201,162,39,0.5)] active:scale-95"
               title="Perfil"
               aria-label="Perfil y sesión"
             >
-              <User className="h-4 w-4 text-white" />
+              <User className="h-5 w-5 text-white" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64">

@@ -2,7 +2,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { lazyWithRetry } from './lib/lazyWithRetry';
 import { Sidebar, SidebarContent } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
-import { Sheet, SheetContent, SheetTitle } from './components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from './components/ui/sheet';
 import { Dashboard } from './components/Dashboard';
 import { FichaClimatica } from './components/FichaClimatica';
 
@@ -208,6 +208,7 @@ export default function App() {
       <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
         <SheetContent side="left" className="glass-rojo w-72 border-r border-[#8a1216] p-0 text-white [&>button]:text-white">
           <SheetTitle className="sr-only">Navegación</SheetTitle>
+          <SheetDescription className="sr-only">Explora las vistas y herramientas de la plataforma.</SheetDescription>
           <div className="flex h-full flex-col">
             <SidebarContent
               currentView={currentView}
