@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Activity, BookMarked, BookOpenText, Building2, Calculator, Database, Download, BarChart3, ChevronLeft, ChevronRight, GitCompareArrows, MapPin, TrendingUp } from 'lucide-react';
-import logoVertical from "../../imports/Logo_CUC_PNG_letra_blanca_barra_roja_vtcal.png";
+// Version blanca sobre transparente (sin el cuadro rojo del PNG original): sobre
+// el rojo del panel queda limpia, sin "cuadrado flotante".
+import logoVertical from "../../imports/Logo_CUC_blanco_transparente.png";
 import logoCollapsed from "../../imports/u.png";
 import logoIdeam from "../../imports/Ideam_(Colombia)_logo.png";
 
@@ -78,11 +80,11 @@ export function SidebarContent({
               aria-label="Ir al inicio"
               className="block w-full rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#C9A227]"
             >
-              <img src={logoVertical} alt="Universidad de la Costa CUC" className="anim-float mx-auto h-auto w-28" />
+              <img src={logoVertical} alt="Universidad de la Costa CUC" className="mx-auto h-auto w-28" />
             </button>
             <div className="pt-1 text-center">
-              <p className="marca-brillo text-xs font-bold leading-4">AUTOMATIZACIÓN DE DATOS HÍDRICOS DEL IDEAM</p>
-              <p className="text-[0.7rem] text-white/80"><span className="marca-firma">Por: Sergio Beltran Coley</span></p>
+              <p className="text-xs font-bold leading-4 text-white">AUTOMATIZACIÓN DE DATOS HÍDRICOS DEL IDEAM</p>
+              <p className="text-[0.7rem] text-white/80">Por: Sergio Beltran Coley</p>
             </div>
           </div>
         ) : (
