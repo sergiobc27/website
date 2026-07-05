@@ -22,70 +22,128 @@ interface ChartMeta {
   filenameParts: string[];
 }
 
-// Captura el nodo del gráfico y compone un PNG con encabezado/pie de marca,
-// devolviendo el Blob. Respeta el tema (claro/oscuro) leyendo la clase `dark`.
-// Reutilizado por la descarga y por la copia al portapapeles.
-export async function composeChartPng(node: HTMLElement, meta: ChartMeta): Promise<Blob> {
-  // Exportar SIEMPRE en claro: un PNG con fondo oscuro es inservible para pegar
-  // en un informe impreso. Quitamos .dark durante la captura (html-to-image
-  // inlina los colores computados en el clon) y lo restauramos al terminar.
-  const root = document.documentElement;
-  const wasDark = root.classList.contains('dark');
-  if (wasDark) root.classList.remove('dark');
-
-  try {
-    const bg = '#ffffff';
-    const fg = '#1a1a1a';
-    const muted = '#595959';
-    const accent = '#C9A227';
-
-    const dataUrl = await toPng(node, { pixelRatio: 2, cacheBust: true, backgroundColor: bg });
-    const chart = new Image();
-    await new Promise<void>((resolve, reject) => {
-      chart.onload = () => resolve();
-      chart.onerror = reject;
-      chart.src = dataUrl;
-    });
-
-    const pad = 48;
-    const headerH = meta.subtitle ? 150 : 108;
-    const footerH = 72;
-    const canvas = document.createElement('canvas');
-    canvas.width = chart.width + pad * 2;
-    canvas.height = headerH + chart.height + footerH;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('No canvas context');
-
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    ctx.textBaseline = 'top';
-    ctx.fillStyle = fg;
-    ctx.font = '700 40px system-ui, -apple-system, sans-serif';
-    ctx.fillText(meta.title, pad, 40);
-    if (meta.subtitle) {
-      ctx.fillStyle = muted;
-      ctx.font = '400 28px system-ui, -apple-system, sans-serif';
-      ctx.fillText(meta.subtitle, pad, 94);
+// Reúne las variables de tema del bloque :root (los valores CLAROS). Sirven
+// para forzar el modo claro en un contenedor aislado sin togglear la clase
+// `.dark` global, que repintaba y hacía parpadear toda la página durante la
+// captura. Recorre también reglas anidadas (@layer, @media de Tailwind v4).
+function collectRootVars(): Record<string, string> {
+  const vars: Record<string, string> = {};
+  const visit = (rules?: CSSRuleList) => {
+    if (!rules) return;
+    for (const rule of Array.from(rules)) {
+      if (rule instanceof CSSStyleRule) {
+        if ((rule.selectorText || '').split(',').some((s) => s.trim() === ':root')) {
+          for (let i = 0; i < rule.style.length; i++) {
+            const prop = rule.style[i];
+            if (prop.startsWith('--')) vars[prop] = rule.style.getPropertyValue(prop);
+          }
+        }
+      } else {
+        visit((rule as CSSGroupingRule).cssRules);
+      }
     }
-    ctx.fillStyle = accent;
-    ctx.fillRect(pad, headerH - 18, canvas.width - pad * 2, 3);
-
-    ctx.drawImage(chart, pad, headerH);
-
-    ctx.fillStyle = muted;
-    ctx.font = '400 24px system-ui, -apple-system, sans-serif';
-    ctx.fillText(`Generado ${new Date().toLocaleDateString('es-CO')}`, pad, headerH + chart.height + 24);
-    const url = 'ideam.sergiobc.com';
-    const w = ctx.measureText(url).width;
-    ctx.fillText(url, canvas.width - pad - w, headerH + chart.height + 24);
-
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-    if (!blob) throw new Error('No blob');
-    return blob;
-  } finally {
-    if (wasDark) root.classList.add('dark');
+  };
+  for (const sheet of Array.from(document.styleSheets)) {
+    try {
+      visit(sheet.cssRules);
+    } catch {
+      // Hoja cross-origin: no legible, se ignora.
+    }
   }
+  return vars;
+}
+
+// Rasteriza el gráfico a un <img>, SIEMPRE en claro (un PNG con fondo oscuro es
+// inservible para pegar en un informe impreso). Camino preferido: clonar el
+// nodo en un host fuera de pantalla con las variables claras aplicadas, así la
+// página visible nunca cambia y no hay parpadeo. Respaldo (si no pudimos leer
+// las variables, p. ej. hojas cross-origin): quitar `.dark` global como antes.
+async function captureChartImage(node: HTMLElement, bg: string): Promise<HTMLImageElement> {
+  const lightVars = collectRootVars();
+  let dataUrl: string;
+
+  if (Object.keys(lightVars).length > 0) {
+    const rect = node.getBoundingClientRect();
+    const host = document.createElement('div');
+    host.style.cssText = 'position:fixed;left:-99999px;top:0;pointer-events:none;z-index:-1;';
+    host.style.colorScheme = 'light';
+    for (const [k, v] of Object.entries(lightVars)) host.style.setProperty(k, v);
+    const clone = node.cloneNode(true) as HTMLElement;
+    clone.style.width = `${rect.width}px`;
+    clone.style.height = `${rect.height}px`;
+    host.appendChild(clone);
+    document.body.appendChild(host);
+    try {
+      dataUrl = await toPng(clone, { pixelRatio: 2, cacheBust: true, backgroundColor: bg });
+    } finally {
+      document.body.removeChild(host);
+    }
+  } else {
+    const root = document.documentElement;
+    const wasDark = root.classList.contains('dark');
+    if (wasDark) root.classList.remove('dark');
+    try {
+      dataUrl = await toPng(node, { pixelRatio: 2, cacheBust: true, backgroundColor: bg });
+    } finally {
+      if (wasDark) root.classList.add('dark');
+    }
+  }
+
+  const chart = new Image();
+  await new Promise<void>((resolve, reject) => {
+    chart.onload = () => resolve();
+    chart.onerror = reject;
+    chart.src = dataUrl;
+  });
+  return chart;
+}
+
+// Captura el nodo del gráfico y compone un PNG con encabezado/pie de marca,
+// devolviendo el Blob. Siempre en claro. Reutilizado por la descarga y la copia.
+export async function composeChartPng(node: HTMLElement, meta: ChartMeta): Promise<Blob> {
+  const bg = '#ffffff';
+  const fg = '#1a1a1a';
+  const muted = '#595959';
+  const accent = '#C9A227';
+
+  const chart = await captureChartImage(node, bg);
+
+  const pad = 48;
+  const headerH = meta.subtitle ? 150 : 108;
+  const footerH = 72;
+  const canvas = document.createElement('canvas');
+  canvas.width = chart.width + pad * 2;
+  canvas.height = headerH + chart.height + footerH;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('No canvas context');
+
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = fg;
+  ctx.font = '700 40px system-ui, -apple-system, sans-serif';
+  ctx.fillText(meta.title, pad, 40);
+  if (meta.subtitle) {
+    ctx.fillStyle = muted;
+    ctx.font = '400 28px system-ui, -apple-system, sans-serif';
+    ctx.fillText(meta.subtitle, pad, 94);
+  }
+  ctx.fillStyle = accent;
+  ctx.fillRect(pad, headerH - 18, canvas.width - pad * 2, 3);
+
+  ctx.drawImage(chart, pad, headerH);
+
+  ctx.fillStyle = muted;
+  ctx.font = '400 24px system-ui, -apple-system, sans-serif';
+  ctx.fillText(`Generado ${new Date().toLocaleDateString('es-CO')}`, pad, headerH + chart.height + 24);
+  const url = 'ideam.sergiobc.com';
+  const w = ctx.measureText(url).width;
+  ctx.fillText(url, canvas.width - pad - w, headerH + chart.height + 24);
+
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+  if (!blob) throw new Error('No blob');
+  return blob;
 }
 
 // Descarga el PNG compuesto como archivo.
