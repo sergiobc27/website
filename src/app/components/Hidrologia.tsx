@@ -10,6 +10,7 @@ import logoCucUrl from '../../imports/Logo_CUC_PNG_letra_blanca_barra_roja_vtcal
 import logoIdeamUrl from '../../imports/Ideam_(Colombia)_logo.png';
 import { AlertTriangle, BarChart4, Calculator, CheckCircle2, CloudRain, FileDown, Mail, Navigation, Plus, Search, Waves } from 'lucide-react';
 import { InfoGrafica } from './InfoGrafica';
+import { InfoEcuacionIdf } from './InfoEcuacionIdf';
 import {
   Bar,
   Area,
@@ -815,7 +816,7 @@ export function Hidrologia() {
               <div className="space-y-4">
                 <div ref={idfChartRef} className="bg-card" style={{ width: '100%', height: '320px' }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={idfChartData}>
+                    <LineChart data={idfChartData} margin={{ top: 4, right: 8, left: 0, bottom: 16 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
                       <XAxis
                         dataKey="durMin"
@@ -842,7 +843,13 @@ export function Hidrologia() {
                         formatter={(value: number, name: string) => [`${fmt(value, 1)} mm/h`, name.replace('tr', 'Tr ') + ' años']}
                         labelFormatter={(v) => `Duración ${v} min`}
                       />
-                      <Legend formatter={(value: string) => `Tr ${value.replace('tr', '')} años`} />
+                      <Legend
+                        verticalAlign="top"
+                        align="center"
+                        height={30}
+                        wrapperStyle={{ paddingBottom: 10, fontSize: 12 }}
+                        formatter={(value: string) => `Tr ${value.replace('tr', '')} años`}
+                      />
                       {(idf.returnPeriods || []).map((tr, index) => (
                         <Line
                           key={tr}
@@ -861,7 +868,10 @@ export function Hidrologia() {
 
                 {idf.equation && (
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-sm">
-                    <span className="text-muted-foreground">Ecuación ajustada:</span>
+                    <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                      Ecuación ajustada:
+                      <InfoEcuacionIdf equation={idf.equation} />
+                    </span>
                     <FormulaIdf equation={idf.equation} className="text-base font-semibold text-card-foreground" />
                     <span className="text-xs text-muted-foreground">
                       (<V>I</V> en mm/h, <V>T</V> en años, <V>D</V> en min · <V>R</V><Sup>2</Sup><Sub>log</Sub> = {fmt(idf.equation.r2, 3)})
