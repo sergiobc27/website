@@ -59,6 +59,55 @@ function collectRootVars(): Record<string, string> {
   return vars;
 }
 
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+// Propiedades de presentación que se copian del SVG vivo al clon serializado.
+const SVG_STYLE_PROPS = [
+  'fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-linecap', 'stroke-linejoin',
+  'opacity', 'fill-opacity', 'stroke-opacity', 'font-family', 'font-size', 'font-weight',
+  'text-anchor', 'dominant-baseline',
+];
+
+// Rasteriza un <svg> de recharts a un <img> PNG (a la resolución de exportación).
+// html-to-image NO dibuja de forma fiable el texto ni los ejes del SVG de recharts
+// (los números de los ejes salían en blanco); en cambio, serializar el SVG con sus
+// estilos computados inlineados y renderizarlo de forma nativa sí los conserva.
+async function rasterizeSvg(svg: SVGElement): Promise<{ img: HTMLImageElement; width: number; height: number }> {
+  const width = Number(svg.getAttribute('width')) || svg.clientWidth;
+  const height = Number(svg.getAttribute('height')) || svg.clientHeight;
+  const clone = svg.cloneNode(true) as SVGElement;
+  const srcEls = svg.querySelectorAll('*');
+  const dstEls = clone.querySelectorAll('*');
+  for (let i = 0; i < srcEls.length; i++) {
+    const cs = getComputedStyle(srcEls[i]);
+    let style = '';
+    for (const p of SVG_STYLE_PROPS) {
+      const v = cs.getPropertyValue(p);
+      if (v) style += `${p}:${v};`;
+    }
+    dstEls[i].setAttribute('style', style);
+  }
+  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  clone.setAttribute('width', String(width));
+  clone.setAttribute('height', String(height));
+  const serialized = new XMLSerializer().serializeToString(clone);
+  const svgImg = await loadImage('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(serialized));
+  const canvas = document.createElement('canvas');
+  canvas.width = width * EXPORT_SCALE;
+  canvas.height = height * EXPORT_SCALE;
+  const ctx = canvas.getContext('2d');
+  if (ctx) ctx.drawImage(svgImg, 0, 0, canvas.width, canvas.height);
+  const img = await loadImage(canvas.toDataURL('image/png'));
+  return { img, width, height };
+}
+
 // Rasteriza el gráfico a un <img>, SIEMPRE en claro (un PNG con fondo oscuro es
 // inservible para pegar en un informe impreso). Se captura el nodo EN VIVO (así
 // el tamaño y el detalle son idénticos a los originales), pero forzando el tema
@@ -67,37 +116,54 @@ function collectRootVars(): Record<string, string> {
 // pudieron leer las variables, p. ej. hojas cross-origin): quitar `.dark` global.
 async function captureChartImage(node: HTMLElement, bg: string): Promise<HTMLImageElement> {
   const lightVars = collectRootVars();
-  let dataUrl: string;
+  const usedInline = Object.keys(lightVars).length > 0;
+  const appliedKeys = usedInline ? Object.keys(lightVars) : [];
+  const prevColorScheme = node.style.colorScheme;
+  const root = document.documentElement;
+  const wasDark = !usedInline && root.classList.contains('dark');
 
-  if (Object.keys(lightVars).length > 0) {
-    const applied = Object.keys(lightVars);
-    for (const k of applied) node.style.setProperty(k, lightVars[k]);
-    const prevColorScheme = node.style.colorScheme;
+  if (usedInline) {
+    for (const k of appliedKeys) node.style.setProperty(k, lightVars[k]);
     node.style.colorScheme = 'light';
+  } else if (wasDark) {
+    root.classList.remove('dark');
+  }
+
+  // Sustituye cada SVG de recharts por un <img> equivalente durante la captura
+  // (ver rasterizeSvg). Es imperceptible en pantalla porque el <img> se ve igual,
+  // y se restaura el SVG al terminar. Si algo falla, se deja el SVG original.
+  const swaps: Array<{ svg: SVGElement; placeholder: HTMLImageElement; parent: Node }> = [];
+  for (const svg of Array.from(node.querySelectorAll<SVGElement>('svg.recharts-surface'))) {
     try {
-      dataUrl = await toPng(node, { pixelRatio: EXPORT_SCALE, cacheBust: true, backgroundColor: bg });
-    } finally {
-      for (const k of applied) node.style.removeProperty(k);
-      node.style.colorScheme = prevColorScheme;
-    }
-  } else {
-    const root = document.documentElement;
-    const wasDark = root.classList.contains('dark');
-    if (wasDark) root.classList.remove('dark');
-    try {
-      dataUrl = await toPng(node, { pixelRatio: EXPORT_SCALE, cacheBust: true, backgroundColor: bg });
-    } finally {
-      if (wasDark) root.classList.add('dark');
+      const { img, width, height } = await rasterizeSvg(svg);
+      img.width = width;
+      img.height = height;
+      img.style.width = `${width}px`;
+      img.style.height = `${height}px`;
+      const parent = svg.parentNode;
+      if (parent) {
+        parent.replaceChild(img, svg);
+        swaps.push({ svg, placeholder: img, parent });
+      }
+    } catch {
+      // Deja el SVG original si la rasterización falla.
     }
   }
 
-  const chart = new Image();
-  await new Promise<void>((resolve, reject) => {
-    chart.onload = () => resolve();
-    chart.onerror = reject;
-    chart.src = dataUrl;
-  });
-  return chart;
+  let dataUrl: string;
+  try {
+    dataUrl = await toPng(node, { pixelRatio: EXPORT_SCALE, cacheBust: true, backgroundColor: bg });
+  } finally {
+    for (const s of swaps) s.parent.replaceChild(s.svg, s.placeholder);
+    if (usedInline) {
+      for (const k of appliedKeys) node.style.removeProperty(k);
+      node.style.colorScheme = prevColorScheme;
+    } else if (wasDark) {
+      root.classList.add('dark');
+    }
+  }
+
+  return loadImage(dataUrl);
 }
 
 // Captura el nodo del gráfico y compone un PNG con encabezado/pie de marca,
