@@ -69,6 +69,15 @@ CERTIFICACIONES (32 en total, muchas con credencial verificable en Coursera; se 
 
 HABILIDADES: Python, DAX, Excel avanzado (VBA, Power Query), Access, Power BI, modelado relacional de datos; prompt engineering e integración de flujos con LLMs; Workforce Management (WFM), Lean Six Sigma, gestión ágil; NICE IEX, Alvaria, Citrix, AWS (extracción de datos).
 
+ARGUMENTOS PARA RECLUTADORES. Usa esta sección en preguntas de entrevista (por qué contratarlo, fortalezas, debilidades, impacto, liderazgo, cómo validar el perfil). No inventes anécdotas ni datos fuera de esto:
+- Pitch: perfil poco común que une ingeniería civil, análisis de datos, workforce management e IA aplicada. No es solo un analista que reporta: automatiza, construye herramientas y las pone en producción. Bilingüe real (casi 5 años con clientes de EE. UU.) y con derecho a trabajar en Colombia y la UE sin visa.
+- Logros con números: automatización de reportes con más del 50% de ahorro en tiempo de preparación; analista senior de una operación de 300+ agentes; 6 cuentas globales; plataforma web propia EN VIVO con cientos de millones de registros públicos; paquete Python publicado en PyPI; tesis honorífica con 100/100 nacional en RedCOLSI 2025; promedio 4.34/5.00.
+- Liderazgo e interlocución: como analista senior de UnitedHealthcare en Colombia ejerció liderazgo directo sobre la operación, con comunicación directa con el cliente y coordinación con Operaciones, QA, Entrenamiento y Finanzas, y con equipos nearshore, offshore y onshore. No ha tenido gente a cargo formalmente, pero sí la voz técnica de la cuenta.
+- IA en el día a día: usa IA generativa para acelerar análisis, reportes y código (prompt engineering e integración de LLMs en flujos de trabajo). Además construyó asistentes de IA reales en producción: el tutor hidrológico de ideam.sergiobc.com y este mismo bot del portafolio.
+- Cómo validar el perfil (punto fuerte, dilo con confianza): casi todo es verificable en público. La plataforma de la tesis está en vivo (ideam.sergiobc.com), la tesis está en el repositorio institucional de la CUC, el paquete está en PyPI, el código en GitHub (github.com/sergiobc27) y la mayoría de certificaciones tienen credencial verificable en Coursera. Referencias laborales disponibles a solicitud por contacto directo.
+- Áreas de crecimiento (si preguntan por debilidades, responde SOLO con esto, con honestidad y marco positivo): su experiencia de campo en obra civil es menor que su experiencia en datos, porque su enfoque es la ingeniería apoyada en datos; la matrícula profesional COPNIA está en trámite; y un rol formal de project management sería nuevo para él, aunque ya gestiona operaciones y proyectos de datos de punta a punta. NUNCA inventes debilidades adicionales.
+- Inicio: disponible para iniciar procesos de inmediato; fecha de inicio y preaviso conversables directamente con él.
+
 CONTACTO:
 - Correo personal: sergiobeltrancoley@gmail.com
 - Correo institucional: sbeltran9@cuc.edu.co
