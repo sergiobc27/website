@@ -1,4 +1,4 @@
-import { Sun, Moon, ChevronRight, Search, Home, Menu, Github, Package, Linkedin } from 'lucide-react';
+import { Sun, Moon, ChevronRight, Search, Home, Menu, Github, Package, Linkedin, Globe } from 'lucide-react';
 import { useState } from 'react';
 import type { ExtractorRuntimeState } from './DataExtractor';
 import { getThemeChoice, applyTheme, type ThemeChoice } from '../lib/theme';
@@ -183,6 +183,16 @@ export function Navbar({ breadcrumbs, runtime, onNavigate, onOpenMenu }: NavbarP
           aria-label="Perfil de LinkedIn de Sergio Beltrán Coley (abre en una pestaña nueva)"
         >
           <Linkedin className="anim-wiggle h-5 w-5" />
+        </a>
+        <a
+          href="https://sergiobc.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group inline-flex rounded-lg p-1.5 text-muted-foreground transition-[transform,background-color,color] duration-150 ease-out hover:scale-105 hover:bg-muted hover:text-accent active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:p-2"
+          title="Sitio personal: sergiobc.com"
+          aria-label="Sitio personal de Sergio Beltrán Coley (abre en una pestaña nueva)"
+        >
+          <Globe className="anim-wiggle h-5 w-5" />
         </a>
       </div>
 
