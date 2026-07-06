@@ -2,7 +2,7 @@
 // del asistente en POST /api/chat con Workers AI. Aislado: si la IA falla,
 // el sitio sigue sirviéndose igual.
 import { looksLikeManipulation, CHAT_REJECTION } from './guardrail.js'
-import { SYSTEM_PROMPT } from './dossier.js'
+import { systemPrompt } from './dossier.js'
 
 const MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct'
 const VENTANA_MS = 10 * 60 * 1000
@@ -83,7 +83,7 @@ export async function handleChat(request, env, limiter, ahora) {
   mensajesHoy += 1
   try {
     const result = await env.AI.run(MODEL, {
-      messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...v.messages.slice(-HISTORIAL_AL_MODELO)],
+      messages: [{ role: 'system', content: systemPrompt(ahora) }, ...v.messages.slice(-HISTORIAL_AL_MODELO)],
       max_tokens: 512,
     })
     const reply = typeof result?.response === 'string' && result.response.trim() ? result.response.trim() : null

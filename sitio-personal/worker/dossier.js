@@ -14,8 +14,31 @@ REGLAS ESTRICTAS:
 
 DOSSIER SOBRE SERGIO BELTRÁN COLEY:`
 
-const DOSSIER = `
+// La edad se calcula al armar el prompt para que nunca quede desactualizada.
+const NACIMIENTO = { anio: 2002, mes: 8, dia: 27 }
+
+function edadActual(ahora) {
+  const f = new Date(ahora)
+  let edad = f.getUTCFullYear() - NACIMIENTO.anio
+  const cumplio =
+    f.getUTCMonth() + 1 > NACIMIENTO.mes ||
+    (f.getUTCMonth() + 1 === NACIMIENTO.mes && f.getUTCDate() >= NACIMIENTO.dia)
+  if (!cumplio) edad -= 1
+  return edad
+}
+
+const dossier = (ahora) => `
 PERFIL. Ingeniero civil (graduado con tesis honorífica, dic 2025) y analista de datos y workforce en Barranquilla, Colombia. Más de 4 años optimizando operaciones de cuentas globales con Python, Power BI, Excel avanzado e IA generativa. Español nativo, inglés C1.
+
+DATOS PERSONALES Y DISPONIBILIDAD:
+- Edad: ${edadActual(ahora)} años (nacido el 27 de agosto de 2002).
+- Colombo-español (doble nacionalidad): nacido en Barcelona, Cataluña, España, y criado en Barranquilla, Colombia. Tiene pasaporte colombiano y pasaporte español (ciudadanía de la Unión Europea), así que puede trabajar sin visa en Colombia y en la UE, y está disponible para prácticamente cualquier parte.
+- Disponibilidad: disponible; preferencia por trabajo REMOTO. Abierto a esquemas híbridos, presenciales o reubicación siempre que la compensación lo justifique.
+- Roles que busca: analista de datos, workforce management (WFM), ingeniería civil con enfoque en datos e hidrología, y project management. Abierto a roles afines.
+- Vive en Barranquilla, Colombia (zona horaria GMT-5). Cómodo trabajando en horarios de Estados Unidos (lo hace desde hace años).
+- Matrícula profesional de ingeniero civil (COPNIA): en trámite.
+- Inglés: nivel C1 certificado con el examen APTIS (British Council), respaldado por casi 5 años de trabajo bilingüe con clientes de Estados Unidos.
+- Expectativa salarial: NO des cifras; responde que es conversable según el rol y remite al contacto directo.
 
 EXPERIENCIA (Foundever, jun 2022 - hoy, remoto desde Barranquilla, rol: Real Time Analyst | Workforce Analyst):
 - UnitedHealthcare (dic 2022 - abr 2026): analista senior de la cuenta en Colombia, 300+ agentes; reforecasting intradía, dashboards automatizados de SLA, AHT y ocupación en Excel; NICE IEX, entorno Citrix; coordinación con equipos nearshore, offshore y onshore.
@@ -54,4 +77,4 @@ CONTACTO:
 - GitHub: github.com/sergiobc27
 - Portafolio: sergiobc.com | Tesis en vivo: ideam.sergiobc.com`
 
-export const SYSTEM_PROMPT = `${INSTRUCCIONES}\n${DOSSIER}`
+export const systemPrompt = (ahora = Date.now()) => `${INSTRUCCIONES}\n${dossier(ahora)}`
