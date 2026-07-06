@@ -1,5 +1,11 @@
 import { toPng } from 'html-to-image';
 
+// El gráfico se rasteriza a este múltiplo de resolución (nitidez retina). El
+// encabezado/pie/márgenes se dibujan con las mismas unidades, así que TODO se
+// escala por este factor para que el marco de marca quede proporcional al
+// gráfico (antes el título y los márgenes salían diminutos junto a un gráfico 2×).
+const EXPORT_SCALE = 2;
+
 export function slugify(text: string): string {
   return text
     .normalize('NFD')
@@ -69,7 +75,7 @@ async function captureChartImage(node: HTMLElement, bg: string): Promise<HTMLIma
     const prevColorScheme = node.style.colorScheme;
     node.style.colorScheme = 'light';
     try {
-      dataUrl = await toPng(node, { pixelRatio: 2, cacheBust: true, backgroundColor: bg });
+      dataUrl = await toPng(node, { pixelRatio: EXPORT_SCALE, cacheBust: true, backgroundColor: bg });
     } finally {
       for (const k of applied) node.style.removeProperty(k);
       node.style.colorScheme = prevColorScheme;
@@ -79,7 +85,7 @@ async function captureChartImage(node: HTMLElement, bg: string): Promise<HTMLIma
     const wasDark = root.classList.contains('dark');
     if (wasDark) root.classList.remove('dark');
     try {
-      dataUrl = await toPng(node, { pixelRatio: 2, cacheBust: true, backgroundColor: bg });
+      dataUrl = await toPng(node, { pixelRatio: EXPORT_SCALE, cacheBust: true, backgroundColor: bg });
     } finally {
       if (wasDark) root.classList.add('dark');
     }
@@ -104,9 +110,12 @@ export async function composeChartPng(node: HTMLElement, meta: ChartMeta): Promi
 
   const chart = await captureChartImage(node, bg);
 
-  const pad = 48;
-  const headerH = meta.subtitle ? 150 : 108;
-  const footerH = 72;
+  // El gráfico ya viene a EXPORT_SCALE×; el marco se dibuja en esas mismas
+  // unidades, así que cada medida se escala igual para quedar proporcional.
+  const s = EXPORT_SCALE;
+  const pad = 48 * s;
+  const headerH = (meta.subtitle ? 150 : 108) * s;
+  const footerH = 72 * s;
   const canvas = document.createElement('canvas');
   canvas.width = chart.width + pad * 2;
   canvas.height = headerH + chart.height + footerH;
@@ -118,24 +127,24 @@ export async function composeChartPng(node: HTMLElement, meta: ChartMeta): Promi
 
   ctx.textBaseline = 'top';
   ctx.fillStyle = fg;
-  ctx.font = '700 40px system-ui, -apple-system, sans-serif';
-  ctx.fillText(meta.title, pad, 40);
+  ctx.font = `700 ${40 * s}px system-ui, -apple-system, sans-serif`;
+  ctx.fillText(meta.title, pad, 40 * s);
   if (meta.subtitle) {
     ctx.fillStyle = muted;
-    ctx.font = '400 28px system-ui, -apple-system, sans-serif';
-    ctx.fillText(meta.subtitle, pad, 94);
+    ctx.font = `400 ${28 * s}px system-ui, -apple-system, sans-serif`;
+    ctx.fillText(meta.subtitle, pad, 94 * s);
   }
   ctx.fillStyle = accent;
-  ctx.fillRect(pad, headerH - 18, canvas.width - pad * 2, 3);
+  ctx.fillRect(pad, headerH - 18 * s, canvas.width - pad * 2, 3 * s);
 
   ctx.drawImage(chart, pad, headerH);
 
   ctx.fillStyle = muted;
-  ctx.font = '400 24px system-ui, -apple-system, sans-serif';
-  ctx.fillText(`Generado ${new Date().toLocaleDateString('es-CO')}`, pad, headerH + chart.height + 24);
+  ctx.font = `400 ${24 * s}px system-ui, -apple-system, sans-serif`;
+  ctx.fillText(`Generado ${new Date().toLocaleDateString('es-CO')}`, pad, headerH + chart.height + 24 * s);
   const url = 'ideam.sergiobc.com';
   const w = ctx.measureText(url).width;
-  ctx.fillText(url, canvas.width - pad - w, headerH + chart.height + 24);
+  ctx.fillText(url, canvas.width - pad - w, headerH + chart.height + 24 * s);
 
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
   if (!blob) throw new Error('No blob');
