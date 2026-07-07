@@ -84,13 +84,33 @@ async function rasterizeSvg(svg: SVGElement): Promise<{ img: HTMLImageElement; w
   const srcEls = svg.querySelectorAll('*');
   const dstEls = clone.querySelectorAll('*');
   for (let i = 0; i < srcEls.length; i++) {
-    const cs = getComputedStyle(srcEls[i]);
+    const src = srcEls[i];
+    const dst = dstEls[i];
+    const cs = getComputedStyle(src);
+    const cls = src.getAttribute('class') || '';
+    // Las series (líneas y áreas) se animan con stroke-dasharray para el
+    // "revelado"; al serializar el SVG puede quedar en su estado inicial
+    // (p. ej. "0px 982px" = todo hueco) y salir INVISIBLE. Forzamos trazo
+    // continuo en ellas, conservando el punteado solo en la rejilla.
+    const isSeries = /recharts-(line-curve|area-area|area-curve)/.test(cls);
     let style = '';
     for (const p of SVG_STYLE_PROPS) {
+      if (p === 'stroke-dasharray' && isSeries) continue;
       const v = cs.getPropertyValue(p);
       if (v) style += `${p}:${v};`;
     }
-    dstEls[i].setAttribute('style', style);
+    if (isSeries) style += 'stroke-dasharray:none;stroke-dashoffset:0;';
+    dst.setAttribute('style', style);
+    if (isSeries) {
+      dst.removeAttribute('stroke-dasharray');
+      dst.removeAttribute('stroke-dashoffset');
+    }
+    // Quitar los clip-path: recharts usa clipPaths (uno para el área del plot y
+    // otro para la animación de revelado); al renderizar el SVG aislado como
+    // imagen, esas referencias url(#…) pueden resolverse mal y OCULTAR las
+    // series (p. ej. el área de "Total anual" salía vacía). Sin clip los datos
+    // caen igual dentro del área, así que se ven completos.
+    dst.removeAttribute('clip-path');
   }
   clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
   clone.setAttribute('width', String(width));
@@ -186,12 +206,23 @@ export async function composeChartPng(node: HTMLElement, meta: ChartMeta): Promi
   const footerH = 72 * s;
   const plotW = chartCssW * s;
   const plotH = chartCssH * s;
-  const contentW = plotW;
-  const canvasW = plotW + pad * 2;
 
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('No canvas context');
+
+  // Ancho del lienzo: al menos lo que necesita el pie (fecha + URL) para que no
+  // se encimen en gráficas angostas (p. ej. copiadas desde el móvil). Si el plot
+  // es más angosto que ese mínimo, se centra en el lienzo.
+  const footerFont = 24 * s;
+  const genText = `Generado ${new Date().toLocaleDateString('es-CO')}`;
+  const url = 'ideam.sergiobc.com';
+  ctx.font = `400 ${footerFont}px system-ui, -apple-system, sans-serif`;
+  const footerNeed = ctx.measureText(genText).width + 60 * s + ctx.measureText(url).width;
+  const contentW = Math.max(plotW, footerNeed);
+  const canvasW = contentW + pad * 2;
+  const plotX = pad + (contentW - plotW) / 2;
+  canvas.width = canvasW; // fijar antes de medir texto
 
   // — Medir la leyenda (para reservar su alto) —
   const legendFont = 26 * s;
@@ -200,7 +231,6 @@ export async function composeChartPng(node: HTMLElement, meta: ChartMeta): Promi
   const itemGap = 36 * s;
   const lineH = 42 * s;
   const legendPadY = legend.length ? 14 * s : 0;
-  canvas.width = canvasW; // fijar antes de medir texto
   ctx.font = `500 ${legendFont}px system-ui, -apple-system, sans-serif`;
   const measured = legend.map((it) => ({ ...it, w: markerW + markerGap + ctx.measureText(it.label).width }));
   const lines: Array<Array<(typeof measured)[number]>> = [];
@@ -270,15 +300,14 @@ export async function composeChartPng(node: HTMLElement, meta: ChartMeta): Promi
     ctx.textBaseline = 'top';
   }
 
-  // — Gráfico —
-  ctx.drawImage(chart, pad, headerH + legendH, plotW, plotH);
+  // — Gráfico (centrado si es más angosto que el lienzo) —
+  ctx.drawImage(chart, plotX, headerH + legendH, plotW, plotH);
 
   // — Pie —
   const footerY = headerH + legendH + plotH + 24 * s;
   ctx.fillStyle = muted;
-  ctx.font = `400 ${24 * s}px system-ui, -apple-system, sans-serif`;
-  ctx.fillText(`Generado ${new Date().toLocaleDateString('es-CO')}`, pad, footerY);
-  const url = 'ideam.sergiobc.com';
+  ctx.font = `400 ${footerFont}px system-ui, -apple-system, sans-serif`;
+  ctx.fillText(genText, pad, footerY);
   const uw = ctx.measureText(url).width;
   ctx.fillText(url, canvas.width - pad - uw, footerY);
 
