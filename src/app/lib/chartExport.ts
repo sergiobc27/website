@@ -199,46 +199,51 @@ export async function composeChartPng(node: HTMLElement, meta: ChartMeta): Promi
 
   const { img: chart, width: chartCssW, height: chartCssH, legend } = await capturePlot(node);
 
-  // Todo se dibuja a EXPORT_SCALE× para quedar nítido y proporcional al plot.
-  const s = EXPORT_SCALE;
-  const pad = 48 * s;
-  const headerH = (meta.subtitle ? 150 : 108) * s;
-  const footerH = 72 * s;
-  const plotW = chartCssW * s;
-  const plotH = chartCssH * s;
+  // El plot ya viene a EXPORT_SCALE× para quedar nítido. TODA la tipografía y
+  // los márgenes se derivan del ancho del plot (m = fracción de ese ancho), así
+  // el título, la leyenda y el pie se ven equilibrados por igual en gráficas
+  // anchas, angostas o copiadas desde el móvil (antes eran fijos y se veían
+  // desproporcionados). Al escalar el pie con el ancho, además nunca se encima.
+  const plotW = chartCssW * EXPORT_SCALE;
+  const plotH = chartCssH * EXPORT_SCALE;
+  const m = (frac: number) => Math.round(plotW * frac);
+
+  const pad = m(0.045);
+  const titlePx = m(0.038);
+  const subPx = m(0.026);
+  const legendFont = m(0.024);
+  const footerFont = m(0.022);
+  const dividerH = Math.max(2, m(0.0018));
+  const font = (weight: number, sizePx: number) => `${weight} ${sizePx}px system-ui, -apple-system, sans-serif`;
 
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('No canvas context');
 
-  // Ancho del lienzo: al menos lo que necesita el pie (fecha + URL) para que no
-  // se encimen en gráficas angostas (p. ej. copiadas desde el móvil). Si el plot
-  // es más angosto que ese mínimo, se centra en el lienzo.
-  const footerFont = 24 * s;
-  const genText = `Generado ${new Date().toLocaleDateString('es-CO')}`;
-  const url = 'ideam.sergiobc.com';
-  ctx.font = `400 ${footerFont}px system-ui, -apple-system, sans-serif`;
-  const footerNeed = ctx.measureText(genText).width + 60 * s + ctx.measureText(url).width;
-  const contentW = Math.max(plotW, footerNeed);
-  const canvasW = contentW + pad * 2;
-  const plotX = pad + (contentW - plotW) / 2;
+  const canvasW = plotW + pad * 2;
+  const maxTextW = plotW; // = canvasW - pad*2
   canvas.width = canvasW; // fijar antes de medir texto
 
-  // — Medir la leyenda (para reservar su alto) —
-  const legendFont = 26 * s;
-  const markerW = 42 * s;
-  const markerGap = 12 * s;
-  const itemGap = 36 * s;
-  const lineH = 42 * s;
-  const legendPadY = legend.length ? 14 * s : 0;
-  ctx.font = `500 ${legendFont}px system-ui, -apple-system, sans-serif`;
+  // — Alto del encabezado, según el tamaño real de la tipografía —
+  const titleTop = m(0.03);
+  const subTop = titleTop + titlePx + m(0.012);
+  const dividerY = (meta.subtitle ? subTop + subPx : titleTop + titlePx) + m(0.022);
+  const headerH = dividerY + dividerH + m(0.03);
+
+  // — Medir la leyenda (para reservar su alto), con salto de línea si no cabe —
+  const markerW = m(0.042);
+  const markerGap = m(0.012);
+  const itemGap = m(0.032);
+  const lineH = Math.round(legendFont * 1.7);
+  const legendPadY = legend.length ? m(0.016) : 0;
+  ctx.font = font(500, legendFont);
   const measured = legend.map((it) => ({ ...it, w: markerW + markerGap + ctx.measureText(it.label).width }));
   const lines: Array<Array<(typeof measured)[number]>> = [];
   let cur: Array<(typeof measured)[number]> = [];
   let curW = 0;
   for (const it of measured) {
     const add = it.w + (cur.length ? itemGap : 0);
-    if (cur.length && curW + add > contentW) {
+    if (cur.length && curW + add > maxTextW) {
       lines.push(cur);
       cur = [it];
       curW = it.w;
@@ -250,44 +255,43 @@ export async function composeChartPng(node: HTMLElement, meta: ChartMeta): Promi
   if (cur.length) lines.push(cur);
   const legendH = legend.length ? lines.length * lineH + legendPadY * 2 : 0;
 
+  const footerH = Math.round(footerFont * 2.4);
   canvas.height = headerH + legendH + plotH + footerH;
 
   // Fijar height reinicia el contexto: re-pintar todo desde cero.
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // — Encabezado (el tamaño de fuente se reduce si el texto no cabe, para que
-  //   nunca se corte en gráficas angostas) —
-  const maxTextW = canvas.width - pad * 2;
+  // — Encabezado (reduce la fuente si el texto no cabe, para que nunca se corte) —
   const fitPx = (text: string, weight: number, basePx: number) => {
-    ctx.font = `${weight} ${basePx}px system-ui, -apple-system, sans-serif`;
+    ctx.font = font(weight, basePx);
     const w = ctx.measureText(text).width;
-    const px = w > maxTextW ? Math.max(20 * s, Math.floor((basePx * maxTextW) / w)) : basePx;
-    ctx.font = `${weight} ${px}px system-ui, -apple-system, sans-serif`;
+    const p = w > maxTextW ? Math.floor((basePx * maxTextW) / w) : basePx;
+    ctx.font = font(weight, p);
   };
   ctx.textBaseline = 'top';
   ctx.fillStyle = fg;
-  fitPx(meta.title, 700, 40 * s);
-  ctx.fillText(meta.title, pad, 40 * s);
+  fitPx(meta.title, 700, titlePx);
+  ctx.fillText(meta.title, pad, titleTop);
   if (meta.subtitle) {
     ctx.fillStyle = muted;
-    fitPx(meta.subtitle, 400, 28 * s);
-    ctx.fillText(meta.subtitle, pad, 94 * s);
+    fitPx(meta.subtitle, 400, subPx);
+    ctx.fillText(meta.subtitle, pad, subTop);
   }
   ctx.fillStyle = accent;
-  ctx.fillRect(pad, headerH - 18 * s, canvas.width - pad * 2, 3 * s);
+  ctx.fillRect(pad, dividerY, canvasW - pad * 2, dividerH);
 
   // — Leyenda (marcador de color + etiqueta en gris oscuro, centrada) —
   if (legend.length) {
-    ctx.font = `500 ${legendFont}px system-ui, -apple-system, sans-serif`;
+    ctx.font = font(500, legendFont);
     ctx.textBaseline = 'middle';
+    ctx.lineWidth = Math.max(2, m(0.004));
     lines.forEach((line, li) => {
       const totalW = line.reduce((a, it) => a + it.w, 0) + itemGap * (line.length - 1);
-      let x = (canvas.width - totalW) / 2;
+      let x = (canvasW - totalW) / 2;
       const y = headerH + legendPadY + li * lineH + lineH / 2;
       for (const it of line) {
         ctx.strokeStyle = it.color;
-        ctx.lineWidth = 4 * s;
         ctx.beginPath();
         ctx.moveTo(x, y);
         ctx.lineTo(x + markerW, y);
@@ -300,16 +304,18 @@ export async function composeChartPng(node: HTMLElement, meta: ChartMeta): Promi
     ctx.textBaseline = 'top';
   }
 
-  // — Gráfico (centrado si es más angosto que el lienzo) —
-  ctx.drawImage(chart, plotX, headerH + legendH, plotW, plotH);
+  // — Gráfico —
+  ctx.drawImage(chart, pad, headerH + legendH, plotW, plotH);
 
   // — Pie —
-  const footerY = headerH + legendH + plotH + 24 * s;
+  const genText = `Generado ${new Date().toLocaleDateString('es-CO')}`;
+  const url = 'ideam.sergiobc.com';
+  const footerY = headerH + legendH + plotH + m(0.024);
   ctx.fillStyle = muted;
-  ctx.font = `400 ${footerFont}px system-ui, -apple-system, sans-serif`;
+  ctx.font = font(400, footerFont);
   ctx.fillText(genText, pad, footerY);
   const uw = ctx.measureText(url).width;
-  ctx.fillText(url, canvas.width - pad - uw, footerY);
+  ctx.fillText(url, canvasW - pad - uw, footerY);
 
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
   if (!blob) throw new Error('No blob');
