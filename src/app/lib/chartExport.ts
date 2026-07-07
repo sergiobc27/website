@@ -4,6 +4,26 @@
 // gráfico (antes el título y los márgenes salían diminutos junto a un gráfico 2×).
 const EXPORT_SCALE = 2;
 
+// Ancho CSS al que se compone SIEMPRE la gráfica, sin importar el dispositivo.
+// Los contenedores de recharts usan ancho fluido (100%) pero ALTO fijo en px, así
+// que la geometría del plot cambia con el viewport: en escritorio sale ancho y en
+// móvil casi cuadrado y "aplastado". Antes de capturar forzamos este ancho para
+// que el alto (ya fijo) + este ancho fijo den una imagen idéntica en cualquier
+// pantalla (la que se ve bien en un monitor de buena resolución).
+const CANONICAL_CSS_WIDTH = 1000;
+
+// Tolerancia: si el plot ya mide ~este ancho no re-maquetamos (evita el reflujo).
+const RELAYOUT_TOLERANCE_PX = 8;
+// Tras forzar el ancho, recharts re-anima barras/curvas (morph) durante
+// `animationDuration` (550 ms en todas las gráficas). Esperamos un poco más para
+// capturar el estado final, nunca un fotograma intermedio.
+const RELAYOUT_SETTLE_MS = 700;
+// Cota de seguridad para no colgar la exportación si el re-maquetado nunca cuadra.
+const RELAYOUT_TIMEOUT_MS = 1500;
+
+const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
 export function slugify(text: string): string {
   return text
     .normalize('NFD')
@@ -64,6 +84,40 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     img.onerror = reject;
     img.src = src;
   });
+}
+
+// El <svg> del plot es la superficie de recharts que NO está dentro de la leyenda
+// (esa contiene sus propios <svg> diminutos por cada marcador).
+function findPlotSvg(node: HTMLElement): SVGElement | undefined {
+  return Array.from(node.querySelectorAll<SVGElement>('svg.recharts-surface')).find(
+    (s) => !s.closest('.recharts-legend-wrapper'),
+  );
+}
+
+function plotSvgWidth(node: HTMLElement): number {
+  const svg = findPlotSvg(node);
+  if (!svg) return 0;
+  return Number(svg.getAttribute('width')) || svg.clientWidth || 0;
+}
+
+// Espera a que recharts re-maquete el <svg> del plot al ancho objetivo tras forzar
+// el ancho del contenedor. Sale al llegar al objetivo, al estabilizarse el ancho, o
+// por timeout (fallback: capturar con lo que haya).
+async function waitForPlotWidth(node: HTMLElement, targetCssW: number): Promise<void> {
+  const start = performance.now();
+  let last = -1;
+  let stable = 0;
+  while (performance.now() - start < RELAYOUT_TIMEOUT_MS) {
+    await nextFrame();
+    const w = plotSvgWidth(node);
+    if (Math.abs(w - targetCssW) <= RELAYOUT_TOLERANCE_PX) return;
+    if (w === last) {
+      if (++stable >= 3) return;
+    } else {
+      stable = 0;
+      last = w;
+    }
+  }
 }
 
 // Propiedades de presentación que se copian del SVG vivo al clon serializado.
@@ -136,29 +190,54 @@ interface LegendItem {
 // nodo (sin tocar el DOM en vivo → sin parpadeo ni conflictos con React), rasteriza
 // el <svg> del plot de forma nativa (conserva ejes, números y curvas, cosa que
 // html-to-image NO hacía) y extrae los ítems de la leyenda (que van en HTML aparte).
+//
+// Antes de capturar fuerza el ancho canónico (CANONICAL_CSS_WIDTH): el nodo se
+// posiciona FUERA de pantalla con ese ancho fijo, se deja que recharts re-maquete y
+// se rasteriza. Como el alto del contenedor ya es fijo en px, forzar el ancho hace
+// que la imagen sea IDÉNTICA en móvil y escritorio (la misma que se ve bien en un
+// monitor de buena resolución), y no una versión angosta/aplastada en el celular.
+// Para que el usuario no vea un salto de maquetación, se congela el alto del
+// contenedor padre mientras el nodo está fuera de pantalla (solo se ve el gesto de
+// "Generando…"/"Copiando…"). Si el re-maquetado no cuadra a tiempo, se captura con
+// lo que haya (nunca falla la exportación).
 async function capturePlot(
   node: HTMLElement,
 ): Promise<{ img: HTMLImageElement; width: number; height: number; legend: LegendItem[] }> {
   const lightVars = collectRootVars();
   const usedInline = Object.keys(lightVars).length > 0;
-  const appliedKeys = usedInline ? Object.keys(lightVars) : [];
-  const prevColorScheme = node.style.colorScheme;
   const root = document.documentElement;
   const wasDark = !usedInline && root.classList.contains('dark');
 
+  // Snapshot para restaurar EN UN SOLO paso (quita vars de tema, ancho y posición).
+  const originalStyle = node.getAttribute('style');
+  const parent = node.parentElement;
+  const parentPrevMinHeight = parent ? parent.style.minHeight : '';
+
+  const needRelayout = node.clientWidth > 0 && Math.abs(node.clientWidth - CANONICAL_CSS_WIDTH) > RELAYOUT_TOLERANCE_PX;
+
   if (usedInline) {
-    for (const k of appliedKeys) node.style.setProperty(k, lightVars[k]);
+    for (const k of Object.keys(lightVars)) node.style.setProperty(k, lightVars[k]);
     node.style.colorScheme = 'light';
   } else if (wasDark) {
     root.classList.remove('dark');
   }
 
   try {
-    // El <svg> del plot es la superficie de recharts que NO está dentro de la
-    // leyenda (esa contiene sus propios <svg> diminutos por cada marcador).
-    const plotSvg = Array.from(node.querySelectorAll<SVGElement>('svg.recharts-surface')).find(
-      (s) => !s.closest('.recharts-legend-wrapper'),
-    );
+    if (needRelayout) {
+      // Congelar el alto del padre ANTES de sacar el nodo del flujo (evita el salto).
+      if (parent) parent.style.minHeight = `${parent.offsetHeight}px`;
+      node.style.position = 'fixed';
+      node.style.left = '-100000px';
+      node.style.top = '0';
+      node.style.width = `${CANONICAL_CSS_WIDTH}px`;
+      node.style.maxWidth = 'none';
+      node.style.zIndex = '-1';
+      await waitForPlotWidth(node, CANONICAL_CSS_WIDTH);
+      // Dejar terminar el morph de barras/curvas que dispara recharts al re-maquetar.
+      await sleep(RELAYOUT_SETTLE_MS);
+    }
+
+    const plotSvg = findPlotSvg(node);
     if (!plotSvg) throw new Error('No recharts surface');
     const { img, width, height } = await rasterizeSvg(plotSvg);
 
@@ -180,13 +259,63 @@ async function capturePlot(
     }
     return { img, width, height, legend };
   } finally {
-    if (usedInline) {
-      for (const k of appliedKeys) node.style.removeProperty(k);
-      node.style.colorScheme = prevColorScheme;
-    } else if (wasDark) {
-      root.classList.add('dark');
-    }
+    // Restaurar el estilo original del nodo en un solo paso (quita vars, ancho y
+    // posición) y liberar el alto congelado del padre.
+    if (originalStyle === null) node.removeAttribute('style');
+    else node.setAttribute('style', originalStyle);
+    if (parent) parent.style.minHeight = parentPrevMinHeight;
+    if (wasDark) root.classList.add('dark');
   }
+}
+
+// Tamaños de tipografía y márgenes del marco de marca, PUROS (testeable sin DOM).
+// Se atan a la dimensión MENOR efectiva del plot — min(ancho, alto·2.6) — y NO al
+// ancho: en gráficas anchas-y-bajas atarse al ancho hacía el título/leyenda/pie
+// gigantes frente a un plot bajo. Como el alto del plot es fijo por dispositivo y
+// el ancho se canoniza al capturar, el marco queda proporcional e IDÉNTICO en móvil
+// y escritorio (misma altura ⇒ mismas tipografías, sin importar la pantalla).
+export interface ChartLayoutMetrics {
+  ref: number;
+  pad: number;
+  titlePx: number;
+  subPx: number;
+  legendFont: number;
+  footerFont: number;
+  dividerH: number;
+  titleTop: number;
+  subGap: number;
+  dividerGap: number;
+  headerBottomGap: number;
+  markerW: number;
+  markerGap: number;
+  itemGap: number;
+  legendPadY: number;
+  legendLineWidth: number;
+  footerGap: number;
+}
+
+export function chartLayoutMetrics(plotW: number, plotH: number): ChartLayoutMetrics {
+  const ref = Math.min(plotW, plotH * 2.6);
+  const s = (frac: number) => Math.round(ref * frac);
+  return {
+    ref,
+    pad: s(0.045),
+    titlePx: s(0.03),
+    subPx: s(0.02),
+    legendFont: s(0.018),
+    footerFont: s(0.017),
+    dividerH: Math.max(2, s(0.0016)),
+    titleTop: s(0.028),
+    subGap: s(0.012),
+    dividerGap: s(0.02),
+    headerBottomGap: s(0.028),
+    markerW: s(0.04),
+    markerGap: s(0.012),
+    itemGap: s(0.03),
+    legendPadY: s(0.014),
+    legendLineWidth: Math.max(2, s(0.0035)),
+    footerGap: s(0.022),
+  };
 }
 
 // Captura el gráfico y compone un PNG con encabezado, leyenda y pie de marca,
@@ -199,21 +328,12 @@ export async function composeChartPng(node: HTMLElement, meta: ChartMeta): Promi
 
   const { img: chart, width: chartCssW, height: chartCssH, legend } = await capturePlot(node);
 
-  // El plot ya viene a EXPORT_SCALE× para quedar nítido. TODA la tipografía y
-  // los márgenes se derivan del ancho del plot (m = fracción de ese ancho), así
-  // el título, la leyenda y el pie se ven equilibrados por igual en gráficas
-  // anchas, angostas o copiadas desde el móvil (antes eran fijos y se veían
-  // desproporcionados). Al escalar el pie con el ancho, además nunca se encima.
+  // El plot ya viene a EXPORT_SCALE× para quedar nítido. La tipografía y los
+  // márgenes salen de chartLayoutMetrics (atados al alto, no al ancho).
   const plotW = chartCssW * EXPORT_SCALE;
   const plotH = chartCssH * EXPORT_SCALE;
-  const m = (frac: number) => Math.round(plotW * frac);
-
-  const pad = m(0.045);
-  const titlePx = m(0.038);
-  const subPx = m(0.026);
-  const legendFont = m(0.024);
-  const footerFont = m(0.022);
-  const dividerH = Math.max(2, m(0.0018));
+  const M = chartLayoutMetrics(plotW, plotH);
+  const { pad, titlePx, subPx, legendFont, footerFont, dividerH } = M;
   const font = (weight: number, sizePx: number) => `${weight} ${sizePx}px system-ui, -apple-system, sans-serif`;
 
   const canvas = document.createElement('canvas');
@@ -225,17 +345,17 @@ export async function composeChartPng(node: HTMLElement, meta: ChartMeta): Promi
   canvas.width = canvasW; // fijar antes de medir texto
 
   // — Alto del encabezado, según el tamaño real de la tipografía —
-  const titleTop = m(0.03);
-  const subTop = titleTop + titlePx + m(0.012);
-  const dividerY = (meta.subtitle ? subTop + subPx : titleTop + titlePx) + m(0.022);
-  const headerH = dividerY + dividerH + m(0.03);
+  const titleTop = M.titleTop;
+  const subTop = titleTop + titlePx + M.subGap;
+  const dividerY = (meta.subtitle ? subTop + subPx : titleTop + titlePx) + M.dividerGap;
+  const headerH = dividerY + dividerH + M.headerBottomGap;
 
   // — Medir la leyenda (para reservar su alto), con salto de línea si no cabe —
-  const markerW = m(0.042);
-  const markerGap = m(0.012);
-  const itemGap = m(0.032);
+  const markerW = M.markerW;
+  const markerGap = M.markerGap;
+  const itemGap = M.itemGap;
   const lineH = Math.round(legendFont * 1.7);
-  const legendPadY = legend.length ? m(0.016) : 0;
+  const legendPadY = legend.length ? M.legendPadY : 0;
   ctx.font = font(500, legendFont);
   const measured = legend.map((it) => ({ ...it, w: markerW + markerGap + ctx.measureText(it.label).width }));
   const lines: Array<Array<(typeof measured)[number]>> = [];
@@ -285,7 +405,7 @@ export async function composeChartPng(node: HTMLElement, meta: ChartMeta): Promi
   if (legend.length) {
     ctx.font = font(500, legendFont);
     ctx.textBaseline = 'middle';
-    ctx.lineWidth = Math.max(2, m(0.004));
+    ctx.lineWidth = M.legendLineWidth;
     lines.forEach((line, li) => {
       const totalW = line.reduce((a, it) => a + it.w, 0) + itemGap * (line.length - 1);
       let x = (canvasW - totalW) / 2;
@@ -310,7 +430,7 @@ export async function composeChartPng(node: HTMLElement, meta: ChartMeta): Promi
   // — Pie —
   const genText = `Generado ${new Date().toLocaleDateString('es-CO')}`;
   const url = 'ideam.sergiobc.com';
-  const footerY = headerH + legendH + plotH + m(0.024);
+  const footerY = headerH + legendH + plotH + M.footerGap;
   ctx.fillStyle = muted;
   ctx.font = font(400, footerFont);
   ctx.fillText(genText, pad, footerY);
