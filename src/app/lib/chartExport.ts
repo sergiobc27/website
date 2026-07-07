@@ -14,14 +14,13 @@ const CANONICAL_CSS_WIDTH = 1000;
 
 // Tolerancia: si el plot ya mide ~este ancho no re-maquetamos (evita el reflujo).
 const RELAYOUT_TOLERANCE_PX = 8;
-// Tras forzar el ancho, recharts re-anima barras/curvas (morph) durante
-// `animationDuration` (550 ms en todas las gráficas). Esperamos un poco más para
-// capturar el estado final, nunca un fotograma intermedio.
-const RELAYOUT_SETTLE_MS = 700;
-// Cota de seguridad para no colgar la exportación si el re-maquetado nunca cuadra.
-const RELAYOUT_TIMEOUT_MS = 1500;
+// Intervalo de sondeo mientras esperamos a que la superficie de recharts se asiente.
+// Usamos setTimeout (NO requestAnimationFrame) a propósito: ver waitForStablePlot.
+const RELAYOUT_POLL_MS = 60;
+// Cota DURA: la espera termina sí o sí (nunca cuelga). Debe superar el morph de
+// recharts (animationDuration 550 ms) para capturar el estado final.
+const RELAYOUT_TIMEOUT_MS = 2000;
 
-const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 export function slugify(text: string): string {
@@ -94,28 +93,35 @@ function findPlotSvg(node: HTMLElement): SVGElement | undefined {
   );
 }
 
-function plotSvgWidth(node: HTMLElement): number {
-  const svg = findPlotSvg(node);
-  if (!svg) return 0;
-  return Number(svg.getAttribute('width')) || svg.clientWidth || 0;
-}
-
-// Espera a que recharts re-maquete el <svg> del plot al ancho objetivo tras forzar
-// el ancho del contenedor. Sale al llegar al objetivo, al estabilizarse el ancho, o
-// por timeout (fallback: capturar con lo que haya).
-async function waitForPlotWidth(node: HTMLElement, targetCssW: number): Promise<void> {
+// Espera a que la superficie de recharts DEJE DE CAMBIAR (re-maquetado al nuevo
+// ancho + animación de barras/curvas asentados) y luego regresa.
+//
+// CRÍTICO: sondea con setTimeout, NO con requestAnimationFrame. rAF se PAUSA cuando
+// la pestaña no está visible/enfocada; una versión anterior esperaba con rAF y el
+// chequeo de timeout quedaba DETRÁS del `await rAF`, así que si rAF nunca disparaba
+// la espera se colgaba para siempre → composeChartPng no resolvía → la copia se
+// quedaba en "Copiando…" o terminaba en error. setTimeout sí dispara en pestañas
+// ocultas, de modo que el timeout SIEMPRE se cumple y la exportación nunca cuelga.
+async function waitForStablePlot(node: HTMLElement): Promise<void> {
   const start = performance.now();
-  let last = -1;
+  let lastSig = '';
   let stable = 0;
   while (performance.now() - start < RELAYOUT_TIMEOUT_MS) {
-    await nextFrame();
-    const w = plotSvgWidth(node);
-    if (Math.abs(w - targetCssW) <= RELAYOUT_TOLERANCE_PX) return;
-    if (w === last) {
+    await sleep(RELAYOUT_POLL_MS);
+    const svg = findPlotSvg(node);
+    if (!svg) {
+      stable = 0;
+      lastSig = '';
+      continue;
+    }
+    // Firma sensible al tamaño Y al contenido: cambia mientras recharts re-maqueta
+    // o anima; cuando se repite varias veces seguidas, el dibujo ya está asentado.
+    const sig = `${svg.getAttribute('width')}x${svg.getAttribute('height')}:${svg.innerHTML.length}`;
+    if (sig === lastSig) {
       if (++stable >= 3) return;
     } else {
       stable = 0;
-      last = w;
+      lastSig = sig;
     }
   }
 }
@@ -191,15 +197,20 @@ interface LegendItem {
 // el <svg> del plot de forma nativa (conserva ejes, números y curvas, cosa que
 // html-to-image NO hacía) y extrae los ítems de la leyenda (que van en HTML aparte).
 //
-// Antes de capturar fuerza el ancho canónico (CANONICAL_CSS_WIDTH): el nodo se
-// posiciona FUERA de pantalla con ese ancho fijo, se deja que recharts re-maquete y
-// se rasteriza. Como el alto del contenedor ya es fijo en px, forzar el ancho hace
+// Antes de capturar intenta forzar el ancho canónico (CANONICAL_CSS_WIDTH): el nodo
+// se posiciona FUERA de pantalla con ese ancho fijo, se deja que recharts re-maquete
+// y se rasteriza. Como el alto del contenedor ya es fijo en px, forzar el ancho hace
 // que la imagen sea IDÉNTICA en móvil y escritorio (la misma que se ve bien en un
 // monitor de buena resolución), y no una versión angosta/aplastada en el celular.
 // Para que el usuario no vea un salto de maquetación, se congela el alto del
 // contenedor padre mientras el nodo está fuera de pantalla (solo se ve el gesto de
-// "Generando…"/"Copiando…"). Si el re-maquetado no cuadra a tiempo, se captura con
-// lo que haya (nunca falla la exportación).
+// "Generando…"/"Copiando…").
+//
+// El re-maquetado es BEST-EFFORT y a prueba de fallos: la espera tiene cota dura
+// (nunca cuelga), solo se intenta con la pestaña VISIBLE (recharts no re-renderiza
+// sin requestAnimationFrame, que se pausa en pestañas ocultas) y cualquier error se
+// ignora. Pase lo que pase se captura la superficie que exista (canónica o natural),
+// así que la exportación NUNCA se cuelga ni falla por esto.
 async function capturePlot(
   node: HTMLElement,
 ): Promise<{ img: HTMLImageElement; width: number; height: number; legend: LegendItem[] }> {
@@ -213,7 +224,12 @@ async function capturePlot(
   const parent = node.parentElement;
   const parentPrevMinHeight = parent ? parent.style.minHeight : '';
 
-  const needRelayout = node.clientWidth > 0 && Math.abs(node.clientWidth - CANONICAL_CSS_WIDTH) > RELAYOUT_TOLERANCE_PX;
+  // Solo re-maquetamos si la pestaña está visible: si está oculta, recharts no
+  // re-renderiza (rAF pausado) y solo perderíamos tiempo; capturamos al natural.
+  const canRelayout =
+    node.clientWidth > 0 &&
+    Math.abs(node.clientWidth - CANONICAL_CSS_WIDTH) > RELAYOUT_TOLERANCE_PX &&
+    document.visibilityState === 'visible';
 
   if (usedInline) {
     for (const k of Object.keys(lightVars)) node.style.setProperty(k, lightVars[k]);
@@ -223,18 +239,21 @@ async function capturePlot(
   }
 
   try {
-    if (needRelayout) {
-      // Congelar el alto del padre ANTES de sacar el nodo del flujo (evita el salto).
-      if (parent) parent.style.minHeight = `${parent.offsetHeight}px`;
-      node.style.position = 'fixed';
-      node.style.left = '-100000px';
-      node.style.top = '0';
-      node.style.width = `${CANONICAL_CSS_WIDTH}px`;
-      node.style.maxWidth = 'none';
-      node.style.zIndex = '-1';
-      await waitForPlotWidth(node, CANONICAL_CSS_WIDTH);
-      // Dejar terminar el morph de barras/curvas que dispara recharts al re-maquetar.
-      await sleep(RELAYOUT_SETTLE_MS);
+    if (canRelayout) {
+      try {
+        // Congelar el alto del padre ANTES de sacar el nodo del flujo (evita el salto).
+        if (parent) parent.style.minHeight = `${parent.offsetHeight}px`;
+        node.style.position = 'fixed';
+        node.style.left = '-100000px';
+        node.style.top = '0';
+        node.style.width = `${CANONICAL_CSS_WIDTH}px`;
+        node.style.maxWidth = 'none';
+        node.style.zIndex = '-1';
+        // Espera acotada a que el nuevo ancho + morph de recharts se asienten.
+        await waitForStablePlot(node);
+      } catch {
+        // Si el re-maquetado falla por lo que sea, seguimos y capturamos al natural.
+      }
     }
 
     const plotSvg = findPlotSvg(node);
