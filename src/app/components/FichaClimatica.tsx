@@ -289,10 +289,10 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
               ) : (
                 <div ref={chartRef} className="bg-card" style={{ width: '100%', height: '260px' }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={climatologyData}>
+                    <ComposedChart data={climatologyData} margin={{ top: 4, right: 8, left: 6, bottom: 18 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
-                      <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} />
-                      <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} tickFormatter={(v: number) => formatValue(v)} width={64} />
+                      <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} label={{ value: 'Mes', position: 'insideBottom', offset: -8, fontSize: 11 }} />
+                      <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} tickFormatter={(v: number) => formatValue(v)} width={72} label={{ value: `${datasetName}${unitSuffix(unidad)}`, angle: -90, position: 'insideLeft', style: { fontSize: 11, textAnchor: 'middle' } }} />
                       <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => formatValue(value)} />
                       <Bar dataKey="media" fill="var(--accent)" radius={[6, 6, 0, 0]} isAnimationActive animationDuration={550} />
                       <Line type="monotone" dataKey="máximo" stroke="var(--primary)" strokeWidth={1.5} dot={false} isAnimationActive animationDuration={550} />
@@ -327,7 +327,7 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
               ) : (
                 <div ref={yearlyChartRef} className="bg-card" style={{ width: '100%', height: '260px' }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={yearlyData}>
+                    <AreaChart data={yearlyData} margin={{ top: 4, right: 8, left: 6, bottom: 18 }}>
                       <defs>
                         <linearGradient id="fichaGradient" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.45} />
@@ -335,8 +335,8 @@ export function FichaClimatica({ initialDepartment = '', initialMunicipality = '
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
-                      <XAxis dataKey="year" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} minTickGap={24} />
-                      <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} tickFormatter={(v: number) => formatValue(v)} width={64} />
+                      <XAxis dataKey="year" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} minTickGap={24} label={{ value: 'Año', position: 'insideBottom', offset: -8, fontSize: 11 }} />
+                      <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} tickFormatter={(v: number) => formatValue(v)} width={72} label={{ value: `${datasetName}${unitSuffix(unidad)}`, angle: -90, position: 'insideLeft', style: { fontSize: 11, textAnchor: 'middle' } }} />
                       <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [formatValue(value), isPrecip ? 'Total anual' : 'Promedio']} />
                       <Area type="monotone" dataKey="valor" stroke="var(--accent)" strokeWidth={2} fill="url(#fichaGradient)" isAnimationActive animationDuration={550} />
                     </AreaChart>
