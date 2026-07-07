@@ -1,5 +1,3 @@
-import { toPng } from 'html-to-image';
-
 // El gráfico se rasteriza a este múltiplo de resolución (nitidez retina). El
 // encabezado/pie/márgenes se dibujan con las mismas unidades, así que TODO se
 // escala por este factor para que el marco de marca quede proporcional al
@@ -108,13 +106,19 @@ async function rasterizeSvg(svg: SVGElement): Promise<{ img: HTMLImageElement; w
   return { img, width, height };
 }
 
-// Rasteriza el gráfico a un <img>, SIEMPRE en claro (un PNG con fondo oscuro es
-// inservible para pegar en un informe impreso). Se captura el nodo EN VIVO (así
-// el tamaño y el detalle son idénticos a los originales), pero forzando el tema
-// claro SOLO en ese nodo con variables CSS inline: sus descendientes las heredan
-// y el resto de la página no se toca, así que no parpadea. Respaldo (si no se
-// pudieron leer las variables, p. ej. hojas cross-origin): quitar `.dark` global.
-async function captureChartImage(node: HTMLElement, bg: string): Promise<HTMLImageElement> {
+interface LegendItem {
+  label: string;
+  color: string;
+}
+
+// Captura el gráfico como imagen SIEMPRE en claro (un PNG oscuro es inservible
+// para un informe impreso). Fuerza el tema claro SOLO leyendo las variables del
+// nodo (sin tocar el DOM en vivo → sin parpadeo ni conflictos con React), rasteriza
+// el <svg> del plot de forma nativa (conserva ejes, números y curvas, cosa que
+// html-to-image NO hacía) y extrae los ítems de la leyenda (que van en HTML aparte).
+async function capturePlot(
+  node: HTMLElement,
+): Promise<{ img: HTMLImageElement; width: number; height: number; legend: LegendItem[] }> {
   const lightVars = collectRootVars();
   const usedInline = Object.keys(lightVars).length > 0;
   const appliedKeys = usedInline ? Object.keys(lightVars) : [];
@@ -129,32 +133,33 @@ async function captureChartImage(node: HTMLElement, bg: string): Promise<HTMLIma
     root.classList.remove('dark');
   }
 
-  // Sustituye cada SVG de recharts por un <img> equivalente durante la captura
-  // (ver rasterizeSvg). Es imperceptible en pantalla porque el <img> se ve igual,
-  // y se restaura el SVG al terminar. Si algo falla, se deja el SVG original.
-  const swaps: Array<{ svg: SVGElement; placeholder: HTMLImageElement; parent: Node }> = [];
-  for (const svg of Array.from(node.querySelectorAll<SVGElement>('svg.recharts-surface'))) {
-    try {
-      const { img, width, height } = await rasterizeSvg(svg);
-      img.width = width;
-      img.height = height;
-      img.style.width = `${width}px`;
-      img.style.height = `${height}px`;
-      const parent = svg.parentNode;
-      if (parent) {
-        parent.replaceChild(img, svg);
-        swaps.push({ svg, placeholder: img, parent });
-      }
-    } catch {
-      // Deja el SVG original si la rasterización falla.
-    }
-  }
-
-  let dataUrl: string;
   try {
-    dataUrl = await toPng(node, { pixelRatio: EXPORT_SCALE, cacheBust: true, backgroundColor: bg });
+    // El <svg> del plot es la superficie de recharts que NO está dentro de la
+    // leyenda (esa contiene sus propios <svg> diminutos por cada marcador).
+    const plotSvg = Array.from(node.querySelectorAll<SVGElement>('svg.recharts-surface')).find(
+      (s) => !s.closest('.recharts-legend-wrapper'),
+    );
+    if (!plotSvg) throw new Error('No recharts surface');
+    const { img, width, height } = await rasterizeSvg(plotSvg);
+
+    const legend: LegendItem[] = [];
+    const wrap = node.querySelector('.recharts-legend-wrapper');
+    if (wrap) {
+      for (const li of Array.from(wrap.querySelectorAll('.recharts-legend-item'))) {
+        const textEl = li.querySelector('.recharts-legend-item-text');
+        const label = textEl?.textContent?.trim();
+        if (!label) continue;
+        const icon = li.querySelector('.recharts-legend-icon');
+        const iconCs = icon ? getComputedStyle(icon) : null;
+        const color =
+          (iconCs && iconCs.stroke && iconCs.stroke !== 'none' ? iconCs.stroke : iconCs?.fill) ||
+          (textEl ? getComputedStyle(textEl).color : '') ||
+          '#595959';
+        legend.push({ label, color });
+      }
+    }
+    return { img, width, height, legend };
   } finally {
-    for (const s of swaps) s.parent.replaceChild(s.svg, s.placeholder);
     if (usedInline) {
       for (const k of appliedKeys) node.style.removeProperty(k);
       node.style.colorScheme = prevColorScheme;
@@ -162,55 +167,120 @@ async function captureChartImage(node: HTMLElement, bg: string): Promise<HTMLIma
       root.classList.add('dark');
     }
   }
-
-  return loadImage(dataUrl);
 }
 
-// Captura el nodo del gráfico y compone un PNG con encabezado/pie de marca,
-// devolviendo el Blob. Siempre en claro. Reutilizado por la descarga y la copia.
+// Captura el gráfico y compone un PNG con encabezado, leyenda y pie de marca,
+// SOLO con canvas (sin html-to-image). Reutilizado por la descarga y la copia.
 export async function composeChartPng(node: HTMLElement, meta: ChartMeta): Promise<Blob> {
   const bg = '#ffffff';
   const fg = '#1a1a1a';
   const muted = '#595959';
   const accent = '#C9A227';
 
-  const chart = await captureChartImage(node, bg);
+  const { img: chart, width: chartCssW, height: chartCssH, legend } = await capturePlot(node);
 
-  // El gráfico ya viene a EXPORT_SCALE×; el marco se dibuja en esas mismas
-  // unidades, así que cada medida se escala igual para quedar proporcional.
+  // Todo se dibuja a EXPORT_SCALE× para quedar nítido y proporcional al plot.
   const s = EXPORT_SCALE;
   const pad = 48 * s;
   const headerH = (meta.subtitle ? 150 : 108) * s;
   const footerH = 72 * s;
+  const plotW = chartCssW * s;
+  const plotH = chartCssH * s;
+  const contentW = plotW;
+  const canvasW = plotW + pad * 2;
+
   const canvas = document.createElement('canvas');
-  canvas.width = chart.width + pad * 2;
-  canvas.height = headerH + chart.height + footerH;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('No canvas context');
 
+  // — Medir la leyenda (para reservar su alto) —
+  const legendFont = 26 * s;
+  const markerW = 42 * s;
+  const markerGap = 12 * s;
+  const itemGap = 36 * s;
+  const lineH = 42 * s;
+  const legendPadY = legend.length ? 14 * s : 0;
+  canvas.width = canvasW; // fijar antes de medir texto
+  ctx.font = `500 ${legendFont}px system-ui, -apple-system, sans-serif`;
+  const measured = legend.map((it) => ({ ...it, w: markerW + markerGap + ctx.measureText(it.label).width }));
+  const lines: Array<Array<(typeof measured)[number]>> = [];
+  let cur: Array<(typeof measured)[number]> = [];
+  let curW = 0;
+  for (const it of measured) {
+    const add = it.w + (cur.length ? itemGap : 0);
+    if (cur.length && curW + add > contentW) {
+      lines.push(cur);
+      cur = [it];
+      curW = it.w;
+    } else {
+      cur.push(it);
+      curW += add;
+    }
+  }
+  if (cur.length) lines.push(cur);
+  const legendH = legend.length ? lines.length * lineH + legendPadY * 2 : 0;
+
+  canvas.height = headerH + legendH + plotH + footerH;
+
+  // Fijar height reinicia el contexto: re-pintar todo desde cero.
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  // — Encabezado (el tamaño de fuente se reduce si el texto no cabe, para que
+  //   nunca se corte en gráficas angostas) —
+  const maxTextW = canvas.width - pad * 2;
+  const fitPx = (text: string, weight: number, basePx: number) => {
+    ctx.font = `${weight} ${basePx}px system-ui, -apple-system, sans-serif`;
+    const w = ctx.measureText(text).width;
+    const px = w > maxTextW ? Math.max(20 * s, Math.floor((basePx * maxTextW) / w)) : basePx;
+    ctx.font = `${weight} ${px}px system-ui, -apple-system, sans-serif`;
+  };
   ctx.textBaseline = 'top';
   ctx.fillStyle = fg;
-  ctx.font = `700 ${40 * s}px system-ui, -apple-system, sans-serif`;
+  fitPx(meta.title, 700, 40 * s);
   ctx.fillText(meta.title, pad, 40 * s);
   if (meta.subtitle) {
     ctx.fillStyle = muted;
-    ctx.font = `400 ${28 * s}px system-ui, -apple-system, sans-serif`;
+    fitPx(meta.subtitle, 400, 28 * s);
     ctx.fillText(meta.subtitle, pad, 94 * s);
   }
   ctx.fillStyle = accent;
   ctx.fillRect(pad, headerH - 18 * s, canvas.width - pad * 2, 3 * s);
 
-  ctx.drawImage(chart, pad, headerH);
+  // — Leyenda (marcador de color + etiqueta en gris oscuro, centrada) —
+  if (legend.length) {
+    ctx.font = `500 ${legendFont}px system-ui, -apple-system, sans-serif`;
+    ctx.textBaseline = 'middle';
+    lines.forEach((line, li) => {
+      const totalW = line.reduce((a, it) => a + it.w, 0) + itemGap * (line.length - 1);
+      let x = (canvas.width - totalW) / 2;
+      const y = headerH + legendPadY + li * lineH + lineH / 2;
+      for (const it of line) {
+        ctx.strokeStyle = it.color;
+        ctx.lineWidth = 4 * s;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + markerW, y);
+        ctx.stroke();
+        ctx.fillStyle = fg;
+        ctx.fillText(it.label, x + markerW + markerGap, y);
+        x += it.w + itemGap;
+      }
+    });
+    ctx.textBaseline = 'top';
+  }
 
+  // — Gráfico —
+  ctx.drawImage(chart, pad, headerH + legendH, plotW, plotH);
+
+  // — Pie —
+  const footerY = headerH + legendH + plotH + 24 * s;
   ctx.fillStyle = muted;
   ctx.font = `400 ${24 * s}px system-ui, -apple-system, sans-serif`;
-  ctx.fillText(`Generado ${new Date().toLocaleDateString('es-CO')}`, pad, headerH + chart.height + 24 * s);
+  ctx.fillText(`Generado ${new Date().toLocaleDateString('es-CO')}`, pad, footerY);
   const url = 'ideam.sergiobc.com';
-  const w = ctx.measureText(url).width;
-  ctx.fillText(url, canvas.width - pad - w, headerH + chart.height + 24 * s);
+  const uw = ctx.measureText(url).width;
+  ctx.fillText(url, canvas.width - pad - uw, footerY);
 
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
   if (!blob) throw new Error('No blob');
