@@ -839,8 +839,8 @@ export function Hidrologia() {
                         stroke="currentColor"
                         className="text-muted-foreground"
                         style={{ fontSize: '11px' }}
-                        width={52}
-                        label={{ value: 'mm/h', angle: -90, position: 'insideLeft', fontSize: 10 }}
+                        width={64}
+                        label={{ value: 'Intensidad (mm/h)', angle: -90, position: 'insideLeft', style: { fontSize: 11, textAnchor: 'middle' } }}
                       />
                       <Tooltip
                         contentStyle={tooltipStyle}
@@ -1013,7 +1013,7 @@ export function Hidrologia() {
                   </div>
                   <div ref={returnChartRef} className="bg-card" style={{ width: '100%', height: '220px' }}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={returnCurve}>
+                      <ComposedChart data={returnCurve} margin={{ top: 4, right: 8, left: 8, bottom: 16 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
                         <XAxis
                           dataKey="tr"
@@ -1026,7 +1026,7 @@ export function Hidrologia() {
                           style={{ fontSize: '11px' }}
                           label={{ value: 'Período de retorno (años, escala log)', position: 'insideBottom', offset: -2, fontSize: 10 }}
                         />
-                        <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} width={48} />
+                        <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} width={64} label={{ value: 'Lámina máxima (mm/día)', angle: -90, position: 'insideLeft', style: { fontSize: 11, textAnchor: 'middle' } }} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(value: number, name: string) => [`${fmt(value, 1)} mm/día`, name]} labelFormatter={(v) => `Tr ≈ ${v} años`} />
                         <Area dataKey="banda" name="IC 90%" stroke="none" fill="#C9A227" fillOpacity={0.15} connectNulls isAnimationActive animationDuration={550} />
                         <Line type="monotone" dataKey="ajustado" name="Gumbel ajustado" stroke="#C9A227" strokeWidth={2} dot={{ r: 3 }} connectNulls isAnimationActive animationDuration={550} />
@@ -1090,10 +1090,10 @@ export function Hidrologia() {
                   )}
                   <div ref={spiChartRef} className="bg-card" style={{ width: '100%', height: '190px' }}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={spiData}>
+                      <BarChart data={spiData} margin={{ top: 4, right: 8, left: 6, bottom: 16 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
-                        <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '10px' }} minTickGap={28} />
-                        <YAxis domain={[-3, 3]} stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} width={32} />
+                        <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '10px' }} minTickGap={28} label={{ value: 'Mes', position: 'insideBottom', offset: -6, fontSize: 11 }} />
+                        <YAxis domain={[-3, 3]} stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} width={56} label={{ value: 'SPI (índice)', angle: -90, position: 'insideLeft', style: { fontSize: 11, textAnchor: 'middle' } }} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(value: number, name, item: { payload?: SpiPointLike }) => [`${fmt(value, 2)} (${item.payload?.category || ''})`, 'SPI']} />
                         <Bar dataKey="spi" isAnimationActive animationDuration={550}>
                           {spiData.map((p) => (
@@ -1140,10 +1140,10 @@ export function Hidrologia() {
               ) : (
                 <div ref={hyetographChartRef} className="bg-card" style={{ width: '100%', height: '210px' }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={hyetographData}>
+                    <BarChart data={hyetographData} margin={{ top: 4, right: 8, left: 6, bottom: 16 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
-                      <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} />
-                      <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} width={48} />
+                      <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} label={{ value: 'Mes', position: 'insideBottom', offset: -6, fontSize: 11 }} />
+                      <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} width={64} label={{ value: 'Precipitación (mm)', angle: -90, position: 'insideLeft', style: { fontSize: 11, textAnchor: 'middle' } }} />
                       <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`${fmt(value, 0)} mm`, 'Acumulado']} />
                       <Bar dataKey="total" fill="#2563eb" radius={[4, 4, 0, 0]} isAnimationActive animationDuration={550} />
                     </BarChart>
@@ -1180,10 +1180,10 @@ export function Hidrologia() {
               ) : (
                 <div ref={histogramChartRef} className="bg-card" style={{ width: '100%', height: '210px' }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={histogramBins}>
+                    <BarChart data={histogramBins} margin={{ top: 4, right: 8, left: 6, bottom: 18 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
-                      <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '10px' }} minTickGap={16} label={{ value: 'mm/día', position: 'insideBottom', offset: -2, fontSize: 10 }} />
-                      <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} width={48} />
+                      <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '10px' }} minTickGap={16} label={{ value: 'Lámina diaria (mm/día)', position: 'insideBottom', offset: -8, fontSize: 11 }} />
+                      <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} width={64} label={{ value: 'Frecuencia (días)', angle: -90, position: 'insideLeft', style: { fontSize: 11, textAnchor: 'middle' } }} />
                       <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`${value.toLocaleString('es-CO')} días`, 'Frecuencia']} labelFormatter={(v) => `${v} mm`} />
                       <Bar dataKey="dias" fill="var(--accent)" radius={[4, 4, 0, 0]} isAnimationActive animationDuration={550} />
                     </BarChart>

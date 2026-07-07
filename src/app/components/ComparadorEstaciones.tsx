@@ -380,10 +380,10 @@ export function ComparadorEstaciones() {
             ) : (
               <div ref={chartRef} className="bg-card" style={{ width: '100%', height: '320px' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData}>
+                  <LineChart data={chartData} margin={{ top: 4, right: 8, left: 6, bottom: 16 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
-                    <XAxis dataKey="year" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} minTickGap={24} />
-                    <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} tickFormatter={(v: number) => formatValue(v)} width={70} />
+                    <XAxis dataKey="year" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} minTickGap={24} label={{ value: 'Año', position: 'insideBottom', offset: -6, fontSize: 11 }} />
+                    <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} tickFormatter={(v: number) => formatValue(v)} width={72} label={{ value: `${datasetName}${unitSuffix(datasetUnit(datasetId))}`, angle: -90, position: 'insideLeft', style: { fontSize: 11, textAnchor: 'middle' } }} />
                     <Tooltip
                       contentStyle={{ backgroundColor: 'var(--background)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--foreground)' }}
                       formatter={(value: number, name: string) => [`${formatValue(value)}${unitSuffix(datasetUnit(datasetId))}`, stationLabel(name)]}

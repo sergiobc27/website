@@ -482,7 +482,7 @@ export function Analytics() {
         ) : (
           <div ref={chartRef} className="bg-card" style={{ width: '100%', height: '300px' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={seriesData}>
+              <AreaChart data={seriesData} margin={{ top: 4, right: 8, left: 6, bottom: 16 }}>
                 <defs>
                   <linearGradient id="serieGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.45} />
@@ -490,8 +490,8 @@ export function Analytics() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
-                <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} minTickGap={24} />
-                <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} tickFormatter={(v: number) => formatValue(v)} width={70} label={{ value: `${metricLabel}${unitSuffix(seriesUnit)}`, angle: -90, position: 'insideLeft', style: { fontSize: 10, textAnchor: 'middle' } }} />
+                <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} minTickGap={24} label={{ value: 'Período', position: 'insideBottom', offset: -6, fontSize: 11 }} />
+                <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} tickFormatter={(v: number) => formatValue(v)} width={72} label={{ value: `${metricLabel}${unitSuffix(seriesUnit)}`, angle: -90, position: 'insideLeft', style: { fontSize: 11, textAnchor: 'middle' } }} />
                 <Tooltip
                   contentStyle={tooltipStyle}
                   formatter={(value: number, name: string, item: { payload?: { n?: number } }) => [
@@ -534,10 +534,10 @@ export function Analytics() {
           ) : (
             <div ref={climatoChartRef} className="bg-card" style={{ width: '100%', height: '260px' }}>
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={climatologyData}>
+                <ComposedChart data={climatologyData} margin={{ top: 4, right: 8, left: 6, bottom: 16 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
-                  <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} />
-                  <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} tickFormatter={(v: number) => formatValue(v)} width={70} label={{ value: varUnit, angle: -90, position: 'insideLeft', style: { fontSize: 10, textAnchor: 'middle' } }} />
+                  <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} label={{ value: 'Mes', position: 'insideBottom', offset: -6, fontSize: 11 }} />
+                  <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '12px' }} tickFormatter={(v: number) => formatValue(v)} width={72} label={{ value: `${metricLabel}${unitSuffix(varUnit)}`, angle: -90, position: 'insideLeft', style: { fontSize: 11, textAnchor: 'middle' } }} />
                   <Tooltip contentStyle={tooltipStyle} formatter={(value: number, name: string) => [`${formatValue(value)}${varUnit ? ' ' + varUnit : ''}`, name]} />
                   <Bar dataKey="media" fill="var(--accent)" radius={[6, 6, 0, 0]} isAnimationActive animationDuration={550} />
                   <Line type="monotone" dataKey="máximo" stroke="var(--primary)" strokeWidth={1.5} dot={false} isAnimationActive animationDuration={550} />
@@ -573,9 +573,9 @@ export function Analytics() {
           ) : (
             <div ref={regionChartRef} className="bg-card" style={{ width: '100%', height: '260px' }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={regionData} layout="vertical" margin={{ left: 8 }}>
+                <BarChart data={regionData} layout="vertical" margin={{ left: 8, bottom: 16 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
-                  <XAxis type="number" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} tickFormatter={(v: number) => formatValue(v)} />
+                  <XAxis type="number" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} tickFormatter={(v: number) => formatValue(v)} label={{ value: 'Observaciones', position: 'insideBottom', offset: -6, fontSize: 11 }} />
                   <YAxis type="category" dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} width={130} />
                   <Tooltip
                     contentStyle={tooltipStyle}
@@ -622,10 +622,10 @@ export function Analytics() {
           ) : (
             <div ref={anomalyChartRef} className="bg-card" style={{ width: '100%', height: '240px' }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={anomalyData}>
+                <BarChart data={anomalyData} margin={{ top: 4, right: 8, left: 6, bottom: 16 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
-                  <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} minTickGap={20} />
-                  <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} tickFormatter={(v: number) => `${v}%`} width={56} />
+                  <XAxis dataKey="label" stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} minTickGap={20} label={{ value: 'Mes', position: 'insideBottom', offset: -6, fontSize: 11 }} />
+                  <YAxis stroke="currentColor" className="text-muted-foreground" style={{ fontSize: '11px' }} tickFormatter={(v: number) => `${v}%`} width={64} label={{ value: 'Anomalía (%)', angle: -90, position: 'insideLeft', style: { fontSize: 11, textAnchor: 'middle' } }} />
                   <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`${value > 0 ? '+' : ''}${formatValue(value)}% vs lo normal`, 'Anomalía']} />
                   <Bar dataKey="anomalia" radius={[4, 4, 0, 0]} isAnimationActive animationDuration={550}>
                     {anomalyData.map((entry) => (
