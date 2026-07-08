@@ -93,6 +93,8 @@ export function buildIdfPdfModel(
 
 export interface IdfPdfAssets {
   chartDataUrl: string;
+  // Aspecto (ancho/alto) de la imagen de la gráfica, para colocarla sin estirar.
+  chartAspect: number;
   logoCuc: string;
   logoIdeam: string;
 }
@@ -148,13 +150,21 @@ export function renderIdfPdf(model: IdfPdfModel, assets: IdfPdfAssets): jsPDF {
   doc.text(model.chips.join('   ·   '), M, y);
   y += 8;
 
-  // --- Gráfica IDF (PNG embebido, ancho completo) ---
-  const chartW = W - M * 2;
-  const chartH = 88;
+  // --- Gráfica IDF (PNG embebido, respetando su aspecto para no distorsionar) ---
+  const boxW = W - M * 2;
+  const maxChartH = 92;
+  const aspect = assets.chartAspect > 0 ? assets.chartAspect : 2;
+  let drawW = boxW;
+  let drawH = boxW / aspect;
+  if (drawH > maxChartH) {
+    drawH = maxChartH;
+    drawW = maxChartH * aspect;
+  }
+  const chartX = M + (boxW - drawW) / 2; // centrada en el ancho útil
   try {
-    doc.addImage(assets.chartDataUrl, 'PNG', M, y, chartW, chartH);
+    doc.addImage(assets.chartDataUrl, 'PNG', chartX, y, drawW, drawH);
   } catch { /* si falla la captura, seguimos sin gráfica */ }
-  y += chartH + 8;
+  y += drawH + 8;
 
   // --- Ecuación ---
   doc.setFont('helvetica', 'bold');
