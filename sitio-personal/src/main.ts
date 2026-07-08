@@ -1,3 +1,4 @@
+import { initChat } from './chat'
 import {
   textos, cvPerfil, certificados, certCats, certUrl, roles,
   metaDescripcion, titulos, type Lang, type CertCat, type Cert, type Rol,
@@ -29,6 +30,7 @@ function aplicarIdioma(l: Lang): void {
   pintarChips()
   actualizarPdf()
   if (!modal.hidden) { cvLang = l; pintarCV() }
+  document.dispatchEvent(new CustomEvent('cambioidioma'))
 }
 
 let sweepTimer1 = 0, sweepTimer2 = 0
@@ -364,3 +366,6 @@ modal.addEventListener('keydown', e => {
 
 /* ===================== arranque ===================== */
 aplicarIdioma(lang)
+
+/* asistente del portafolio */
+initChat()

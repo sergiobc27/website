@@ -1,7 +1,9 @@
 {
   "name": "website",
   "compatibility_date": "2026-06-01",
-  "assets": { "directory": "./dist" },
+  "main": "worker/index.js",
+  "assets": { "directory": "./dist", "binding": "ASSETS" },
+  "ai": { "binding": "AI" },
   "routes": [
     { "pattern": "sergiobc.com/*", "zone_name": "sergiobc.com" },
     { "pattern": "www.sergiobc.com/*", "zone_name": "sergiobc.com" }
