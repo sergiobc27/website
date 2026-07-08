@@ -422,6 +422,97 @@ export function chartLayoutMetrics(plotW: number, plotH: number): ChartLayoutMet
   };
 }
 
+type MeasuredLegend = LegendItem & { w: number };
+
+// Distribuye los ítems de leyenda en líneas (con salto si no caben en maxW) y calcula
+// su alto. Compartido por composeChartPng (marco de marca) y captureChartImage (PDF).
+function layoutLegend(
+  ctx: CanvasRenderingContext2D,
+  legend: LegendItem[],
+  M: ChartLayoutMetrics,
+  maxW: number,
+): { lines: MeasuredLegend[][]; legendH: number; lineH: number; legendPadY: number } {
+  const lineH = Math.round(M.legendFont * 1.7);
+  const legendPadY = legend.length ? M.legendPadY : 0;
+  ctx.font = `500 ${M.legendFont}px system-ui, -apple-system, sans-serif`;
+  const measured: MeasuredLegend[] = legend.map((it) => ({
+    ...it,
+    w: M.markerW + M.markerGap + ctx.measureText(it.label).width,
+  }));
+  const lines: MeasuredLegend[][] = [];
+  let cur: MeasuredLegend[] = [];
+  let curW = 0;
+  for (const it of measured) {
+    const add = it.w + (cur.length ? M.itemGap : 0);
+    if (cur.length && curW + add > maxW) {
+      lines.push(cur);
+      cur = [it];
+      curW = it.w;
+    } else {
+      cur.push(it);
+      curW += add;
+    }
+  }
+  if (cur.length) lines.push(cur);
+  const legendH = legend.length ? lines.length * lineH + legendPadY * 2 : 0;
+  return { lines, legendH, lineH, legendPadY };
+}
+
+// Dibuja la leyenda centrada (marcador de color + etiqueta) empezando en topY.
+function drawLegend(
+  ctx: CanvasRenderingContext2D,
+  lines: MeasuredLegend[][],
+  M: ChartLayoutMetrics,
+  canvasW: number,
+  topY: number,
+  lineH: number,
+  fg: string,
+): void {
+  ctx.font = `500 ${M.legendFont}px system-ui, -apple-system, sans-serif`;
+  ctx.textBaseline = 'middle';
+  ctx.lineWidth = M.legendLineWidth;
+  lines.forEach((line, li) => {
+    const totalW = line.reduce((a, it) => a + it.w, 0) + M.itemGap * (line.length - 1);
+    let x = (canvasW - totalW) / 2;
+    const y = topY + li * lineH + lineH / 2;
+    for (const it of line) {
+      ctx.strokeStyle = it.color;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + M.markerW, y);
+      ctx.stroke();
+      ctx.fillStyle = fg;
+      ctx.fillText(it.label, x + M.markerW + M.markerGap, y);
+      x += it.w + M.itemGap;
+    }
+  });
+  ctx.textBaseline = 'top';
+}
+
+// Captura la gráfica como PNG SIN marco de marca: solo el plot (rasterizado del SVG de
+// recharts, con ejes y texto nítidos) más su leyenda. Para embeber en documentos que
+// ya traen su propio encabezado/pie, como el PDF de IDF. Usa la misma captura robusta
+// que la copia/descarga (tema claro, ancho canónico, sin html-to-image y sin colgarse).
+export async function captureChartImage(
+  node: HTMLElement,
+): Promise<{ dataUrl: string; width: number; height: number }> {
+  const { img: chart, width: chartCssW, height: chartCssH, legend } = await capturePlot(node);
+  const plotW = chartCssW * EXPORT_SCALE;
+  const plotH = chartCssH * EXPORT_SCALE;
+  const M = chartLayoutMetrics(plotW, plotH);
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('No canvas context');
+  canvas.width = plotW;
+  const { lines, legendH, lineH, legendPadY } = layoutLegend(ctx, legend, M, plotW);
+  canvas.height = legendH + plotH;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (legend.length) drawLegend(ctx, lines, M, plotW, legendPadY, lineH, '#1a1a1a');
+  ctx.drawImage(chart, 0, legendH, plotW, plotH);
+  return { dataUrl: canvas.toDataURL('image/png'), width: canvas.width, height: canvas.height };
+}
+
 // Captura el gráfico y compone un PNG con encabezado, leyenda y pie de marca,
 // SOLO con canvas (sin html-to-image). Reutilizado por la descarga y la copia.
 export async function composeChartPng(node: HTMLElement, meta: ChartMeta): Promise<Blob> {
@@ -437,7 +528,7 @@ export async function composeChartPng(node: HTMLElement, meta: ChartMeta): Promi
   const plotW = chartCssW * EXPORT_SCALE;
   const plotH = chartCssH * EXPORT_SCALE;
   const M = chartLayoutMetrics(plotW, plotH);
-  const { pad, titlePx, subPx, legendFont, footerFont, dividerH } = M;
+  const { pad, titlePx, subPx, footerFont, dividerH } = M;
   const font = (weight: number, sizePx: number) => `${weight} ${sizePx}px system-ui, -apple-system, sans-serif`;
 
   const canvas = document.createElement('canvas');
@@ -455,29 +546,7 @@ export async function composeChartPng(node: HTMLElement, meta: ChartMeta): Promi
   const headerH = dividerY + dividerH + M.headerBottomGap;
 
   // — Medir la leyenda (para reservar su alto), con salto de línea si no cabe —
-  const markerW = M.markerW;
-  const markerGap = M.markerGap;
-  const itemGap = M.itemGap;
-  const lineH = Math.round(legendFont * 1.7);
-  const legendPadY = legend.length ? M.legendPadY : 0;
-  ctx.font = font(500, legendFont);
-  const measured = legend.map((it) => ({ ...it, w: markerW + markerGap + ctx.measureText(it.label).width }));
-  const lines: Array<Array<(typeof measured)[number]>> = [];
-  let cur: Array<(typeof measured)[number]> = [];
-  let curW = 0;
-  for (const it of measured) {
-    const add = it.w + (cur.length ? itemGap : 0);
-    if (cur.length && curW + add > maxTextW) {
-      lines.push(cur);
-      cur = [it];
-      curW = it.w;
-    } else {
-      cur.push(it);
-      curW += add;
-    }
-  }
-  if (cur.length) lines.push(cur);
-  const legendH = legend.length ? lines.length * lineH + legendPadY * 2 : 0;
+  const { lines, legendH, lineH, legendPadY } = layoutLegend(ctx, legend, M, maxTextW);
 
   const footerH = Math.round(footerFont * 2.4);
   canvas.height = headerH + legendH + plotH + footerH;
@@ -506,27 +575,7 @@ export async function composeChartPng(node: HTMLElement, meta: ChartMeta): Promi
   ctx.fillRect(pad, dividerY, canvasW - pad * 2, dividerH);
 
   // — Leyenda (marcador de color + etiqueta en gris oscuro, centrada) —
-  if (legend.length) {
-    ctx.font = font(500, legendFont);
-    ctx.textBaseline = 'middle';
-    ctx.lineWidth = M.legendLineWidth;
-    lines.forEach((line, li) => {
-      const totalW = line.reduce((a, it) => a + it.w, 0) + itemGap * (line.length - 1);
-      let x = (canvasW - totalW) / 2;
-      const y = headerH + legendPadY + li * lineH + lineH / 2;
-      for (const it of line) {
-        ctx.strokeStyle = it.color;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + markerW, y);
-        ctx.stroke();
-        ctx.fillStyle = fg;
-        ctx.fillText(it.label, x + markerW + markerGap, y);
-        x += it.w + itemGap;
-      }
-    });
-    ctx.textBaseline = 'top';
-  }
+  if (legend.length) drawLegend(ctx, lines, M, canvasW, headerH + legendPadY, lineH, fg);
 
   // — Gráfico —
   ctx.drawImage(chart, pad, headerH + legendH, plotW, plotH);

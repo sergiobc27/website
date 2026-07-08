@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { toPng } from 'html-to-image';
 import { toast } from 'sonner';
 import { ChartDownloadButton } from './ChartDownloadButton';
 import { EnviarPorCorreo } from './EnviarPorCorreo';
 import { buildIdfPdfModel, renderIdfPdf } from '../lib/pdf/idfPdf';
+import { captureChartImage } from '../lib/chartExport';
 import { loadImageDataUrl } from '../lib/pdf/loadImage';
 import { useUrlSync } from '../lib/urlState';
 import logoCucUrl from '../../imports/Logo_CUC_PNG_letra_blanca_barra_roja_vtcal.png';
@@ -486,8 +486,9 @@ export function Hidrologia() {
     if (!idf?.available || !station) throw new Error('Sin curvas IDF');
     const node = idfChartRef.current;
     if (!node) throw new Error('Gráfica no disponible');
-    // Fondo blanco siempre: el PDF es para imprimir.
-    const chartDataUrl = await toPng(node, { pixelRatio: 3, cacheBust: true, backgroundColor: '#ffffff' });
+    // Captura fiable (rasteriza el SVG de recharts con ejes/texto nítidos, en claro,
+    // al ancho canónico y SIN html-to-image, que no dibujaba bien el texto y colgaba).
+    const { dataUrl: chartDataUrl, width: chartPxW, height: chartPxH } = await captureChartImage(node);
     const [logoCuc, logoIdeam] = await Promise.all([
       loadImageDataUrl(logoCucUrl),
       loadImageDataUrl(logoIdeamUrl),
@@ -498,7 +499,10 @@ export function Hidrologia() {
       returnPeriods?.reliability?.level ?? station.fiabilidad?.level ?? null,
       new Date(),
     );
-    return { doc: renderIdfPdf(model, { chartDataUrl, logoCuc, logoIdeam }), filename: model.filename };
+    return {
+      doc: renderIdfPdf(model, { chartDataUrl, chartAspect: chartPxW / chartPxH, logoCuc, logoIdeam }),
+      filename: model.filename,
+    };
   };
 
   const descargarPdf = async () => {
