@@ -1,5 +1,3 @@
-import { toPng } from 'html-to-image';
-
 // El gráfico se rasteriza a este múltiplo de resolución (nitidez retina). El
 // encabezado/pie/márgenes se dibujan con las mismas unidades, así que TODO se
 // escala por este factor para que el marco de marca quede proporcional al
@@ -191,17 +189,74 @@ async function rasterizeSvg(svg: SVGElement): Promise<{ img: HTMLImageElement; w
   return { img, width, height };
 }
 
-// Rasteriza un nodo HTML (no-recharts) a un <img> PNG con html-to-image. Lo usa el
-// mapa de calor, que se dibuja con <div>s de CSS grid y NO tiene svg.recharts-surface
-// (por eso capturePlot fallaba antes con "No recharts surface"). html-to-image sí
-// dibuja bien HTML/CSS; su problema era solo el texto de los ejes del SVG de recharts.
+// Rasteriza un nodo HTML (no-recharts) a un <img> PNG dibujándolo A MANO en un canvas.
+// Lo usa el mapa de calor, que se compone con <div>s de CSS grid y NO tiene un
+// svg.recharts-surface (por eso capturePlot fallaba con "No recharts surface").
+//
+// No usamos html-to-image: su toPng se COLGABA en pestañas ocultas/sin foco (carga de
+// fuentes/imágenes internas), el mismo tipo de fallo que ya arreglamos en la espera.
+// En cambio recorremos los descendientes y pintamos su rectángulo (getBoundingClientRect,
+// relativo al nodo) con su color de fondo/borde y su texto, leídos de getComputedStyle.
+// Es 100% síncrono: sin cargar imágenes ni requestAnimationFrame, así que NUNCA cuelga.
 async function rasterizeHtml(
   node: HTMLElement,
 ): Promise<{ img: HTMLImageElement; width: number; height: number }> {
-  const width = node.clientWidth || node.offsetWidth;
-  const height = node.clientHeight || node.offsetHeight;
-  const dataUrl = await toPng(node, { pixelRatio: EXPORT_SCALE, cacheBust: true, backgroundColor: '#ffffff' });
-  const img = await loadImage(dataUrl);
+  const scale = EXPORT_SCALE;
+  const base = node.getBoundingClientRect();
+  const width = node.clientWidth || Math.round(base.width);
+  const height = node.clientHeight || Math.round(base.height);
+  const canvas = document.createElement('canvas');
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('No canvas context');
+  ctx.scale(scale, scale);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+
+  const transparent = (c: string) => !c || c === 'transparent' || c.startsWith('rgba(0, 0, 0, 0');
+  const els = Array.from(node.querySelectorAll<HTMLElement>('*'));
+
+  // 1) Fondos y bordes (en orden del documento: los hijos quedan sobre los padres).
+  for (const el of els) {
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) continue;
+    const cs = getComputedStyle(el);
+    const x = r.left - base.left;
+    const y = r.top - base.top;
+    if (!transparent(cs.backgroundColor)) {
+      ctx.fillStyle = cs.backgroundColor;
+      ctx.fillRect(x, y, r.width, r.height);
+    }
+    const bw = parseFloat(cs.borderTopWidth) || 0;
+    if (bw > 0 && !transparent(cs.borderTopColor)) {
+      ctx.strokeStyle = cs.borderTopColor;
+      ctx.lineWidth = bw;
+      ctx.strokeRect(x + bw / 2, y + bw / 2, Math.max(0, r.width - bw), Math.max(0, r.height - bw));
+    }
+  }
+
+  // 2) Texto (elementos hoja con contenido), respetando color, fuente y alineación.
+  ctx.textBaseline = 'middle';
+  for (const el of els) {
+    if (el.children.length) continue;
+    const text = (el.textContent || '').trim();
+    if (!text) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) continue;
+    const cs = getComputedStyle(el);
+    const x = r.left - base.left;
+    const y = r.top - base.top;
+    ctx.fillStyle = cs.color;
+    ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    const align = cs.textAlign;
+    const right = align === 'right' || align === 'end';
+    const center = align === 'center';
+    ctx.textAlign = center ? 'center' : right ? 'right' : 'left';
+    ctx.fillText(text, center ? x + r.width / 2 : right ? x + r.width : x, y + r.height / 2);
+  }
+
+  const img = await loadImage(canvas.toDataURL('image/png'));
   return { img, width, height };
 }
 
