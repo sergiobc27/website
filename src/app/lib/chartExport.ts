@@ -1,3 +1,5 @@
+import { toPng } from 'html-to-image';
+
 // El gráfico se rasteriza a este múltiplo de resolución (nitidez retina). El
 // encabezado/pie/márgenes se dibujan con las mismas unidades, así que TODO se
 // escala por este factor para que el marco de marca quede proporcional al
@@ -20,6 +22,9 @@ const RELAYOUT_POLL_MS = 60;
 // Cota DURA: la espera termina sí o sí (nunca cuelga). Debe superar el morph de
 // recharts (animationDuration 550 ms) para capturar el estado final.
 const RELAYOUT_TIMEOUT_MS = 2000;
+// Los visuales de HTML puro (mapa de calor) re-maquetan por CSS de forma síncrona;
+// basta un respiro breve tras fijar el ancho antes de rasterizar.
+const HTML_RELAYOUT_SETTLE_MS = 60;
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -186,6 +191,20 @@ async function rasterizeSvg(svg: SVGElement): Promise<{ img: HTMLImageElement; w
   return { img, width, height };
 }
 
+// Rasteriza un nodo HTML (no-recharts) a un <img> PNG con html-to-image. Lo usa el
+// mapa de calor, que se dibuja con <div>s de CSS grid y NO tiene svg.recharts-surface
+// (por eso capturePlot fallaba antes con "No recharts surface"). html-to-image sí
+// dibuja bien HTML/CSS; su problema era solo el texto de los ejes del SVG de recharts.
+async function rasterizeHtml(
+  node: HTMLElement,
+): Promise<{ img: HTMLImageElement; width: number; height: number }> {
+  const width = node.clientWidth || node.offsetWidth;
+  const height = node.clientHeight || node.offsetHeight;
+  const dataUrl = await toPng(node, { pixelRatio: EXPORT_SCALE, cacheBust: true, backgroundColor: '#ffffff' });
+  const img = await loadImage(dataUrl);
+  return { img, width, height };
+}
+
 interface LegendItem {
   label: string;
   color: string;
@@ -238,6 +257,9 @@ async function capturePlot(
     root.classList.remove('dark');
   }
 
+  // ¿Es una gráfica de recharts (SVG) o un visual de HTML puro (mapa de calor)?
+  const isRecharts = !!findPlotSvg(node);
+
   try {
     if (canRelayout) {
       try {
@@ -249,34 +271,42 @@ async function capturePlot(
         node.style.width = `${CANONICAL_CSS_WIDTH}px`;
         node.style.maxWidth = 'none';
         node.style.zIndex = '-1';
-        // Espera acotada a que el nuevo ancho + morph de recharts se asienten.
-        await waitForStablePlot(node);
+        // recharts re-renderiza asíncrono → esperar a que se asiente; el HTML puro
+        // (CSS grid) re-maqueta síncrono → basta un respiro breve.
+        if (isRecharts) await waitForStablePlot(node);
+        else await sleep(HTML_RELAYOUT_SETTLE_MS);
       } catch {
         // Si el re-maquetado falla por lo que sea, seguimos y capturamos al natural.
       }
     }
 
+    // Camino de recharts: rasterizar el SVG del plot + leer los ítems de la leyenda.
     const plotSvg = findPlotSvg(node);
-    if (!plotSvg) throw new Error('No recharts surface');
-    const { img, width, height } = await rasterizeSvg(plotSvg);
-
-    const legend: LegendItem[] = [];
-    const wrap = node.querySelector('.recharts-legend-wrapper');
-    if (wrap) {
-      for (const li of Array.from(wrap.querySelectorAll('.recharts-legend-item'))) {
-        const textEl = li.querySelector('.recharts-legend-item-text');
-        const label = textEl?.textContent?.trim();
-        if (!label) continue;
-        const icon = li.querySelector('.recharts-legend-icon');
-        const iconCs = icon ? getComputedStyle(icon) : null;
-        const color =
-          (iconCs && iconCs.stroke && iconCs.stroke !== 'none' ? iconCs.stroke : iconCs?.fill) ||
-          (textEl ? getComputedStyle(textEl).color : '') ||
-          '#595959';
-        legend.push({ label, color });
+    if (plotSvg) {
+      const { img, width, height } = await rasterizeSvg(plotSvg);
+      const legend: LegendItem[] = [];
+      const wrap = node.querySelector('.recharts-legend-wrapper');
+      if (wrap) {
+        for (const li of Array.from(wrap.querySelectorAll('.recharts-legend-item'))) {
+          const textEl = li.querySelector('.recharts-legend-item-text');
+          const label = textEl?.textContent?.trim();
+          if (!label) continue;
+          const icon = li.querySelector('.recharts-legend-icon');
+          const iconCs = icon ? getComputedStyle(icon) : null;
+          const color =
+            (iconCs && iconCs.stroke && iconCs.stroke !== 'none' ? iconCs.stroke : iconCs?.fill) ||
+            (textEl ? getComputedStyle(textEl).color : '') ||
+            '#595959';
+          legend.push({ label, color });
+        }
       }
+      return { img, width, height, legend };
     }
-    return { img, width, height, legend };
+
+    // Camino de HTML puro (mapa de calor): rasterizar el nodo con html-to-image. Su
+    // leyenda propia va dentro del nodo, así que no se compone leyenda aparte.
+    const { img, width, height } = await rasterizeHtml(node);
+    return { img, width, height, legend: [] };
   } finally {
     // Restaurar el estilo original del nodo en un solo paso (quita vars, ancho y
     // posición) y liberar el alto congelado del padre.
