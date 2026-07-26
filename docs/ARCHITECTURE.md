@@ -16,7 +16,12 @@
 
 ## Main Modules
 
-- `src/worker/index.js`: Worker routes, Socrata queries, export planning, Durable Objects.
+- `src/worker/index.js`: Worker entry module — routes, `/api/*` proxy, chat/email handlers, R2 files. It exports **only** `export default { fetch }`: workerd refuses to start when the entry module has a named export (`Incorrect type for map entry '<NAME>': the provided value is not of type 'function or ExportedHandler'`), which breaks `wrangler dev` even though `wrangler deploy --dry-run` still passes. Anything a test needs to import on its own belongs in one of the modules below.
+- `src/worker/chatPrompt.js`: assistant system prompt, citable sources, deterministic post-processing (`ensure*`) and the anti-manipulation guardrail.
+- `src/worker/chatSession.js`: HMAC-signed chat session (TTL and per-session message cap).
+- `src/worker/chatData.js`: "ask your data" pipeline (intent extraction, mirror queries, suggestions).
+- `src/worker/proxyHeaders.js`: outbound header allowlist and proxy-secret injection for the box.
+- `src/worker/idfPdfDoc.js`: IDF PDF generated inside the Worker for the email flow.
 - `src/shared/ideamContracts.ts`: shared frontend API response contracts.
 - `src/app/components/DataExtractor.tsx`: current extraction workflow UI.
 - `src/app/lib/ideamApi.ts`: frontend API client and JSON/error handling.

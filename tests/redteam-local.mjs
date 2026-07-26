@@ -4,7 +4,7 @@
 // `node --test tests/redteam-local.mjs`.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { looksLikeManipulation } from '../src/worker/index.js';
+import { looksLikeManipulation } from '../src/worker/chatPrompt.js';
 
 // --- DEBEN bloquearse: manipulación / jailbreak / extracción de prompt -------
 const ATAQUES = [
