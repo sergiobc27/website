@@ -1,0 +1,10 @@
+# Sitio publico del trabajo de grado: se indexa todo salvo la plomeria.
+User-agent: *
+Allow: /
+# El proxy de datos y los binarios no aportan nada a un buscador (los PDF de
+# fuentes y los MP4 de las videoguias ya responden con X-Robots-Tag: noindex).
+Disallow: /api/
+Disallow: /fuentes/
+Disallow: /videos/
+
+Sitemap: https://ideam.sergiobc.com/sitemap.xml
