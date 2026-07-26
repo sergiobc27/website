@@ -2,18 +2,23 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import worker, {
+// index.js SOLO exporta el handler por defecto: workerd rechaza cualquier export
+// con nombre en el módulo de entrada ("Incorrect type for map entry ...") y sin
+// eso `wrangler dev` no arranca. Las piezas que este test importa sueltas viven
+// en módulos aparte.
+import worker from '../src/worker/index.js';
+import {
   looksLikeManipulation,
   ensureDisclaimer,
   ensureReferencia,
   ensureDatoCurioso,
   cifrasConUnidadFueraDe,
-  buildUpstreamHeaders,
   CHAT_SYSTEM,
   CHAT_REJECTION,
   REFERENCIAS,
-  CHAT_SESSION_MAX_MSGS,
-} from '../src/worker/index.js';
+} from '../src/worker/chatPrompt.js';
+import { CHAT_SESSION_MAX_MSGS } from '../src/worker/chatSession.js';
+import { buildUpstreamHeaders } from '../src/worker/proxyHeaders.js';
 import { VISTA_LABELS } from '../src/worker/chatData.js';
 
 const API_ORIGIN = 'https://ideam-api.sergiobc.com';
@@ -66,6 +71,19 @@ function createAssetsStub() {
     },
   };
 }
+
+// Regresión: workerd trata CADA export del módulo de entrada como un handler,
+// así que un export con nombre ("solo para el test") tumba el arranque con
+// "Incorrect type for map entry '<NOMBRE>': the provided value is not of type
+// 'function or ExportedHandler'" y `wrangler dev` deja de servir. El
+// `deploy --dry-run` del CI NO lo detecta (solo empaqueta), así que el guardián
+// es este test.
+test('src/worker/index.js solo exporta el handler por defecto (workerd no admite exports con nombre)', async () => {
+  const mod = await import('../src/worker/index.js');
+  const conNombre = Object.keys(mod).filter((k) => k !== 'default');
+  assert.deepEqual(conNombre, [], `el módulo de entrada no debe exportar nombres: ${conNombre.join(', ')}`);
+  assert.equal(typeof mod.default.fetch, 'function');
+});
 
 test('reenvia /api/* a env.API_ORIGIN conservando path y query, con secreto y cf-connecting-ip', async () => {
   const fetchStub = stubFetch();

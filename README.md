@@ -108,7 +108,10 @@ Componentes de este repo:
 - `src/app/lib/ideamApi.ts`: cliente API del frontend.
 - `src/app/lib/metodologia/`: registro de fórmulas, referencias y contenido normativo.
 - `src/shared/ideamContracts.ts`: contratos TypeScript compartidos para respuestas API.
-- `src/worker/index.js`: Worker, proxy `/api/*` a la API propia, asistente IA, correo IDF y fuentes R2.
+- `src/worker/index.js`: Worker, proxy `/api/*` a la API propia, asistente IA, correo IDF y fuentes R2. Solo exporta `export default { fetch }` (un export con nombre en el módulo de entrada impide que `wrangler dev` arranque).
+- `src/worker/chatPrompt.js`: system prompt del asistente, fuentes citables, redes de seguridad (`ensure*`) y guardrail anti-manipulación.
+- `src/worker/chatSession.js`: sesión firmada del chat (HMAC, TTL y tope de mensajes).
+- `src/worker/proxyHeaders.js`: allowlist de headers salientes al box y secreto del proxy.
 - `tests/worker.test.mjs`: pruebas del Worker.
 - `tests/e2e/ideam-production.spec.ts`: smoke test productivo.
 - `.github/workflows/deploy-ideam.yml`: CI/CD.
