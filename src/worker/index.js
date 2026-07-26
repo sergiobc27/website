@@ -188,35 +188,64 @@ export default {
       return handleFuente(url, request, env);
     }
 
+    // Videoguías (MP4) del proyecto, en el mismo bucket R2 bajo el prefijo
+    // `videos/`. La página que las reproduce es la vista /guias del SPA; esta
+    // ruta solo entrega el archivo.
+    if (url.pathname.startsWith("/videos/")) {
+      return handleVideo(url, request, env);
+    }
+
     // Los assets estáticos los sirve Cloudflare directamente (run_worker_first
-    // está acotado a /api/* y /fuentes/*), así que las cabeceras de seguridad de
-    // documento se definen en el archivo `dist/_headers` (public/_headers), no aquí.
+    // está acotado a /api/*, /fuentes/* y /videos/*), así que las cabeceras de
+    // seguridad de documento se definen en `dist/_headers` (public/_headers), no aquí.
     return env.ASSETS.fetch(request);
   },
 };
 
-// --- PDFs de fuentes/referencias (R2) -----------------------------------------
+// --- Archivos del proyecto en R2 (PDFs de fuentes, videoguías) ----------------
 
-// Sirve /fuentes/<id>.pdf desde el bucket R2 `FUENTES`. Solo GET/HEAD, con la
-// clave saneada (^[a-z0-9-]+\.pdf$ — evita traversal), X-Robots-Tag: noindex y
-// soporte de Range para que los PDF grandes (RAS, ENA 2022) se transmitan por
-// partes en el visor embebido en vez de cargarse completos.
+// Sirve /fuentes/<id>.pdf desde el bucket R2 `FUENTES`, con la clave saneada
+// (^[a-z0-9-]+\.pdf$ — evita traversal).
 async function handleFuente(url, request, env) {
-  if (!env.FUENTES) {
-    return new Response("Almacenamiento de fuentes no disponible.", { status: 503 });
-  }
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    return new Response("Método no permitido.", { status: 405, headers: { allow: "GET, HEAD" } });
-  }
-
-  let key;
+  let nombre;
   try {
-    key = decodeURIComponent(url.pathname.slice("/fuentes/".length));
+    nombre = decodeURIComponent(url.pathname.slice("/fuentes/".length));
   } catch {
     return new Response("Ruta inválida.", { status: 400 });
   }
-  if (!/^[a-z0-9-]+\.pdf$/.test(key)) {
+  if (!/^[a-z0-9-]+\.pdf$/.test(nombre)) {
     return new Response("No encontrado.", { status: 404 });
+  }
+  return serveR2(nombre, request, env, { contentType: "application/pdf", maxAge: 86400 });
+}
+
+// Sirve /videos/<slug>.mp4 desde el mismo bucket bajo el prefijo `videos/`.
+// Caché de 7 días: los slugs son estables, pero una guía corregida no debe
+// quedar cacheada un mes en el navegador de quien ya la vio.
+async function handleVideo(url, request, env) {
+  let nombre;
+  try {
+    nombre = decodeURIComponent(url.pathname.slice("/videos/".length));
+  } catch {
+    return new Response("Ruta inválida.", { status: 400 });
+  }
+  if (!/^[a-z0-9-]+\.mp4$/.test(nombre)) {
+    return new Response("No encontrado.", { status: 404 });
+  }
+  return serveR2(`videos/${nombre}`, request, env, { contentType: "video/mp4", maxAge: 604800 });
+}
+
+// Entrega un objeto de R2 con soporte de Range (solo GET/HEAD) y
+// X-Robots-Tag: noindex. El Range no es un lujo: es lo que permite al visor de
+// PDF pedir páginas sueltas de un documento grande (RAS, ENA 2022) y al
+// reproductor de video arrastrar la barra de tiempo, en vez de bajar el archivo
+// completo. `key` llega ya validada por quien llama, nunca cruda de la URL.
+async function serveR2(key, request, env, { contentType, maxAge }) {
+  if (!env.FUENTES) {
+    return new Response("Almacenamiento no disponible.", { status: 503 });
+  }
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return new Response("Método no permitido.", { status: 405, headers: { allow: "GET, HEAD" } });
   }
 
   const rangeHeader = request.headers.get("range");
@@ -245,9 +274,9 @@ async function handleFuente(url, request, env) {
 
   const headers = new Headers();
   object.writeHttpMetadata(headers);
-  headers.set("content-type", "application/pdf");
+  headers.set("content-type", contentType);
   headers.set("content-disposition", "inline");
-  headers.set("cache-control", "public, max-age=86400");
+  headers.set("cache-control", `public, max-age=${maxAge}`);
   headers.set("x-robots-tag", "noindex");
   headers.set("x-content-type-options", "nosniff");
   headers.set("accept-ranges", "bytes");

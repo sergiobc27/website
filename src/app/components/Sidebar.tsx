@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Activity, BookMarked, BookOpenText, Building2, Calculator, Database, Download, BarChart3, ChevronLeft, ChevronRight, GitCompareArrows, MapPin, TrendingUp } from 'lucide-react';
+import { Activity, BookMarked, BookOpenText, Building2, Calculator, Database, Download, BarChart3, ChevronLeft, ChevronRight, GitCompareArrows, MapPin, MonitorPlay, TrendingUp } from 'lucide-react';
 // Version blanca sobre transparente (sin el cuadro rojo del PNG original): sobre
 // el rojo del panel queda limpia, sin "cuadrado flotante".
 import logoVertical from "../../imports/Logo_CUC_blanco_transparente.png";
@@ -36,6 +36,12 @@ export const MENU_SECTIONS = [
     items: [
       { id: 'extractor', icon: Database, label: 'Extractor de Datos' },
       { id: 'history', icon: Download, label: 'Historial' },
+    ],
+  },
+  {
+    title: 'Ayuda',
+    items: [
+      { id: 'guias', icon: MonitorPlay, label: 'Videoguías' },
     ],
   },
   {

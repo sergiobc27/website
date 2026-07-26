@@ -20,6 +20,13 @@ describe('lib/navigation', () => {
     expect(pathToView('/hydro/')).toBe('hydro');
   });
 
+  it('las videoguias viven en /guias (enlazada desde el README y PyPI)', () => {
+    expect(viewToPath('guias')).toBe('/guias');
+    expect(pathToView('/guias')).toBe('guias');
+    // El deep-link por hash a una guia concreta sigue resolviendo la vista.
+    expect(pathToView('/guias/')).toBe('guias');
+  });
+
   it('ruta desconocida -> landing', () => {
     expect(pathToView('/no-existe')).toBe('landing');
     expect(pathToView('/favicon.ico')).toBe('landing');
