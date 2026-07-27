@@ -41,7 +41,11 @@ const C_BASE_EJEMPLO = '0.83'; // punto medio de 'Distritos comerciales, centro'
 
 export function CalculadoraCaudal({ equation, durations }: Props) {
   const [tr, setTr] = useState(10);
-  const [trSel, setTrSel] = useState<{ tabla: 'vial' | 'urbano'; fila: number } | null>(null);
+  // `fila: null` = el usuario eligió una obra en la tabla y luego sobrescribió el
+  // Tr a mano. Se CONSERVA la tabla porque de ella dependen el piso del Tc
+  // (15 min vial / 10 min urbano) y el límite de área del método racional
+  // (250 ha / 80 ha). Antes se ponía trSel = null y ambos cambiaban en silencio.
+  const [trSel, setTrSel] = useState<{ tabla: 'vial' | 'urbano'; fila: number | null } | null>(null);
   const [area, setArea] = useState(AREA_EJEMPLO);
   const [longitud, setLongitud] = useState(LONGITUD_EJEMPLO);
   const [pendiente, setPendiente] = useState(PENDIENTE_EJEMPLO);
@@ -169,7 +173,9 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
             <Field label="Período de retorno Tr (años)">
               <Select
                 value={tr}
-                onChange={(v) => { setTr(Number(v)); setTrSel(null); }}
+                // Sobrescribir el Tr no borra el contexto de la obra: solo deja
+                // de señalar una fila concreta de la tabla.
+                onChange={(v) => { setTr(Number(v)); setTrSel((s) => (s ? { ...s, fila: null } : null)); }}
                 options={[...new Set([...RETURN_PERIODS, tr])].sort((a, b) => a - b).map((t) => ({ value: t, label: `${t} años` }))}
               />
             </Field>
@@ -183,9 +189,17 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
               <NumberInput value={pendiente} onChange={setPendiente} step="0.1" />
             </Field>
           </div>
-          {trSel && (
+          {trSel && trSel.fila != null && (
             <p className="mt-2 text-xs text-muted-foreground">
               Tr {tr} años · {String((trSel.tabla === 'vial' ? TABLA_TR_VIAL : TABLA_TR_URBANO).filas[trSel.fila][0])} (elegido de la tabla). Puedes sobrescribirlo con el selector de arriba.
+            </p>
+          )}
+          {trSel && trSel.fila == null && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Tr {tr} años, fijado a mano. Se mantiene el contexto de obra{' '}
+              <span className="font-semibold">{trSel.tabla === 'vial' ? 'vial' : 'urbana'}</span>: piso del
+              Tc de {trSel.tabla === 'vial' ? '15' : '10'} min y límite del método racional de{' '}
+              {trSel.tabla === 'vial' ? '250' : '80'} ha. Para cambiarlo, elige una obra en la otra tabla.
             </p>
           )}
           <details className="mt-3 rounded-lg border border-border" open>
@@ -197,13 +211,13 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
                 tabla={TABLA_TR_VIAL}
                 colsValor={[1]}
                 onCelda={(f, _c, v) => { setTr(Number(v)); setTrSel({ tabla: 'vial', fila: f }); }}
-                activa={trSel?.tabla === 'vial' ? { fila: trSel.fila, col: 1 } : null}
+                activa={trSel?.tabla === 'vial' && trSel.fila != null ? { fila: trSel.fila, col: 1 } : null}
               />
               <TablaNormaView
                 tabla={TABLA_TR_URBANO}
                 colsValor={[1]}
                 onCelda={(f, _c, v) => { setTr(Number(v)); setTrSel({ tabla: 'urbano', fila: f }); }}
-                activa={trSel?.tabla === 'urbano' ? { fila: trSel.fila, col: 1 } : null}
+                activa={trSel?.tabla === 'urbano' && trSel.fila != null ? { fila: trSel.fila, col: 1 } : null}
               />
             </div>
           </details>
