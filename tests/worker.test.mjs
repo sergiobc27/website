@@ -19,6 +19,8 @@ import {
 } from '../src/worker/chatPrompt.js';
 import { CHAT_SESSION_MAX_MSGS } from '../src/worker/chatSession.js';
 import { buildUpstreamHeaders } from '../src/worker/proxyHeaders.js';
+import { asuntoIdf, emailIdfHtml, emailIdfText, extractoTabla } from '../src/worker/emailIdf.js';
+import { buildIdfPdf } from '../src/worker/idfPdfDoc.js';
 import { VISTA_LABELS } from '../src/worker/chatData.js';
 
 const API_ORIGIN = 'https://ideam-api.sergiobc.com';
@@ -1140,4 +1142,123 @@ test('ENA 2022: la cita anexada dice (2022) y coincide con referencias.ts', () =
   const r = ensureReferencia('El Estudio Nacional del Agua 2022 (IDEAM, 2022) estima la oferta hídrica. 💧');
   assert.match(r, /📚 Referencia: .*\(2022\)\. Estudio Nacional del Agua 2022/);
   assert.doesNotMatch(r, /\(2023\)/);
+});
+
+// --- Correo de curvas IDF (cuerpo, texto plano y PDF adjunto) -----------------
+
+const IDF_FIXTURE = {
+  available: true,
+  nYears: 9,
+  durations: [10, 20, 30, 60, 120, 180, 360, 720, 1440],
+  returnPeriods: [2, 5, 10, 25, 50, 100],
+  equation: { K: 828.332, m: 0.135, n: 0.694, r2: 0.956, r2Space: 'log' },
+  chosenByDuration: { 10: 'Gumbel', 20: 'Gumbel', 30: 'Gumbel' },
+  warnings: [
+    'Registro corto (9 años): IDF de baja confianza, evita extrapolar a Tr altos.',
+    'Curvas IDF no monótonas al mezclar distribuciones; se unificó a Gumbel.',
+  ],
+  curves: [2, 5, 10, 25, 50, 100].map((tr) => ({
+    returnPeriod: tr,
+    points: [10, 20, 30, 60, 120, 180, 360, 720, 1440].map((durMin) => ({
+      durMin,
+      intensityMmH: (1200 * tr ** 0.135) / durMin ** 0.694,
+    })),
+  })),
+};
+const IDF_STATION = {
+  nombre: 'CHIGORODO [12015110]',
+  codigo: '0012015110',
+  municipio: 'Chigorodó',
+  departamento: 'ANTIOQUIA',
+  fecha: '26/07/2026',
+};
+const NOMBRE_ADJUNTO = 'curva-idf-chigorodo-12015110.pdf';
+
+test('correo IDF: el asunto no lleva raya larga (regla editorial del proyecto)', () => {
+  const asunto = asuntoIdf(IDF_STATION);
+  assert.ok(!asunto.includes('—'), 'el asunto no debe llevar raya larga');
+  assert.match(asunto, /Curvas IDF de CHIGORODO/);
+});
+
+test('correo IDF: ni el HTML ni el texto plano llevan raya larga', () => {
+  const html = emailIdfHtml(IDF_STATION, IDF_FIXTURE, NOMBRE_ADJUNTO);
+  const texto = emailIdfText(IDF_STATION, IDF_FIXTURE, NOMBRE_ADJUNTO);
+  assert.ok(!html.includes('—'), 'el HTML no debe llevar raya larga');
+  assert.ok(!texto.includes('—'), 'el texto plano no debe llevar raya larga');
+});
+
+test('correo IDF: el cuerpo trae estación, adjunto, ecuación y el aviso del cálculo', () => {
+  const html = emailIdfHtml(IDF_STATION, IDF_FIXTURE, NOMBRE_ADJUNTO);
+  assert.ok(html.includes('CHIGORODO [12015110]'), 'debe nombrar la estación');
+  assert.ok(html.includes(NOMBRE_ADJUNTO), 'debe nombrar el adjunto');
+  assert.ok(html.includes('828,3'), 'debe mostrar K en formato es-CO');
+  assert.ok(html.includes('Registro corto'), 'debe mostrar el aviso de fiabilidad');
+  // Enlace profundo a esa estación (lo lee Hidrologia con useUrlSync).
+  assert.ok(html.includes('/hydro?est=0012015110'), 'debe enlazar a la estación');
+  // Preheader: la línea que la bandeja muestra junto al asunto.
+  assert.ok(html.includes('El PDF va adjunto.'), 'debe traer preheader');
+});
+
+test('correo IDF: el nombre de la estación se escapa (nada de marcado inyectado)', () => {
+  const html = emailIdfHtml({ ...IDF_STATION, nombre: '<img src=x onerror=alert(1)>' }, IDF_FIXTURE, NOMBRE_ADJUNTO);
+  assert.ok(!html.includes('<img src=x'), 'no debe colarse marcado del catálogo');
+  assert.ok(html.includes('&lt;img src=x'), 'debe quedar escapado');
+});
+
+test('correo IDF: el extracto elige duraciones y Tr útiles para diseño', () => {
+  const { trs, filas } = extractoTabla(IDF_FIXTURE);
+  assert.deepEqual(trs, [10, 25, 100]);
+  assert.deepEqual(filas.map((f) => f.dur), [10, 30, 60, 120]);
+  assert.ok(filas.every((f) => f.vals.every((v) => typeof v === 'number')), 'todas las celdas con valor');
+});
+
+test('correo IDF: el extracto no rompe con pocas duraciones o pocos Tr', () => {
+  const flaco = {
+    ...IDF_FIXTURE,
+    durations: [15, 60],
+    returnPeriods: [5],
+    curves: [{ returnPeriod: 5, points: [{ durMin: 15, intensityMmH: 90 }, { durMin: 60, intensityMmH: 40 }] }],
+  };
+  const { trs, filas } = extractoTabla(flaco);
+  assert.deepEqual(trs, [5]);
+  assert.equal(filas.length, 2);
+  assert.doesNotThrow(() => emailIdfHtml(IDF_STATION, flaco, NOMBRE_ADJUNTO));
+  assert.doesNotThrow(() => emailIdfText(IDF_STATION, flaco, NOMBRE_ADJUNTO));
+});
+
+test('correo IDF: el texto plano trae la tabla y las variables definidas', () => {
+  const texto = emailIdfText(IDF_STATION, IDF_FIXTURE, NOMBRE_ADJUNTO);
+  assert.match(texto, /EXTRACTO DE LA TABLA/);
+  assert.match(texto, /I: intensidad de la lluvia \(mm\/h\)/);
+  assert.match(texto, /T: período de retorno \(años\)/);
+  assert.match(texto, /D: duración de la lluvia \(min\)/);
+  assert.match(texto, /LEER ANTES DE USAR/);
+});
+
+test('PDF IDF del correo: sale un PDF válido y con peso de informe', async () => {
+  const bytes = await buildIdfPdf(IDF_FIXTURE, IDF_STATION);
+  // Con los dos logos embebidos y la tabla completa, un PDF sano pasa de 15 KB;
+  // por debajo de eso algo se quedó sin dibujar.
+  assert.ok(bytes.length > 15000, `el PDF luce vacío (${bytes.length} bytes)`);
+  assert.equal(new TextDecoder().decode(bytes.subarray(0, 5)), '%PDF-');
+});
+
+// Helvetica con WinAnsi sí tiene tildes y ñ. El PDF viejo las evitaba y escribía
+// cosas como "9 anios"; si alguien cambia la codificación o la fuente, pdf-lib
+// lanza al encontrar estos caracteres y este test lo caza.
+test('PDF IDF del correo: acentos y ñ no revientan la codificación', async () => {
+  const conAcentos = {
+    ...IDF_STATION,
+    nombre: 'CAÑASGORDAS · LA UNIÓN [26055010]',
+    municipio: 'Cañasgordas',
+    departamento: 'ANTIOQUIA',
+  };
+  const bytes = await buildIdfPdf(IDF_FIXTURE, conAcentos);
+  assert.equal(new TextDecoder().decode(bytes.subarray(0, 5)), '%PDF-');
+});
+
+test('PDF IDF del correo: no revienta si faltan avisos, ecuación o curvas', async () => {
+  const minimo = { available: true, nYears: 1, durations: [10], returnPeriods: [2], curves: [] };
+  const bytes = await buildIdfPdf(minimo, IDF_STATION);
+  assert.equal(new TextDecoder().decode(bytes.subarray(0, 5)), '%PDF-');
 });

@@ -17,6 +17,7 @@
  */
 
 import { buildIdfPdf } from "./idfPdfDoc.js";
+import { asuntoIdf, emailIdfHtml, emailIdfText } from "./emailIdf.js";
 import { buildUpstreamHeaders } from "./proxyHeaders.js";
 import {
   CHAT_REJECTION,
@@ -705,36 +706,8 @@ const emailRateLimited = (env, ip) => kvRateLimited(env, "rl", RL_MAX_PER_HOUR, 
 const chatRateLimited = (env, ip) =>
   kvRateLimited(env, "rlc", CHAT_RL_PER_HOUR, CHAT_GLOBAL_CALLS_PER_DAY, ip, true, CHAT_CALLS_POR_MENSAJE);
 
-// Escapa HTML para impedir inyección/phishing en el cuerpo del correo: los
-// campos vienen del cliente y el correo sale desde nuestro dominio verificado.
-function escHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => (
-    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
-  ));
-}
-
-function emailHtml(stationName, stationCode, filename) {
-  return `<!doctype html><html><body style="margin:0;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a">
-  <div style="max-width:560px;margin:0 auto;background:#ffffff">
-    <div style="background:#A3161A;padding:20px 24px;color:#ffffff">
-      <div style="font-size:20px;font-weight:bold">Curvas IDF</div>
-      <div style="font-size:12px;opacity:.9">Intensidad-Duracion-Frecuencia</div>
-    </div>
-    <div style="height:4px;background:#C9A227"></div>
-    <div style="padding:24px">
-      <p>Hola,</p>
-      <p>Adjunto encontrar&aacute;s el PDF con las curvas Intensidad-Duraci&oacute;n-Frecuencia
-      de la estaci&oacute;n <strong>${escHtml(stationName)}</strong> (${escHtml(stationCode)}), solicitadas en la plataforma.</p>
-      <p style="color:#595959">&#128206; ${escHtml(filename)}</p>
-    </div>
-    <div style="border-top:1px solid #e5e5e5;padding:16px 24px;font-size:12px;color:#595959">
-      <a href="https://ideam.sergiobc.com" style="color:#A3161A;text-decoration:none">ideam.sergiobc.com</a><br/>
-      Ing. Civil Sergio Beltr&aacute;n Coley &middot; Universidad de la Costa (CUC)
-    </div>
-  </div>
-</body></html>`;
-}
-
+// El asunto, el cuerpo HTML y el texto plano del correo viven en emailIdf.js
+// (con su propio escapado de HTML).
 // boxJson (llamadas al box con el secreto del proxy) vive en chatData.js.
 
 function u8ToBase64(u8) {
@@ -850,8 +823,11 @@ async function handleEmailIdf(request, env) {
       from: "IDEAM · Curvas IDF <contacto@sergiobc.com>",
       to: to.trim(),
       reply_to: "sergiobeltrancoley@gmail.com",
-      subject: `Tus curvas IDF · ${station.nombre} — ideam.sergiobc.com`,
-      html: emailHtml(station.nombre, station.codigo, filename),
+      subject: asuntoIdf(station),
+      html: emailIdfHtml(station, idf, filename),
+      // El texto plano no es opcional: mejora la entregabilidad y es lo que ven
+      // los clientes que no pintan HTML.
+      text: emailIdfText(station, idf, filename),
       attachments: [{ filename, content: u8ToBase64(pdfBytes) }],
     }),
   });
