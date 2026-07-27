@@ -142,8 +142,16 @@ export function SeccionTc({
 
       <div className="space-y-1 text-xs text-muted-foreground">
         <Formula className="text-sm text-card-foreground">
-          <V>T</V><Sub>c</Sub>&nbsp;(Témez)&nbsp;=&nbsp;0,3 · (<Frac num={<><V>L</V><Sub>km</Sub></>} den={<><V>S</V><Sup>0,25</Sup></>} />)<Sup>0,76</Sup>
+          <V>T</V><Sub>c</Sub>&nbsp;(Témez)&nbsp;=&nbsp;0,3 · (<Frac num={<><V>L</V><Sub>km</Sub></>} den={<><V>S</V><Sup>0,25</Sup></>} />)<Sup>0,76</Sup>&nbsp;· 60
         </Formula>
+        {/* Sin el ×60 la fórmula devuelve HORAS y el resultado de al lado está en
+            minutos: quien la sustituyera a mano obtenía un valor 60 veces menor.
+            Y L va en km aquí, mientras la lista de variables (compartida con
+            Kirpich) la define en metros: por eso la aclaración. */}
+        <p className="mt-1">
+          Témez devuelve horas; el factor 60 lo pasa a minutos. Aquí <V>L</V><Sub>km</Sub> es la
+          longitud en kilómetros, es decir <V>L</V> dividida entre 1.000.
+        </p>
         <VariablesLista variables={variablesDe('tiempo-concentracion')} className="mt-2" />
       </div>
     </div>

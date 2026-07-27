@@ -4,6 +4,9 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { MapPin, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import { apiJson, apiUrl } from '../lib/ideamApi';
+import { PRECIP_DATASET } from '../lib/constants';
+import { datasetUnit } from '../lib/units';
+import { fmt } from '../lib/format';
 import { useUrlSync } from '../lib/urlState';
 import { daneDeDepartamento } from '../lib/departamentos';
 import {
@@ -92,7 +95,19 @@ function popupHtml(p: StationProperties) {
     </div>`;
 }
 
-function sparklineSvg(points: Array<{ bucket: string; value: number | null }>, label: string) {
+/**
+ * Mini-serie anual de la estación.
+ * `metrica` y `unidad` rotulan lo que de verdad se pidió: para precipitación es
+ * la lámina acumulada, no el promedio (ver la llamada). Además se muestran el
+ * mínimo y el máximo, porque sin escala la línea no dice si sube de 10 a 15 mm
+ * o de 100 a 1.500.
+ */
+function sparklineSvg(
+  points: Array<{ bucket: string; value: number | null }>,
+  label: string,
+  metrica = 'promedio anual',
+  unidad = '',
+) {
   const valid = points.filter((p) => p.value !== null) as Array<{ bucket: string; value: number }>;
   if (valid.length < 2) {
     return `<div style="opacity:.65">Sin datos de ${escapeHtml(label)} en esta estación.</div>`;
@@ -111,14 +126,18 @@ function sparklineSvg(points: Array<{ bucket: string; value: number | null }>, l
   // (label, años) o es numérico generado aquí (path con toFixed).
   const first = escapeHtml(valid[0].bucket.slice(0, 4));
   const last = escapeHtml(valid[valid.length - 1].bucket.slice(0, 4));
+  const suf = unidad ? ` ${escapeHtml(unidad)}` : '';
+  const vMin = escapeHtml(fmt(min, 1));
+  const vMax = escapeHtml(fmt(max, 1));
   return `
-    <div style="font-weight:600; margin-bottom:2px;">${escapeHtml(label)} · promedio anual</div>
-    <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Serie anual de ${escapeHtml(label)} de la estación, de ${first} a ${last}">
+    <div style="font-weight:600; margin-bottom:2px;">${escapeHtml(label)} · ${escapeHtml(metrica)}</div>
+    <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Serie anual de ${escapeHtml(label)} de la estación, de ${first} a ${last}; entre ${vMin} y ${vMax}${suf}">
       <path d="${path}" fill="none" stroke="#C9A227" stroke-width="1.6" />
     </svg>
     <div style="display:flex; justify-content:space-between; opacity:.65; font-size:11px;">
       <span>${first}</span><span>${last}</span>
-    </div>`;
+    </div>
+    <div style="opacity:.75; font-size:11px;">De ${vMin} a ${vMax}${suf}</div>`;
 }
 
 // Alta de la fuente y capas de estaciones. Idempotente: se llama al cargar el
@@ -348,13 +367,25 @@ export default function MapaEstaciones() {
                 departments: [],
                 catalogFilters: { stations: [props.codigo] },
                 interval: 'year',
-                metric: 'avg',
+                // Precipitación: la métrica con sentido es la LÁMINA acumulada
+                // (mm/año), no el promedio por lectura de 10 min (~0,05 mm),
+                // que dibuja una línea plana y engañosa. Mismo criterio que
+                // Analytics (effectiveMetric).
+                metric: dataset.id === PRECIP_DATASET ? 'sum' : 'avg',
               }),
             },
             'No fue posible cargar la serie.'
           );
           const target = popup.getElement()?.querySelector('.ideam-spark');
-          if (target) target.innerHTML = sparklineSvg(series.points, dataset.name);
+          if (target) {
+            const esPrecip = dataset.id === PRECIP_DATASET;
+            target.innerHTML = sparklineSvg(
+              series.points,
+              dataset.name,
+              esPrecip ? 'lámina anual' : 'promedio anual',
+              datasetUnit(dataset.id),
+            );
+          }
         } catch {
           const target = popup.getElement()?.querySelector('.ideam-spark');
           if (target) target.innerHTML = '<div style="opacity:.65">No fue posible cargar la serie.</div>';
