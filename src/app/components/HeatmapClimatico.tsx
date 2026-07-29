@@ -3,6 +3,8 @@ import { Maximize2, X } from 'lucide-react';
 import { InfoGrafica } from './InfoGrafica';
 import { apiJson, ApiError } from '../lib/ideamApi';
 import { fmt } from '../lib/format';
+import { datasetUnit } from '../lib/units';
+import { PRECIP_DATASET } from '../lib/constants';
 import { ControlSelect } from './ControlSelect';
 import { ChartDownloadButton } from './ChartDownloadButton';
 import { SkeletonLoader } from './SkeletonLoader';
@@ -62,9 +64,23 @@ interface Props {
   metric: string;
   anioMin?: number;
   anioMax?: number;
+  /** Nombre de la variable ("Precipitación", "Temperatura máxima del aire"...).
+   * Sin él el rótulo decía "intensidad de lluvia" aunque se estuviera mirando
+   * temperatura o viento. */
+  datasetName?: string;
+  /** Métrica en curso ("Lámina", "Promedio"...), para no dar por hecha una. */
+  metricLabel?: string;
 }
 
-export function HeatmapClimatico({ datasetId, department, metric, anioMin, anioMax }: Props) {
+export function HeatmapClimatico({
+  datasetId,
+  department,
+  metric,
+  anioMin,
+  anioMax,
+  datasetName,
+  metricLabel,
+}: Props) {
   const gridRef = useRef<HTMLDivElement>(null);
   const ahora = new Date().getUTCFullYear();
   const [vista, setVista] = useState<Vista>('anios-meses');
@@ -127,6 +143,19 @@ export function HeatmapClimatico({ datasetId, department, metric, anioMin, anioM
     return arr;
   }, [anioMin, anioMax, ahora]);
 
+  // Rótulos que dependen de la variable en curso. "seco / lluvioso" solo tiene
+  // sentido en precipitación; para las demás se usa el par neutro y, en todos
+  // los casos, se muestra el tramo real de la escala con su unidad.
+  const unidad = datasetUnit(datasetId);
+  const esPrecip = datasetId === PRECIP_DATASET;
+  const extremos = esPrecip ? { bajo: 'seco', alto: 'lluvioso' } : { bajo: 'menos', alto: 'más' };
+  const variable = datasetName ? datasetName.toLowerCase() : 'variable seleccionada';
+  const subtitulo = `${department || 'Todo el país'} · ${variable}${metricLabel ? ` · ${metricLabel.toLowerCase()}` : ''}`;
+  const maxEscala = useMemo(
+    () => points.reduce((max, p) => (p.value != null && p.value > max ? p.value : max), 0),
+    [points],
+  );
+
   const cuerpo = (() => {
     if (cargando) return <SkeletonLoader rows={4} />;
     if (requiereDepto) {
@@ -164,11 +193,12 @@ export function HeatmapClimatico({ datasetId, department, metric, anioMin, anioM
 
   const leyenda = !requiereDepto && points.length > 0 && (
     <div className="mt-3 flex items-center justify-end gap-1.5 text-[10px] text-muted-foreground">
-      seco
+      {extremos.bajo}
       {[0.1, 0.35, 0.6, 0.85].map((t) => (
         <span key={t} className="h-2.5 w-2.5 rounded-[2px]" style={{ backgroundColor: colorCalendario(t, 1) }} />
       ))}
-      lluvioso
+      {extremos.alto}
+      <span className="ml-1">· 0 a {fmt(maxEscala, 1)}{unidad ? ` ${unidad}` : ''}</span>
     </div>
   );
 
@@ -177,7 +207,7 @@ export function HeatmapClimatico({ datasetId, department, metric, anioMin, anioM
       <div className="mb-4 flex items-center justify-between gap-4">
         <div>
           <h3 className="font-bold text-card-foreground">Mapa de calor climático</h3>
-          <p className="text-sm text-muted-foreground">{department || 'Todo el país'} · intensidad de lluvia</p>
+          <p className="text-sm text-muted-foreground">{subtitulo}</p>
         </div>
         <div className="flex shrink-0 items-center gap-3">
           <InfoGrafica id="heatmap" />

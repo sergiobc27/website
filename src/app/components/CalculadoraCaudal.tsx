@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Calculator, Info } from 'lucide-react';
 import { InfoGrafica } from './InfoGrafica';
+import { InsigniaFiabilidad } from './InsigniaFiabilidad';
 import { Formula, Frac, V } from './Formula';
+import type { Fiabilidad } from '../../shared/ideamContracts';
 import { fmt } from '../lib/format';
 import { tiemposConcentracion, FACTOR_RECORRIDO, PISO_TC_URBANO, PISO_TC_VIAL, type MetodoTc, type Recorrido } from '../lib/hydro/tc';
 import { cAjustado, qRacional, factorFrecuencia, intensidadIdf, type ResultadoRacional } from '../lib/hydro/runoff';
@@ -29,6 +31,10 @@ const HELP_PENDIENTE = comoSeObtiene('tiempo-concentracion', 'S');
 interface Props {
   equation: { K: number; m: number; n: number };
   durations: number[]; // duraciones con datos (para advertir extrapolación)
+  /** Fiabilidad del registro del que salió la IDF: el caudal la hereda entera. */
+  fiabilidad?: Fiabilidad | null;
+  /** Estación de la que viene la IDF, para que el número no quede sin dueño. */
+  estacion?: string;
 }
 
 // Valores de ejemplo con los que arranca la calculadora (no son "los tuyos"):
@@ -39,7 +45,7 @@ const LONGITUD_EJEMPLO = '800'; // m
 const PENDIENTE_EJEMPLO = '2'; // %
 const C_BASE_EJEMPLO = '0.83'; // punto medio de 'Distritos comerciales, centro' (INVÍAS Tabla 2.9)
 
-export function CalculadoraCaudal({ equation, durations }: Props) {
+export function CalculadoraCaudal({ equation, durations, fiabilidad, estacion }: Props) {
   const [tr, setTr] = useState(10);
   // `fila: null` = el usuario eligió una obra en la tabla y luego sobrescribió el
   // Tr a mano. Se CONSERVA la tabla porque de ella dependen el piso del Tc
@@ -133,10 +139,14 @@ export function CalculadoraCaudal({ equation, durations }: Props) {
           <p className="text-sm text-muted-foreground">
             Calcula cuánta agua de lluvia debe evacuar tu obra (cuneta, alcantarilla, canal) y comprueba si la tubería o el
             canal alcanzan.
+            {estacion ? ` La intensidad sale de la IDF de ${estacion}.` : ''}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-3">
           <InfoGrafica id="metodo-racional" />
+          {/* El caudal hereda la calidad del registro de esa estación: si es baja,
+              tiene que verse junto al resultado, no dos tarjetas más abajo. */}
+          {fiabilidad && <InsigniaFiabilidad nivel={fiabilidad.level} razones={fiabilidad.reasons} />}
           <Calculator className="h-5 w-5 shrink-0 text-accent" />
         </div>
       </div>

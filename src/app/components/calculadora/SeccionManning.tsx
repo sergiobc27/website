@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Info } from 'lucide-react';
 import { Formula, Frac, Sup, V } from '../Formula';
 import { VariablesLista } from '../VariablesLista';
+import { CitaFuente } from './CitaFuente';
 import { variablesDe } from '../../lib/metodologia/contenido';
 import { fmt } from '../../lib/format';
 import {
   MATERIALES,
+  FUENTE_N_MANNING,
+  FUENTE_V_MAX,
+  V_MAX_RAS,
   TAU_MIN_AUTOLIMPIEZA,
   capacidadCircular,
   profundidadNormalCircular,
@@ -142,6 +147,31 @@ export function SeccionManning({ q, pendienteCuenca }: { q: number; pendienteCue
           <NumberInput value={vMax} onChange={setVMax} step="0.5" />
         </Field>
       </div>
+
+      {/* De dónde salen los números prefijados. Antes la tabla de materiales daba
+          n y velocidad máxima sin decir de dónde, a diferencia del coeficiente C,
+          que sí cita la tabla del INVÍAS. */}
+      <div className="space-y-1 rounded-lg border border-border bg-background/60 px-3 py-2">
+        <p className="text-[11px] text-muted-foreground">
+          Valores prefijados del material elegido: <V>n</V> = {fmt(MATERIALES[materialIdx].n, 3)} y velocidad máxima ={' '}
+          {fmt(MATERIALES[materialIdx].vMax, 1)} m/s. El <V>n</V> es el típico del material y la velocidad máxima es su
+          límite por erosión. Los dos son editables.
+        </p>
+        <CitaFuente fuente={FUENTE_N_MANNING} />
+        <CitaFuente fuente={FUENTE_V_MAX} />
+      </div>
+
+      {parseFloat(vMax) > V_MAX_RAS && (
+        <div className="flex items-start gap-2 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-accent">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            La velocidad máxima puesta ({fmt(parseFloat(vMax), 1)} m/s) supera el tope de {fmt(V_MAX_RAS, 1)} m/s que fija
+            el RAS 0330 (2017), Art. 150, para alcantarillado pluvial y combinado (admite hasta 10 m/s con revestimiento
+            especial). El chequeo usa el valor que pusiste; si la obra es alcantarillado, baja el tope a{' '}
+            {fmt(V_MAX_RAS, 1)} m/s.
+          </span>
+        </div>
+      )}
 
       {res && (
         <>

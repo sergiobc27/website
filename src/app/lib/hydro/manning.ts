@@ -4,6 +4,8 @@
 // velocidad según RAS 0330. Los valores de n y de velocidad máxima son editables
 // en la UI (valores típicos Ven Te Chow / RAS, sujetos a la edición vigente).
 
+import type { Fuente } from './fuentes';
+
 export type Estado = 'verde' | 'amarillo' | 'rojo';
 
 const F_MAX = 0.93; // Relación de llenado máxima práctica para el solver circular.
@@ -106,8 +108,30 @@ export function profundidadNormalTrapecio(
   return { y, v: area > 0 ? Qd / area : 0, r: perim > 0 ? area / perim : 0, excedeCapacidad: false };
 }
 
-// Materiales típicos: n de Manning y velocidad máxima admisible (valores de
-// referencia Ven Te Chow / RAS 0330, editables en la UI).
+// De dónde salen los valores prefijados de la tabla de materiales. Se declaran
+// como Fuente (igual que las tablas del INVÍAS) para que la UI muestre la cita
+// con su nivel de verificación en vez de dar los números por hechos.
+export const FUENTE_N_MANNING: Fuente = {
+  ref: 'chow-1959',
+  localizador: 'cap. 5 (coeficiente n según material)',
+  verificado: false,
+  nota: 'El valor es el típico que reporta la literatura para cada material; el número exacto de tabla y página está por confirmar contra la fuente primaria.',
+};
+
+export const FUENTE_V_MAX: Fuente = {
+  ref: 'ras-0330',
+  localizador: 'Art. 150 (velocidad máxima 5,0 m/s en alcantarillado)',
+  verificado: true,
+};
+
+// RAS 0330 (2017), Art. 150: tope de velocidad en alcantarillado pluvial y
+// combinado. Los topes por material de la tabla son límites de erosión del
+// material, que en algunos casos quedan POR ENCIMA de este tope normativo; la UI
+// lo advierte en lugar de cambiar el número a la callada.
+export const V_MAX_RAS = 5.0; // m/s
+
+// Materiales típicos: n de Manning y velocidad máxima admisible por erosión del
+// material (editables en la UI; ver FUENTE_N_MANNING y FUENTE_V_MAX).
 export const MATERIALES: Array<{ label: string; n: number; vMax: number }> = [
   { label: 'Concreto', n: 0.013, vMax: 5 },
   { label: 'PVC / plástico liso', n: 0.01, vMax: 6 },
