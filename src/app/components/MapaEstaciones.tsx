@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import type { FeatureCollection, Point as GeoJsonPoint } from 'geojson';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -9,6 +9,8 @@ import { datasetUnit } from '../lib/units';
 import { fmt } from '../lib/format';
 import { useUrlSync } from '../lib/urlState';
 import { daneDeDepartamento } from '../lib/departamentos';
+import { bboxDeEstaciones, bboxDeGeometria, limiteDeDepartamento } from '../lib/geo';
+import { InfoGrafica } from './InfoGrafica';
 import {
   vistaPorId,
   vistasPorFamilia,
@@ -53,6 +55,7 @@ interface StationCollection {
 
 const SOURCE_ID = 'estaciones';
 const DEPTOS_SOURCE_ID = 'departamentos';
+const ZONA_SOURCE_ID = 'zona-seleccionada';
 
 // Carto basemaps gratuitos (atribución OSM+Carto obligatoria, ya incluida en el estilo).
 const STYLE_DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
@@ -208,6 +211,10 @@ export default function MapaEstaciones() {
   const boundariesRef = useRef<FeatureCollection | null>(null);
   // Cache de by-region por datasetId: evita re-consultar al alternar vistas.
   const byRegionCacheRef = useRef<Map<string, RegionRow[]>>(new Map());
+  // Última zona a la que se encuadró el mapa. Evita re-encuadrar (y perder el
+  // desplazamiento del usuario) cuando el efecto se repite por otro motivo,
+  // como el cambio de tema, que rehace todas las capas.
+  const zonaEncuadradaRef = useRef('');
 
   const [allStations, setAllStations] = useState<StationFeature[]>([]);
   const [datasets, setDatasets] = useState<Array<{ id: string; name: string }>>([]);
@@ -220,6 +227,7 @@ export default function MapaEstaciones() {
   const [estadoFilter, setEstadoFilter] = useState<'todas' | 'activa' | 'otra'>('todas');
   const [categoriaFilter, setCategoriaFilter] = useState('');
   const [departamentoFilter, setDepartamentoFilter] = useState('');
+  const [municipioFilter, setMunicipioFilter] = useState('');
   const [zonaFilter, setZonaFilter] = useState('');
   const [corrienteFilter, setCorrienteFilter] = useState('');
   // Diferido: filtrar 18K features en cada tecla causaba jank (auditoría #5 #13).
@@ -239,6 +247,7 @@ export default function MapaEstaciones() {
       estado: estadoFilter === 'todas' ? undefined : estadoFilter,
       cat: categoriaFilter || undefined,
       dep: departamentoFilter || undefined,
+      mun: municipioFilter || undefined,
       zona: zonaFilter || undefined,
       corriente: corrienteFilter || undefined,
       altmax: altitudMax === null ? undefined : String(altitudMax),
@@ -250,6 +259,7 @@ export default function MapaEstaciones() {
       if (p.estado === 'todas' || p.estado === 'activa' || p.estado === 'otra') setEstadoFilter(p.estado);
       if (p.cat) setCategoriaFilter(p.cat);
       if (p.dep) setDepartamentoFilter(p.dep);
+      if (p.mun) setMunicipioFilter(p.mun);
       if (p.zona) setZonaFilter(p.zona);
       if (p.corriente) setCorrienteFilter(p.corriente);
       if (p.altmax && Number.isFinite(Number(p.altmax))) setAltitudMax(Number(p.altmax));
@@ -441,6 +451,33 @@ export default function MapaEstaciones() {
     () => Array.from(new Set(allStations.map((f) => f.properties.departamento).filter(Boolean))).sort() as string[],
     [allStations]
   );
+  // Municipios del departamento elegido. Sin departamento no se ofrecen: son más
+  // de mil y la lista sería inútil, además de que hay nombres repetidos entre
+  // departamentos (hay varios "Albania").
+  const municipios = useMemo(() => {
+    if (!departamentoFilter) return [] as string[];
+    return Array.from(
+      new Set(
+        allStations
+          .filter((f) => f.properties.departamento === departamentoFilter)
+          .map((f) => f.properties.municipio)
+          .filter(Boolean)
+      )
+    ).sort() as string[];
+  }, [allStations, departamentoFilter]);
+
+  // Estaciones de la zona filtrada, sin aplicar el resto de filtros: de aquí sale
+  // el encuadre del mapa, que no debe moverse al cambiar de categoría o altitud.
+  const estacionesDeZona = useMemo(
+    () =>
+      allStations.filter(
+        (f) =>
+          f.properties.departamento === departamentoFilter &&
+          (!municipioFilter || f.properties.municipio === municipioFilter)
+      ),
+    [allStations, departamentoFilter, municipioFilter]
+  );
+
   const zonas = useMemo(
     () => Array.from(new Set(allStations.map((f) => f.properties.zonaHidrografica).filter(Boolean))).sort() as string[],
     [allStations]
@@ -466,6 +503,7 @@ export default function MapaEstaciones() {
         if (estadoFilter !== 'todas' && p.estadoNorm !== estadoFilter) return false;
         if (categoriaFilter && p.categoria !== categoriaFilter) return false;
         if (departamentoFilter && p.departamento !== departamentoFilter) return false;
+        if (municipioFilter && p.municipio !== municipioFilter) return false;
         if (zonaFilter && p.zonaHidrografica !== zonaFilter) return false;
         if (corrienteNorm && !normalizeName(p.corriente || '').includes(corrienteNorm)) return false;
         if (altitudMax != null) {
@@ -476,7 +514,7 @@ export default function MapaEstaciones() {
         }
         return true;
       }),
-    [allStations, estadoFilter, categoriaFilter, departamentoFilter, zonaFilter, corrienteNorm, altitudMax]
+    [allStations, estadoFilter, categoriaFilter, departamentoFilter, municipioFilter, zonaFilter, corrienteNorm, altitudMax]
   );
 
   // Los filtros reescriben la fuente (setData) para que los clusters se
@@ -486,6 +524,96 @@ export default function MapaEstaciones() {
     const source = mapRef.current?.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
     source?.setData({ type: 'FeatureCollection', features: visibleStations } as unknown as FeatureCollection);
   }, [isMapReady, visibleStations, styleEpoch]);
+
+  // Límites departamentales del DANE, una sola descarga por sesión: los usan la
+  // coropleta y el resaltado de la zona filtrada.
+  const cargarLimites = useCallback(async () => {
+    if (!boundariesRef.current) {
+      const response = await fetch('/colombia-departamentos.json');
+      if (!response.ok) throw new Error('No fue posible cargar los límites departamentales.');
+      boundariesRef.current = (await response.json()) as FeatureCollection;
+    }
+    return boundariesRef.current;
+  }, []);
+
+  // Zona filtrada: además de dejar solo sus estaciones, PINTA el territorio del
+  // departamento y encuadra el mapa en él. Antes el filtro solo quitaba puntos,
+  // así que no se veía de qué territorio se estaba hablando.
+  // El municipio no se dibuja: la aplicación solo trae los límites
+  // DEPARTAMENTALES del DANE, y trazar una frontera municipal inventada en una
+  // herramienta de consulta seria no es una opción. Con municipio elegido se
+  // mantiene el contorno del departamento y el encuadre baja a sus estaciones.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!isMapReady || !map) return undefined;
+
+    const quitarZona = () => {
+      if (map.getLayer('zona-line')) map.removeLayer('zona-line');
+      if (map.getLayer('zona-fill')) map.removeLayer('zona-fill');
+      if (map.getSource(ZONA_SOURCE_ID)) map.removeSource(ZONA_SOURCE_ID);
+    };
+
+    if (!departamentoFilter) {
+      quitarZona();
+      // Solo devuelve la vista al país si venía de una zona; si no, respeta el
+      // encuadre que el usuario tenga puesto.
+      if (zonaEncuadradaRef.current) {
+        zonaEncuadradaRef.current = '';
+        map.fitBounds(COLOMBIA_BOUNDS, { padding: 24 });
+      }
+      return undefined;
+    }
+
+    let cancelled = false;
+    const pintar = async () => {
+      try {
+        const limites = await cargarLimites();
+        if (cancelled) return;
+        const feature = limiteDeDepartamento(limites, departamentoFilter);
+        quitarZona();
+        if (!feature) return; // sin geometría para ese nombre: no se pinta nada
+
+        map.addSource(ZONA_SOURCE_ID, {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [feature] } as FeatureCollection,
+        });
+        const antesDe = map.getLayer('clusters') ? 'clusters' : undefined;
+        map.addLayer(
+          {
+            id: 'zona-fill',
+            type: 'fill',
+            source: ZONA_SOURCE_ID,
+            paint: { 'fill-color': '#C9A227', 'fill-opacity': 0.1 },
+          },
+          antesDe
+        );
+        map.addLayer(
+          {
+            id: 'zona-line',
+            type: 'line',
+            source: ZONA_SOURCE_ID,
+            paint: { 'line-color': '#C9A227', 'line-width': 2.2, 'line-opacity': 0.9 },
+          },
+          antesDe
+        );
+
+        const clave = `${departamentoFilter}|${municipioFilter}`;
+        if (zonaEncuadradaRef.current !== clave) {
+          const caja = municipioFilter
+            ? bboxDeEstaciones(estacionesDeZona)
+            : bboxDeGeometria(feature.geometry);
+          if (caja) map.fitBounds(caja, { padding: 40, maxZoom: municipioFilter ? 11 : 9 });
+          zonaEncuadradaRef.current = clave;
+        }
+      } catch (cause) {
+        if (!cancelled) setError(cause instanceof Error ? cause.message : 'No fue posible pintar la zona.');
+      }
+    };
+    void pintar();
+    return () => {
+      cancelled = true;
+    };
+  }, [isMapReady, departamentoFilter, municipioFilter, estacionesDeZona, styleEpoch, cargarLimites]);
 
   // Coropleta por VISTA temática: colorea cada departamento por la magnitud del
   // fenómeno (mm/mes, °C, %, nº de estaciones...). Une los límites estáticos con
@@ -510,11 +638,7 @@ export default function MapaEstaciones() {
     let cancelled = false;
     const load = async () => {
       try {
-        if (!boundariesRef.current) {
-          const response = await fetch('/colombia-departamentos.json');
-          if (!response.ok) throw new Error('No fue posible cargar los límites departamentales.');
-          boundariesRef.current = (await response.json()) as FeatureCollection;
-        }
+        await cargarLimites();
 
         let valorPorDane: Map<string, number>;
         if (vista.metrica === 'catalogStations') {
@@ -542,7 +666,7 @@ export default function MapaEstaciones() {
           valorPorDane = valoresPorDane(regions, vista.metrica);
         }
 
-        const merged = construirFeatures(boundariesRef.current, valorPorDane);
+        const merged = construirFeatures(boundariesRef.current as FeatureCollection, valorPorDane);
         const { min, max } = rangoValores([...valorPorDane.values()]);
         setLeyenda({
           rotulo: vista.rotulo,
@@ -563,6 +687,13 @@ export default function MapaEstaciones() {
         ] as unknown as maplibregl.ExpressionSpecification;
 
         removeLayers();
+        // Debajo del resaltado de la zona si lo hay, para que su contorno no
+        // quede tapado por el relleno de la coropleta.
+        const antesDe = map.getLayer('zona-fill')
+          ? 'zona-fill'
+          : map.getLayer('clusters')
+            ? 'clusters'
+            : undefined;
         map.addSource(DEPTOS_SOURCE_ID, { type: 'geojson', data: merged });
         map.addLayer(
           {
@@ -571,7 +702,7 @@ export default function MapaEstaciones() {
             source: DEPTOS_SOURCE_ID,
             paint: { 'fill-color': fillColor, 'fill-outline-color': 'rgba(201,162,39,0.4)' },
           },
-          'clusters'
+          antesDe
         );
         map.addLayer(
           {
@@ -580,7 +711,7 @@ export default function MapaEstaciones() {
             source: DEPTOS_SOURCE_ID,
             paint: { 'line-color': 'rgba(201,162,39,0.5)', 'line-width': 0.8 },
           },
-          'clusters'
+          antesDe
         );
       } catch (cause) {
         if (!cancelled) setError(cause instanceof Error ? cause.message : 'No fue posible cargar la coropleta.');
@@ -590,13 +721,16 @@ export default function MapaEstaciones() {
     return () => {
       cancelled = true;
     };
-  }, [isMapReady, mapaVista, allStations, styleEpoch]);
+  }, [isMapReady, mapaVista, allStations, styleEpoch, cargarLimites]);
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <h2 className="text-card-foreground text-2xl font-bold">Mapa de estaciones IDEAM</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-card-foreground text-2xl font-bold">Mapa de estaciones IDEAM</h2>
+            <InfoGrafica id="mapa-coropleta" />
+          </div>
           <p className="text-muted-foreground text-sm mt-1">
             {visibleStations.length.toLocaleString('es-CO')} de {allStations.length.toLocaleString('es-CO')} estaciones visibles ·
             <span className="ml-1 inline-flex items-center gap-1">
@@ -643,15 +777,33 @@ export default function MapaEstaciones() {
           </select>
           <select
             value={departamentoFilter}
-            onChange={(event) => setDepartamentoFilter(event.target.value)}
+            onChange={(event) => {
+              setDepartamentoFilter(event.target.value);
+              setMunicipioFilter(''); // el municipio anterior no existe en el nuevo depto.
+            }}
             className="h-9 max-w-48 rounded-lg border border-border bg-card px-3 text-sm text-card-foreground outline-none focus:border-accent"
             aria-label="Filtrar por departamento"
+            title="Filtra las estaciones y pinta el territorio del departamento"
           >
             <option value="">Todos los departamentos</option>
             {departamentos.map((departamento) => (
               <option key={departamento} value={departamento}>{departamento}</option>
             ))}
           </select>
+          {municipios.length > 0 && (
+            <select
+              value={municipioFilter}
+              onChange={(event) => setMunicipioFilter(event.target.value)}
+              className="h-9 max-w-48 rounded-lg border border-border bg-card px-3 text-sm text-card-foreground outline-none focus:border-accent"
+              aria-label="Filtrar por municipio"
+              title="Acerca el mapa a las estaciones del municipio"
+            >
+              <option value="">Todos los municipios</option>
+              {municipios.map((municipio) => (
+                <option key={municipio} value={municipio}>{municipio}</option>
+              ))}
+            </select>
+          )}
           <select
             value={zonaFilter}
             onChange={(event) => setZonaFilter(event.target.value)}
@@ -751,7 +903,9 @@ export default function MapaEstaciones() {
       <p className="text-xs text-muted-foreground">
         Fuente: catálogo nacional de estaciones del IDEAM (datos.gov.co, hp9r-jxuu) sobre el espejo propio. Haz clic en una
         estación para ver su ficha y su serie histórica; los círculos dorados agrupan estaciones cercanas. Límites
-        departamentales: DANE (marco geoestadístico, simplificado).
+        departamentales: DANE (marco geoestadístico, simplificado). Al filtrar por departamento se dibuja su contorno; el
+        municipio no lleva contorno propio porque el marco incluido es departamental, así que en ese caso el mapa se acerca
+        a sus estaciones.
       </p>
     </div>
   );

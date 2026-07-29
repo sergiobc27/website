@@ -1,5 +1,5 @@
 import { Info } from 'lucide-react';
-import { Formula, Frac, Sub, Sup, V } from '../Formula';
+import { Formula, Frac, Raiz, Sub, Sup, V } from '../Formula';
 import { VariablesLista } from '../VariablesLista';
 import { variablesDe } from '../../lib/metodologia/contenido';
 import { fmt } from '../../lib/format';
@@ -140,17 +140,47 @@ export function SeccionTc({
         </div>
       )}
 
-      <div className="space-y-1 text-xs text-muted-foreground">
-        <Formula className="text-sm text-card-foreground">
-          <V>T</V><Sub>c</Sub>&nbsp;(Témez)&nbsp;=&nbsp;0,3 · (<Frac num={<><V>L</V><Sub>km</Sub></>} den={<><V>S</V><Sup>0,25</Sup></>} />)<Sup>0,76</Sup>&nbsp;· 60
-        </Formula>
-        {/* Sin el ×60 la fórmula devuelve HORAS y el resultado de al lado está en
-            minutos: quien la sustituyera a mano obtenía un valor 60 veces menor.
-            Y L va en km aquí, mientras la lista de variables (compartida con
-            Kirpich) la define en metros: por eso la aclaración. */}
+      {/* Las TRES fórmulas, porque las tres se pueden elegir en el selector de
+          arriba. Antes solo se mostraba la de Témez, así que quien eligiera
+          Giandotti no tenía forma de ver de dónde salía su número. */}
+      <div className="space-y-2 text-xs text-muted-foreground">
+        {/* Cada fórmula en su propio bloque: `Formula` es un inline-flex, así que
+            sin el div las tres se pegaban en un solo renglón. */}
+        <div className="space-y-3">
+          <div>
+            <Formula className="text-sm text-card-foreground">
+              <V>T</V><Sub>c</Sub>&nbsp;(Kirpich)&nbsp;=&nbsp;
+              {tcs.kirpichModificado ? `${fmt(tcs.factorRecorrido, 1)} · ` : ''}
+              0,0195 · <V>L</V><Sup>0,77</Sup> · <V>S</V><Sup>−0,385</Sup>
+            </Formula>
+          </div>
+          <div>
+            <Formula className="text-sm text-card-foreground">
+              <V>T</V><Sub>c</Sub>&nbsp;(Témez)&nbsp;=&nbsp;0,3 · (<Frac num={<><V>L</V><Sub>km</Sub></>} den={<><V>S</V><Sup>0,25</Sup></>} />)<Sup>0,76</Sup>&nbsp;· 60
+            </Formula>
+          </div>
+          <div>
+            <Formula className="text-sm text-card-foreground">
+              <V>T</V><Sub>c</Sub>&nbsp;(Giandotti)&nbsp;=&nbsp;
+              <Frac
+                num={<>4 · <Raiz><V>A</V><Sub>km²</Sub></Raiz>&nbsp;+ 1,5 · <V>L</V><Sub>km</Sub></>}
+                den={<>25,3 · <Raiz><V>S</V> · <V>L</V><Sub>km</Sub></Raiz></>}
+              />
+              &nbsp;· 60
+            </Formula>
+          </div>
+        </div>
+        {/* Sin el ×60 las fórmulas de Témez y Giandotti devuelven HORAS y el
+            resultado de al lado está en minutos: quien las sustituyera a mano
+            obtenía un valor 60 veces menor. Y L va en km ahí, mientras la lista
+            de variables (compartida con Kirpich) la define en metros. */}
         <p className="mt-1">
-          Témez devuelve horas; el factor 60 lo pasa a minutos. Aquí <V>L</V><Sub>km</Sub> es la
-          longitud en kilómetros, es decir <V>L</V> dividida entre 1.000.
+          Kirpich devuelve minutos y usa <V>L</V> en metros. Témez y Giandotti devuelven horas, y el factor 60 las pasa
+          a minutos: en ambas <V>L</V><Sub>km</Sub> es <V>L</V> dividida entre 1.000, y en Giandotti{' '}
+          <V>A</V><Sub>km²</Sub> es el área dividida entre 100 (de hectáreas a km²).
+          {tcs.kirpichModificado
+            ? ` El ${fmt(tcs.factorRecorrido, 1)} que encabeza Kirpich es el factor del recorrido elegido (Chow, Maidment y Mays, 1988, Tabla 15.1.2).`
+            : ''}
         </p>
         <VariablesLista variables={variablesDe('tiempo-concentracion')} className="mt-2" />
       </div>

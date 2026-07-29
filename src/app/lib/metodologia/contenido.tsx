@@ -86,6 +86,9 @@ export const METODOLOGIA: Record<string, EntradaMetodo> = {
       { simbolo: <><V>T</V><Sub>c</Sub></>, definicion: 'tiempo de concentración (min)', comoSeObtiene: 'No se mide: la calcula la app con Kirpich, Témez y Giandotti a partir de L y S, y toma la mediana (con un piso de diseño de 10 min, o de 15 min si la obra elegida es vial). En recorrido urbano pavimentado se aplica el Kirpich modificado (Tc de Kirpich × 0,4; × 0,2 en canal de concreto; factores de Chow, Maidment y Mays, 1988).' },
       { simbolo: 'L', definicion: 'longitud del cauce principal (m)', comoSeObtiene: 'Se mide sobre el cauce principal, desde el punto más alejado de la cuenca hasta la salida, en un plano o SIG; en metros.' },
       { simbolo: 'S', definicion: 'pendiente media del cauce (m/m)', comoSeObtiene: 'Diferencia de cotas entre el punto más alto y la salida, dividida por la longitud del cauce. Se saca de curvas de nivel (planchas IGAC) o de un modelo de elevación (DEM); en m/m.' },
+      // Giandotti también necesita el área; sin esta entrada su fórmula quedaba
+      // con una variable sin definir en la lista de abajo.
+      { simbolo: 'A', definicion: 'área de la cuenca que aporta (ha; la fórmula de Giandotti la usa en km², es decir A/100)', comoSeObtiene: 'Se mide delimitando en un plano o SIG (planchas del IGAC, Google Earth) toda el área que drena hacia el punto de interés; se expresa en hectáreas.' },
     ],
     fuentes: [
       cita('kirpich-1940', 'p. 362'),
@@ -243,14 +246,14 @@ export const METODOLOGIA: Record<string, EntradaMetodo> = {
   // ─────────────────────── Gráficas de exploración ───────────────────────
   hietograma: {
     id: 'hietograma',
-    titulo: 'Hietograma mensual',
+    titulo: 'Lluvia mensual del año',
     resumen: 'Cuánta lluvia cayó cada mes del año elegido.',
     queEs:
-      'Un hietograma reparte la lluvia en el tiempo. Aquí, en barras, muestra la lámina acumulada (mm) de cada mes del año seleccionado para la estación.',
+      'Barras con la lámina acumulada (mm) de cada mes del año seleccionado para la estación. NO es el hietograma de diseño: ese reparte una sola tormenta de diseño en intervalos de minutos a partir de la curva IDF (por ejemplo con el método de bloques alternos) y la plataforma no lo calcula. Esta gráfica describe el régimen estacional del año, no un evento de diseño.',
     comoSeLee:
       'Eje X: meses del año. Eje Y: lluvia acumulada (mm). Las barras más altas son los meses más lluviosos; revela el régimen estacional (uni o bimodal en Colombia).',
     paraQueSirve:
-      'Ver el reparto estacional de la lluvia y comparar años entre sí.',
+      'Ver el reparto estacional de la lluvia y comparar años entre sí. Para dimensionar una obra, lo que se usa es la curva IDF y el método racional, no estas barras.',
     fuentes: [cita('poveda-2004', 'hidroclimatología de Colombia')],
   },
   histograma: {

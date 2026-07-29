@@ -50,6 +50,17 @@ export function Bar({ children }: { children: ReactNode }) {
   return <span style={{ textDecoration: 'overline' }}>{children}</span>;
 }
 
+/** Raíz cuadrada con el radicando cubierto por la barra, como en un libro. Sin
+ * la barra, "√A + 1,5·L" se lee como si la raíz cubriera toda la suma. */
+export function Raiz({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex items-start align-middle">
+      <span style={{ fontSize: '1.15em', lineHeight: 1 }}>√</span>
+      <span className="border-t border-current px-0.5 pt-0.5">{children}</span>
+    </span>
+  );
+}
+
 /** Fracción con barra real: numerador sobre denominador. */
 export function Frac({ num, den }: { num: ReactNode; den: ReactNode }) {
   return (

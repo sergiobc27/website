@@ -11,6 +11,7 @@ import logoIdeamUrl from '../../imports/Ideam_(Colombia)_logo.png';
 import { AlertTriangle, BarChart4, Calculator, CheckCircle2, CloudRain, FileDown, Mail, Navigation, Plus, Search, Waves } from 'lucide-react';
 import { InfoGrafica } from './InfoGrafica';
 import { InfoEcuacionIdf } from './InfoEcuacionIdf';
+import { InsigniaFiabilidad } from './InsigniaFiabilidad';
 import {
   Bar,
   Area,
@@ -473,12 +474,30 @@ export function Hidrologia() {
         if (point.lowerMmH != null && point.upperMmH != null) {
           row[`tr${curve.returnPeriod}_lo`] = point.lowerMmH;
           row[`tr${curve.returnPeriod}_hi`] = point.upperMmH;
+          // Par [inferior, superior] que Recharts dibuja como banda. Solo si
+          // AMBOS extremos son positivos: el eje Y es logarítmico y un cero
+          // haría log(0)=−∞, que se lleva por delante toda la gráfica.
+          if (point.lowerMmH > 0 && point.upperMmH > 0) {
+            (row as Record<string, unknown>)[`tr${curve.returnPeriod}_banda`] = [point.lowerMmH, point.upperMmH];
+          }
         }
         byDur.set(point.durMin, row);
       }
     }
     return Array.from(byDur.values()).sort((a, b) => a.durMin - b.durMin);
   }, [idf]);
+
+  // Fiabilidad del registro de la estación en curso. La del análisis de extremos
+  // manda; si no viene, la del catálogo. La usan las TRES tarjetas que dependen
+  // de ese registro: curvas IDF, períodos de retorno y calculadora de caudal.
+  const fiabilidadVigente = returnPeriods?.reliability ?? station?.fiabilidad ?? null;
+
+  // ¿Hay al menos una banda dibujable? Si la API no las trae, no se anuncia algo
+  // que no se ve.
+  const hayBandasIdf = useMemo(
+    () => idfChartData.some((row) => Object.keys(row).some((k) => k.endsWith('_banda'))),
+    [idfChartData]
+  );
 
   // Captura la gráfica IDF en alta resolución y arma el PDF de marca CUC.
   // Reutilizado por la descarga y por el envío por correo.
@@ -525,7 +544,7 @@ export function Hidrologia() {
         <h2 className="text-card-foreground text-2xl font-bold">Hidrología de precipitación</h2>
         <p className="text-muted-foreground text-sm mt-1">
           Calcula el caudal de diseño de tu obra (drenaje) con la curva IDF de una estación, y explora también períodos de
-          retorno (Gumbel), monitor de sequía (SPI), hietograma e histograma.
+          retorno (Gumbel), monitor de sequía (SPI), lluvia mensual e histograma.
         </p>
       </div>
 
@@ -782,6 +801,11 @@ export function Hidrologia() {
               </div>
               <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:gap-3">
                 <InfoGrafica id="idf" />
+                {/* La curva sale del mismo registro que el análisis de extremos:
+                    si ese registro es corto o incompleto, hay que verlo AQUÍ. */}
+                {fiabilidadVigente && (
+                  <InsigniaFiabilidad nivel={fiabilidadVigente.level} razones={fiabilidadVigente.reasons} />
+                )}
                 {idf?.available && (
                   <>
                     <ChartDownloadButton
@@ -824,7 +848,7 @@ export function Hidrologia() {
               <div className="space-y-4">
                 <div ref={idfChartRef} className="bg-card" style={{ width: '100%', height: '320px' }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={idfChartData} margin={{ top: 4, right: 8, left: 0, bottom: 16 }}>
+                    <ComposedChart data={idfChartData} margin={{ top: 4, right: 8, left: 0, bottom: 16 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
                       <XAxis
                         dataKey="durMin"
@@ -858,6 +882,24 @@ export function Hidrologia() {
                         wrapperStyle={{ paddingBottom: 10, fontSize: 12 }}
                         formatter={(value: string) => `Tr ${value.replace('tr', '')} años`}
                       />
+                      {/* Bandas de confianza del 90%: ya venían calculadas de la
+                          API y no se dibujaban, así que la curva parecía exacta.
+                          Van ANTES de las líneas para quedar por debajo, y fuera
+                          de leyenda y tooltip para no duplicar cada período. */}
+                      {(idf.returnPeriods || []).map((tr, index) => (
+                        <Area
+                          key={`banda-${tr}`}
+                          type="monotone"
+                          dataKey={`tr${tr}_banda`}
+                          stroke="none"
+                          fill={IDF_COLORS[index % IDF_COLORS.length]}
+                          fillOpacity={0.12}
+                          legendType="none"
+                          tooltipType="none"
+                          connectNulls
+                          isAnimationActive animationDuration={550}
+                        />
+                      ))}
                       {(idf.returnPeriods || []).map((tr, index) => (
                         <Line
                           key={tr}
@@ -870,9 +912,15 @@ export function Hidrologia() {
                           isAnimationActive animationDuration={550}
                         />
                       ))}
-                    </LineChart>
+                    </ComposedChart>
                   </ResponsiveContainer>
                 </div>
+                {hayBandasIdf && (
+                  <p className="text-xs text-muted-foreground">
+                    La franja del color de cada curva es su intervalo de confianza del 90% (bootstrap): cuanto más ancha,
+                    menos años de registro sostienen ese período de retorno.
+                  </p>
+                )}
 
                 {idf.equation && (
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-sm">
@@ -927,8 +975,16 @@ export function Hidrologia() {
             )}
           </div>
 
+          {/* `estacion` va solo con el nombre del catálogo, que ya trae el código
+              entre corchetes: pasar también `codigo` daba "TIBAITATA [21206990]
+              (0021206990)". */}
           {idf?.available && idf.equation && (
-            <CalculadoraCaudal equation={idf.equation} durations={idf.durations} />
+            <CalculadoraCaudal
+              equation={idf.equation}
+              durations={idf.durations}
+              fiabilidad={fiabilidadVigente}
+              estacion={station?.nombre || station?.codigo || undefined}
+            />
           )}
 
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
@@ -948,22 +1004,9 @@ export function Hidrologia() {
                       filenameParts={['periodos-retorno', station?.nombre ?? station?.codigo ?? '']}
                     />
                   )}
-                  {returnPeriods?.reliability && (() => {
-                    const r = returnPeriods.reliability;
-                    const cfg = {
-                      verde: { cls: 'border-success/40 bg-success/10 text-success', label: 'Alta' },
-                      amarillo: { cls: 'border-accent/40 bg-accent/10 text-accent', label: 'Media' },
-                      rojo: { cls: 'border-red-500/40 bg-red-500/10 text-red-500', label: 'Baja' },
-                    }[r.level];
-                    return (
-                      <span
-                        title={r.reasons.length ? r.reasons.join(' · ') : 'Registro largo, completo y estacionario.'}
-                        className={`cursor-help rounded-full border px-2.5 py-0.5 text-xs font-semibold ${cfg.cls}`}
-                      >
-                        Fiabilidad: {cfg.label}
-                      </span>
-                    );
-                  })()}
+                  {fiabilidadVigente && (
+                    <InsigniaFiabilidad nivel={fiabilidadVigente.level} razones={fiabilidadVigente.reasons} />
+                  )}
                   <Waves className="h-5 w-5 text-accent" />
                 </div>
               </div>
@@ -1113,25 +1156,30 @@ export function Hidrologia() {
 
             <div className="rounded-xl border border-border bg-card p-6 shadow-glow">
               <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                {/* Antes se llamaba "hietograma mensual", y el hietograma de
+                    diseño es otra cosa: reparte UNA tormenta de diseño en
+                    intervalos de minutos a partir de la IDF (bloques alternos).
+                    Con ese nombre, un lector de drenaje podía tomar estas barras
+                    por el hietograma de diseño, que la plataforma no calcula. */}
                 <div>
-                  <h3 className="font-bold text-card-foreground">Hietograma mensual</h3>
-                  <p className="text-sm text-muted-foreground">Lluvia acumulada por mes del año elegido</p>
+                  <h3 className="font-bold text-card-foreground">Lluvia mensual del año</h3>
+                  <p className="text-sm text-muted-foreground">Lámina acumulada por mes del año elegido (régimen estacional)</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:gap-3">
                   <InfoGrafica id="hietograma" />
                   {hyetograph && (
                     <ChartDownloadButton
                       targetRef={hyetographChartRef}
-                      title={`Hietograma mensual · ${hyetographYear}`}
+                      title={`Lluvia mensual · ${hyetographYear}`}
                       subtitle={station?.nombre ?? station?.codigo}
-                      filenameParts={['hietograma', hyetographYear, station?.nombre ?? station?.codigo ?? '']}
+                      filenameParts={['lluvia-mensual', hyetographYear, station?.nombre ?? station?.codigo ?? '']}
                     />
                   )}
                   <select
                     value={hyetographYear}
                     onChange={(event) => setHyetographYear(event.target.value)}
                     className="h-8 rounded-lg border border-border bg-background px-2 text-xs text-card-foreground outline-none focus:border-accent"
-                    aria-label="Año del hietograma"
+                    aria-label="Año de la lluvia mensual"
                   >
                     {years.map((year) => (
                       <option key={year} value={year}>{year}</option>
